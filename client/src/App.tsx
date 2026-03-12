@@ -10,7 +10,7 @@ import { supabase } from './supabase';
 import bgImage from './assets/bg.png'; 
 
 // =====================================================================
-// 🔊 오디오 파일 절대 경로 Import 
+// 🔊 오디오 파일 Import 
 // =====================================================================
 // @ts-ignore
 import bgmSfx from './assets/sounds/bgm.mp3';
@@ -57,7 +57,7 @@ const getAvatarFallback = (name: string | undefined | null, rankers: any[]) => {
 };
 
 // =====================================================================
-// 🔊 글로벌 사운드 매니저
+// 🔊 글로벌 사운드 설정 관리
 // =====================================================================
 let globalBgmEnabled = true;
 let globalSfxEnabled = true;
@@ -74,16 +74,11 @@ const BASE_VOLUMES: Record<string, number> = {
 
 if (typeof window !== 'undefined') {
   const files: Record<string, string> = { bgm: bgmSfx, hover: hoverSfx, click: clickSfx, match_start: matchStartSfx, waiting: waitingSfx, success: successSfx, error: errorSfx };
-  
   Object.entries(files).forEach(([key, src]) => {
     const audio = new Audio(src);
     audio.preload = 'auto'; 
-    if (key === 'bgm' || key === 'waiting') {
-      audio.loop = true; 
-      audio.volume = globalBgmVolume;
-    } else {
-      audio.volume = globalSfxVolume * (BASE_VOLUMES[key] || 1.0);
-    }
+    if (key === 'bgm' || key === 'waiting') { audio.loop = true; audio.volume = globalBgmVolume; } 
+    else { audio.volume = globalSfxVolume * (BASE_VOLUMES[key] || 1.0); }
     audioCache[key] = audio;
   });
 
@@ -102,23 +97,11 @@ if (typeof window !== 'undefined') {
     });
     window.removeEventListener('click', unlockAudio);
   };
-
   window.addEventListener('click', unlockAudio);
 
-  // 🌟 [남철님 요청] 다른 창 클릭 시(탭 전환 시) 모든 사운드 즉시 뮤트
-  // 1. 창을 클릭해서 다시 돌아왔을 때 (소리 켜기)
-  window.addEventListener('focus', () => {
-    Object.values(audioCache).forEach(audio => {
-      audio.muted = false; 
-    });
-  });
-
-  // 2. 다른 프로그램, 바탕화면 등을 클릭해서 창을 벗어났을 때 (즉시 뮤트)
-  window.addEventListener('blur', () => {
-    Object.values(audioCache).forEach(audio => {
-      audio.muted = true;
-    });
-  });
+  // 🌟 [남철님 요청] 다른 창 클릭 시 즉시 뮤트
+  window.addEventListener('focus', () => { Object.values(audioCache).forEach(audio => { audio.muted = false; }); });
+  window.addEventListener('blur', () => { Object.values(audioCache).forEach(audio => { audio.muted = true; }); });
 }
 
 const playSFX = (type: string) => {
@@ -147,21 +130,26 @@ function App() {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [activeMenu, setActiveMenu] = useState('home');
+
   const [entryMode, setEntryMode] = useState<'free' | 'random'>('free');
   const [entryOpponent, setEntryOpponent] = useState('');
   const [entryLegend, setEntryLegend] = useState('');
   const [entryWeapons, setEntryWeapons] = useState<string[]>(['', '']);
+
   const [matchPhase, setMatchPhase] = useState<'idle' | 'waiting' | 'ready'>('idle');
-  const [activeMatch, setActiveMatch] = useState<{ mode: string, opponent: string, legend: string, weapons: string[] } | null>(null);
+  const [activeMatch, setActiveMatch] = useState<{ id: string, mode: string, opponent: string, legend: string, weapons: string[] } | null>(null);
   const [myReportedScore, setMyReportedScore] = useState<number | null>(null);
+  
   const [logs, setLogs] = useState<any[]>([]); 
   const [rankers, setRankers] = useState<any[]>([]); 
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [copyStatus, setCopyStatus] = useState(false);
   const [showComet, setShowComet] = useState(false);
   const prevTopPlayer = useRef<string | null>(null);
   const [rankTab, setRankTab] = useState<number>(0);
+
   const [bgmEnabled, setBgmEnabled] = useState(true);
   const [sfxEnabled, setSfxEnabled] = useState(true);
   const [bgmVolume, setBgmVolume] = useState(0.10);
@@ -196,6 +184,31 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // 🌟 [남철님 요청] 실시간 매칭 엔진
+  useEffect(() => {
+    if (!currentUserName || matchPhase !== 'waiting') return;
+
+    const channel = supabase.channel('challenges_realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'challenges' }, payload => {
+        const newChallenge = payload.new;
+        // 상대방이 나를 지목했는지 확인
+        if (newChallenge.challenger_name === entryOpponent && newChallenge.target_name === currentUserName) {
+          playSFX('match_start');
+          setActiveMatch({
+            id: newChallenge.id,
+            mode: newChallenge.mode,
+            opponent: entryOpponent,
+            legend: entryMode === 'random' ? newChallenge.legend : entryLegend,
+            weapons: entryMode === 'random' ? newChallenge.weapons : entryWeapons
+          });
+          setMatchPhase('ready');
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [matchPhase, entryOpponent, currentUserName]);
+
   const fetchData = async () => {
     const { data: matches } = await supabase.from('matches').select('*').order('created_at', { ascending: false });
     if (matches && matches.length > 0) setLogs([...matches]); else setLogs([]);
@@ -222,46 +235,87 @@ function App() {
   const handleLogin = async () => { playSFX('click'); await supabase.auth.signInWithOAuth({ provider: 'discord' }); };
   const handleLogout = async () => { playSFX('click'); await supabase.auth.signOut(); setProfile(null); };
 
-  const handleStartMatch = () => {
+  const handleStartMatch = async () => {
     if (!user) { playSFX('error'); return alert("로그인이 필요합니다!"); }
     if (!entryOpponent.trim()) { playSFX('error'); return alert("상대방 닉네임을 정확히 입력하세요!"); }
     if (entryMode === 'free' && (!entryLegend || !entryWeapons[0] || !entryWeapons[1])) { playSFX('error'); return alert("레전드와 무기를 모두 선택해주세요!"); }
-    playSFX('match_start'); 
-    if (entryMode === 'random') {
+    
+    playSFX('click');
+    
+    // 🌟 쌍방 확인 로직: 상대방이 이미 나를 기다리고 있는지 체크
+    const { data: existing } = await supabase.from('challenges')
+      .select('*')
+      .eq('challenger_name', entryOpponent)
+      .eq('target_name', currentUserName)
+      .eq('mode', entryMode)
+      .single();
+
+    if (existing) {
+      // 매칭 성사!
+      playSFX('match_start');
+      setActiveMatch({
+        id: existing.id,
+        mode: entryMode,
+        opponent: entryOpponent,
+        legend: entryMode === 'random' ? existing.legend : entryLegend,
+        weapons: entryMode === 'random' ? existing.weapons : entryWeapons
+      });
+      setMatchPhase('ready');
+    } else {
+      // 대기열 등록
       const randL = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
       const randW = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
-      setActiveMatch({ mode: 'random', opponent: entryOpponent.trim(), legend: randL, weapons: randW });
-    } else {
-      setActiveMatch({ mode: 'free', opponent: entryOpponent.trim(), legend: entryLegend, weapons: [...entryWeapons] });
+      
+      await supabase.from('challenges').insert([{
+        challenger_name: currentUserName,
+        target_name: entryOpponent,
+        mode: entryMode,
+        legend: entryMode === 'random' ? randL : entryLegend,
+        weapons: entryMode === 'random' ? randW : entryWeapons
+      }]);
+      setMatchPhase('waiting');
     }
-    setMatchPhase('waiting'); setMyReportedScore(null);
+    setMyReportedScore(null);
   };
 
-  const handleCancelMatch = () => { playSFX('click'); setMatchPhase('idle'); setActiveMatch(null); };
+  const handleCancelMatch = async () => {
+    playSFX('click');
+    await supabase.from('challenges').delete().eq('challenger_name', currentUserName);
+    setMatchPhase('idle');
+    setActiveMatch(null);
+  };
 
   const handleReportScore = async () => {
     if (myReportedScore === null) { playSFX('error'); return alert("스코어를 선택하세요!"); }
     if (!user) { playSFX('error'); return alert("로그인이 필요합니다!"); }
     if (!activeMatch) return;
+
     playSFX('success'); 
-    const playerName = profile?.display_name || user.user_metadata.full_name;
+    const playerName = currentUserName;
     const winnerName = myReportedScore === 3 ? playerName : activeMatch.opponent;
     const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
+
     const { error } = await supabase.from('matches').insert([{
       match_type: activeMatch.mode, left_player_name: playerName, right_player_name: activeMatch.opponent,
       left_legend: activeMatch.legend, left_weapons: activeMatch.weapons,
       score_left: myReportedScore, score_right: 3 - myReportedScore, winner_name: winnerName, winner_rank_num: winnerRankNum 
     }]);
+    
     if (!error) { 
+      await supabase.from('challenges').delete().eq('challenger_name', currentUserName);
+      await supabase.from('challenges').delete().eq('target_name', currentUserName);
       alert("전투 보고 완료!"); 
       setMatchPhase('idle'); setActiveMatch(null); setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']);
       fetchData(); fetchRankers(); 
     } else { playSFX('error'); alert(`점수 저장 중 오류가 발생했습니다.\n상세내용: ${error.message}`); }
   };
 
-  const copyDiscordId = (id: string) => {
-    if (!id) return;
-    playSFX('click'); navigator.clipboard.writeText(id); setCopyStatus(true);
+  // 🌟 [남철님 요청] 닉네임 복사로 변경
+  const copyPlayerName = (name: string) => {
+    if (!name) return;
+    playSFX('click');
+    navigator.clipboard.writeText(name);
+    setCopyStatus(true);
     setTimeout(() => setCopyStatus(false), 2000);
   };
 
@@ -301,7 +355,6 @@ function App() {
   return (
     <div className="flex h-screen bg-black text-slate-300 font-sans overflow-hidden relative select-none">
       <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000" style={{ backgroundImage: `url(${bgImage})` }}><div className="absolute inset-0 bg-black/10"></div></div>
-      {showComet && vfxEnabled && (<div className="fixed inset-0 z-[100] pointer-events-none overflow-hidden"><div className="comet-path"><div className="comet-head shadow-[0_0_50px_#fff]"></div><div className="comet-tail"></div></div></div>)}
       <aside className="w-20 bg-black/20 backdrop-blur-md border-r border-cyan-500/30 shadow-[0_0_30px_rgba(34,211,238,0.15)] flex flex-col items-center py-10 gap-10 z-20 shrink-0 h-screen fixed left-0">
         <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 shadow-[0_0_20px_rgba(34,211,238,0.4)] cursor-pointer" onMouseEnter={() => playSFX('hover')} onClick={() => playSFX('click')}><Star className="text-cyan-400 fill-cyan-400 animate-pulse" size={24}/></div>
         <div className="flex flex-col gap-10 text-slate-500 w-full items-center">
@@ -321,8 +374,7 @@ function App() {
           <main className="flex-1 p-10 grid grid-cols-12 gap-8 items-stretch pb-20 animate-in fade-in duration-500 min-h-[1400px]">
             <div className="col-span-12 xl:col-span-3 flex flex-col gap-8 h-full relative">
                <section className="bg-black/40 backdrop-blur-2xl border-2 border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.5)] rounded-[2.5rem] p-3 shrink-0 h-fit flex flex-col overflow-hidden relative">
-                  <div className="flex flex-col relative z-10">
-                      <h3 className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 uppercase tracking-tight text-center w-full block mb-2 border-b border-white/5 pb-2 shrink-0 drop-shadow-[0_0_8px_cyan]">매치 엔트리</h3>
+                  <div className="flex flex-col relative z-10"><h3 className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 uppercase tracking-tight text-center w-full block mb-2 border-b border-white/5 pb-2 shrink-0 drop-shadow-[0_0_8px_cyan]">매치 엔트리</h3>
                       <div className="space-y-3 flex flex-col relative pb-1">
                           <div className="flex gap-2 p-0.5 bg-black/50 rounded-2xl border border-white/5 shadow-inner shrink-0 relative z-20 mt-1">
                              <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setEntryMode('free'); }} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all cursor-pointer ${entryMode === 'free' ? 'bg-pink-600 text-white shadow-[0_0_15px_pink]' : 'text-slate-500 hover:text-white'}`}>자유대전</button>
@@ -337,9 +389,7 @@ function App() {
                           )}
                           <button onMouseEnter={() => playSFX('hover')} onClick={handleStartMatch} className="w-full py-4 rounded-[1.5rem] font-black text-lg text-white bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:bg-blue-500 transition-all border border-white/10 shrink-0 relative z-20 mt-1 cursor-pointer">대전 생성 (Entry)</button>
                       </div>
-                  </div>
-                  <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/80 to-transparent z-10 rounded-b-[2.5rem] pointer-events-none"></div>
-               </section>
+                  </div></section>
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.5)] rounded-[2.5rem] p-4 flex flex-col overflow-hidden h-[880px] shrink-0">
                   <h3 className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-cyan-400 uppercase tracking-tight text-center w-full block mb-2 border-b border-white/5 pb-2 shrink-0 flex items-center justify-center gap-2 drop-shadow-[0_0_8px_cyan] cursor-default" onMouseEnter={() => playSFX('hover')}><span className="w-2.5 h-2.5 bg-green-500 rounded-full shadow-[0_0_10px_#22c55e] animate-pulse"></span> 접속 현황</h3>
                   <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1 pb-1">
@@ -348,14 +398,14 @@ function App() {
                         const currentUserRankNum = currentUserName ? rankers.findIndex(r => r.display_name === currentUserName) + 1 : 999;
                         const myIdx = currentUserRankNum - 1; const targetIdx = ou.rankIndex; let isChallengeableByRank = false;
                         if (myIdx > targetIdx) {
-                           if (targetIdx >= 12) isChallengeableByRank = true; // 정예 구간 자유 도전
-                           else if (targetIdx >= 6) { if (myIdx <= 12 && (myIdx - targetIdx) <= 2) isChallengeableByRank = true; } // 항성 구간
-                           else { if ((myIdx - targetIdx) === 1) isChallengeableByRank = true; } // 성좌/왕좌 구간
+                           if (targetIdx >= 12) isChallengeableByRank = true;
+                           else if (targetIdx >= 6) { if (myIdx <= 12 && (myIdx - targetIdx) <= 2) isChallengeableByRank = true; }
+                           else { if ((myIdx - targetIdx) === 1) isChallengeableByRank = true; }
                         }
                         return (
                           <div key={i} onMouseEnter={() => playSFX('hover')} className="bg-black/60 border border-white/10 p-3 rounded-xl flex items-center justify-between hover:border-cyan-400/50 transition-all group cursor-default">
                              <div className="flex items-center gap-3"><div className="relative"><img src={ou.avatar_url} className="w-9 h-9 rounded-full border border-white/20" alt="profile"/><div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-black rounded-full"></div></div><div className="flex flex-col"><span className="text-sm font-black text-white truncate max-w-[90px]">{ou.display_name}</span><span className={`text-[9px] font-black uppercase tracking-widest ${rankInfo.color}`}>{rankInfo.title} {rankInfo.num}</span></div></div>
-                             {ou.is_challengeable !== false ? (<button onClick={() => { playSFX('click'); setEntryOpponent(ou.display_name); }} disabled={!isChallengeableByRank} className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all shadow-[0_0_10px_rgba(34,211,238,0.2)] cursor-pointer ${isChallengeableByRank ? 'bg-cyan-600/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500 hover:text-black' : 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'}`}>{isChallengeableByRank ? '도전!' : '하위 랭크'}</button>) : (<span className="px-3 py-1.5 bg-slate-800/50 border border-slate-700 text-slate-500 text-[9px] font-black rounded-xl uppercase tracking-widest cursor-default">매치 중</span>)}
+                             <button onClick={() => { playSFX('click'); setEntryOpponent(ou.display_name); }} disabled={!isChallengeableByRank} className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all shadow-[0_0_10px_rgba(34,211,238,0.2)] cursor-pointer ${isChallengeableByRank ? 'bg-cyan-600/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500 hover:text-black' : 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'}`}>{isChallengeableByRank ? '도전!' : '하위 랭크'}</button>
                           </div>
                         )
                      }) : (<div className="flex items-center justify-center h-full opacity-50 text-sm font-bold tracking-widest text-cyan-400">최초의 왕좌에 도전하세요!</div>)}
@@ -366,14 +416,12 @@ function App() {
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.5)] rounded-[3rem] p-4 overflow-hidden flex flex-col justify-between h-fit shrink-0 relative">
                   <div className="flex flex-col relative z-10"><h3 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 uppercase tracking-tight text-center w-full block mb-2 border-b border-white/5 pb-2 shrink-0 mt-1 drop-shadow-[0_0_8px_cyan]">현재 매치 상황</h3>
                       {matchPhase === 'waiting' ? (
-                        <div className="flex flex-col items-center justify-center opacity-90 relative z-10 py-16 animate-in fade-in"><div className="w-20 h-20 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-8 shadow-[0_0_15px_cyan]"></div><h4 className="text-3xl font-black text-cyan-400 tracking-widest drop-shadow-[0_0_10px_cyan]">대기 중입니다</h4><p className="text-sm font-bold text-slate-300 mt-4 tracking-widest text-center">상대방(<span className="text-pink-400">{entryOpponent}</span>)이 매칭을<br/>수락할 때까지 기다립니다.</p><button onMouseEnter={() => playSFX('hover')} onClick={handleCancelMatch} className="mt-10 px-10 py-3 rounded-full border-2 border-pink-500/50 text-pink-400 font-black hover:bg-pink-500 hover:text-white transition-all shadow-[0_0_15px_rgba(236,72,153,0.3)] cursor-pointer">매칭 취소 (Cancel)</button></div>
+                        <div className="flex flex-col items-center justify-center opacity-90 relative z-10 py-16 animate-in fade-in"><div className="w-20 h-20 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-8 shadow-[0_0_15px_cyan]"></div><h4 className="text-3xl font-black text-cyan-400 tracking-widest drop-shadow-[0_0_10px_cyan]">상대 대기 중</h4><p className="text-sm font-bold text-slate-300 mt-4 tracking-widest text-center">상대방(<span className="text-pink-400">{entryOpponent}</span>)이 당신의 닉네임을 입력하고<br/>대전 생성을 누르면 즉시 시작됩니다.</p><button onMouseEnter={() => playSFX('hover')} onClick={handleCancelMatch} className="mt-10 px-10 py-3 rounded-full border-2 border-pink-500/50 text-pink-400 font-black hover:bg-pink-500 hover:text-white transition-all shadow-[0_0_15px_rgba(236,72,153,0.3)] cursor-pointer">매칭 취소 (Cancel)</button></div>
                       ) : matchPhase === 'idle' || !activeMatch ? (<div className="flex flex-col items-center justify-center opacity-10 relative z-10 py-20 cursor-default" onMouseEnter={() => playSFX('hover')}><Shield size={100}/><p className="text-xl font-black uppercase tracking-[0.4em] mt-8 drop-shadow-[0_0_10px_white]">Ready for Combat</p></div>
                       ) : (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in overflow-hidden relative z-10 gap-3 mt-1"><div className={`p-6 rounded-[2.5rem] border-2 shadow-[0_0_40px_rgba(0,0,0,0.5)] ${activeMatch.mode === 'random' ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'} text-center relative overflow-hidden flex flex-col justify-center shrink-0 cursor-default`} onMouseEnter={() => playSFX('hover')}><h4 className="text-6xl font-black text-white tracking-tighter mb-6 drop-shadow-[0_0_20px_white] leading-tight shrink-0">{activeMatch.legend}</h4><div className="flex flex-col gap-3 items-center shrink-0">{activeMatch.weapons.map((w:any, idx:number) => (<span key={idx} className={`px-6 py-2 rounded-2xl text-base font-black border-2 w-full max-w-[350px] shadow-inner ${activeMatch.mode === 'random' ? 'border-cyan-400/50 text-cyan-400' : 'border-pink-400/50 text-pink-400'}`}>{w}</span>))}</div></div><div className="text-center bg-black/40 p-4 rounded-[1.5rem] border border-white/10 shadow-inner shrink-0 relative z-20 cursor-default" onMouseEnter={() => playSFX('hover')}><p className="text-[10px] text-slate-500 font-black uppercase text-center mb-1 tracking-widest">Target Opponent</p><h4 className="text-5xl font-black text-white italic truncate px-2 pb-2 pt-1 drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">{activeMatch.opponent}</h4></div><div className="flex flex-col gap-3 pt-3 border-t border-white/5 shrink-0 relative z-20"><div className="flex justify-center gap-4 shrink-0">{[0, 1, 2, 3].map(num => (<button key={num} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setMyReportedScore(num); }} className={`w-14 h-14 rounded-3xl font-black text-2xl transition-all border-2 cursor-pointer ${myReportedScore === num ? 'bg-cyan-500 border-white text-black scale-110 shadow-[0_0_20px_cyan]' : 'bg-black/60 border-white/10 text-white hover:bg-white/5'}`}>{num}</button>))}</div><button onMouseEnter={() => playSFX('hover')} onClick={handleReportScore} disabled={myReportedScore === null} className={`w-full py-4 rounded-[1.5rem] font-black text-xl transition-all uppercase tracking-widest shrink-0 relative z-20 cursor-pointer ${myReportedScore !== null ? 'text-cyan-400 border-2 border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:bg-cyan-400 hover:text-black' : 'text-slate-500 border-2 border-slate-700 bg-slate-800/50 cursor-not-allowed'}`}>{myReportedScore !== null ? '전투 결과 입력' : '스코어를 선택하세요'}</button></div></div>
                       )}
-                  </div>
-                  <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/80 to-transparent z-10 rounded-b-[3rem] pointer-events-none"></div>
-               </section>
+                  </div></section>
                <section className="bg-black/40 backdrop-blur-2xl border-2 border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.5)] rounded-[2.5rem] p-6 flex flex-col overflow-hidden h-[940px] shrink-0"><h3 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 uppercase tracking-tight text-center w-full block mb-4 border-b border-white/5 pb-2 shrink-0 drop-shadow-[0_0_8px_cyan] cursor-default" onMouseEnter={() => playSFX('hover')}>최근 전투 기록</h3><div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2 pb-4">{logs.length > 0 ? logs.slice(0, 5).map((log, i) => renderCombatLogItem(log, i)) : (<div className="flex items-center justify-center h-full opacity-50 text-sm font-bold tracking-widest text-cyan-400">아직 진행된 전투가 없습니다</div>)}</div></section>
             </div>
             <div className="col-span-12 lg:col-span-4 flex flex-col h-full relative">
@@ -411,10 +459,10 @@ function App() {
       {selectedPlayer && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[300] flex items-center justify-center p-6 animate-in fade-in duration-300 cursor-pointer" onClick={() => { playSFX('click'); setSelectedPlayer(null); }}>
           <div className="bg-[#0A0C14] border-2 border-cyan-400 w-full max-w-2xl rounded-[4rem] p-12 shadow-[0_0_50px_rgba(34,211,238,0.3)] relative overflow-hidden cursor-default" onClick={(e) => e.stopPropagation()} onMouseEnter={() => playSFX('hover')}>
-             <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(null); }} className="absolute top-10 right-10 text-slate-500 hover:text-white transition-colors cursor-pointer z-50"><X size={36}/></button><div className="flex items-center gap-10 mb-10 relative z-10 cursor-default"><img src={selectedPlayer.avatar_url} className={`w-32 h-32 rounded-[2.5rem] border-4 ${selectedPlayer.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_30px_gold]' : 'border-cyan-400 shadow-[0_0_20px_cyan]'} shrink-0`} alt="profile" /><div className="flex-1 overflow-hidden"><h2 className="text-5xl font-black text-white italic uppercase truncate w-full tracking-tighter text-left mb-2">{selectedPlayer.display_name}</h2><div className="flex gap-3"><span className={`text-sm font-black px-6 py-1.5 rounded-full border border-white/20 inline-block text-left ${getGrandRankInfo(selectedPlayer.rankIndex)?.color || 'text-slate-300'} bg-white/10 uppercase tracking-widest`}>RANK: {getGrandRankInfo(selectedPlayer.rankIndex)?.title} {getGrandRankInfo(selectedPlayer.rankIndex)?.num}</span><span className="text-sm font-black px-6 py-1.5 rounded-full border border-white/10 inline-block text-slate-400 bg-white/5 tracking-widest select-text cursor-text">@{selectedPlayer.discord_id || selectedPlayer.id.substring(0,8)}</span></div></div></div>
+             <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(null); }} className="absolute top-10 right-10 text-slate-500 hover:text-white transition-colors cursor-pointer z-50"><X size={36}/></button><div className="flex items-center gap-10 mb-10 relative z-10 cursor-default"><img src={selectedPlayer.avatar_url} className={`w-32 h-32 rounded-[2.5rem] border-4 ${selectedPlayer.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_30px_gold]' : 'border-cyan-400 shadow-[0_0_20px_cyan]'} shrink-0`} alt="profile" /><div className="flex-1 overflow-hidden"><h2 className="text-5xl font-black text-white italic uppercase truncate w-full tracking-tighter text-left mb-2">{selectedPlayer.display_name}</h2><div className="flex gap-3"><span className={`text-sm font-black px-6 py-1.5 rounded-full border border-white/20 inline-block text-left ${getGrandRankInfo(selectedPlayer.rankIndex)?.color || 'text-slate-300'} bg-white/10 uppercase tracking-widest`}>RANK: {getGrandRankInfo(selectedPlayer.rankIndex)?.title} {getGrandRankInfo(selectedPlayer.rankIndex)?.num}</span></div></div></div>
              <div className="mb-6 relative z-10 flex justify-center cursor-default" onMouseEnter={() => playSFX('hover')}><div className={`px-8 py-3 rounded-full border-2 font-black tracking-widest text-lg shadow-lg ${selectedPlayer.rankIndex === 0 ? 'bg-yellow-400/10 border-yellow-400 text-yellow-400 shadow-[0_0_15px_gold]' : 'bg-slate-800/50 border-slate-600 text-slate-300'}`}>{selectedPlayer.rankIndex === 0 ? '👑 왕좌 방어전 스택 : ' : '🛡️ 방어전 스택 : '} {selectedPlayer.defense_stack || 0}</div></div>
              <div className="grid grid-cols-2 gap-6 mb-10 relative z-10 cursor-default"><div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] text-center shadow-inner flex flex-col justify-center hover:border-cyan-400/50 transition-all" onMouseEnter={() => playSFX('hover')}><p className="text-xs font-black text-slate-400 uppercase mb-2 tracking-widest">Match Record (W/L)</p><p className="text-4xl font-black text-white">{selectedPlayer.wins}승 {selectedPlayer.losses}패</p></div><div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] text-center shadow-inner flex flex-col justify-center hover:border-cyan-400/50 transition-all" onMouseEnter={() => playSFX('hover')}><p className="text-xs font-black text-slate-400 uppercase mb-2 tracking-widest">Win Rate</p><p className="text-4xl font-black text-pink-400">{selectedPlayer.win_rate || "0.0%"}</p></div><div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] text-center shadow-inner flex flex-col justify-center hover:border-cyan-400/50 transition-all" onMouseEnter={() => playSFX('hover')}><p className="text-xs font-black text-slate-400 uppercase mb-2 tracking-widest">Favorite Legend</p><p className="text-2xl font-black text-cyan-400 truncate px-2">{selectedPlayer.favorite_legend || "미선택"}</p></div><div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] text-center shadow-inner flex flex-col justify-center hover:border-cyan-400/50 transition-all" onMouseEnter={() => playSFX('hover')}><p className="text-xs font-black text-slate-400 uppercase mb-2 tracking-widest">Favorite Weapon</p><p className="text-xl font-black text-cyan-400 truncate px-2">{selectedPlayer.favorite_weapon || "미선택"}</p></div></div>
-             <button onMouseEnter={() => playSFX('hover')} onClick={() => copyDiscordId(selectedPlayer.id)} className="w-full bg-cyan-600/20 hover:bg-cyan-600/40 border-2 border-cyan-400/50 text-cyan-400 py-6 rounded-[2rem] font-black text-lg flex items-center justify-center gap-4 transition-all active:scale-95 shadow-[0_0_20px_rgba(34,211,238,0.2)] relative z-10 cursor-pointer">{copyStatus ? <Check size={24}/> : <Copy size={24}/>}{copyStatus ? 'ID COPIED!' : `COPY DISCORD ID`}</button>
+             <button onMouseEnter={() => playSFX('hover')} onClick={() => copyPlayerName(selectedPlayer.display_name)} className="w-full bg-cyan-600/20 hover:bg-cyan-600/40 border-2 border-cyan-400/50 text-cyan-400 py-6 rounded-[2rem] font-black text-lg flex items-center justify-center gap-4 transition-all active:scale-95 shadow-[0_0_20px_rgba(34,211,238,0.2)] relative z-10 cursor-pointer">{copyStatus ? <Check size={24}/> : <Copy size={24}/>}{copyStatus ? 'NICKNAME COPIED!' : `COPY NICKNAME`}</button>
           </div>
         </div>
       )}
