@@ -56,6 +56,20 @@ const getAvatarFallback = (name: string | undefined | null, rankers: any[]) => {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeName}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
 };
 
+// 🌟 닉네임 길이에 따른 폰트 크기 계산 (반응형)
+const getNicknameFontSize = (name: string, isTopRank: boolean) => {
+  const len = name.length;
+  if (isTopRank) {
+    if (len > 12) return 'text-lg';
+    if (len > 8) return 'text-xl';
+    return 'text-3xl';
+  } else {
+    if (len > 12) return 'text-base';
+    if (len > 8) return 'text-lg';
+    return 'text-2xl';
+  }
+};
+
 // 글로벌 사운드 매니저
 let globalBgmEnabled = true;
 let globalSfxEnabled = true;
@@ -69,6 +83,15 @@ let currentMatchPhase = 'idle';
 const BASE_VOLUMES: Record<string, number> = { hover: 0.5, click: 1.0, match_start: 1.0, success: 1.0, error: 1.0 };
 
 if (typeof window !== 'undefined') {
+  // 🌟 로컬 스토리지에서 저장된 볼륨 가져오기
+  const savedBgmVol = localStorage.getItem('bgmVolume');
+  const savedSfxVol = localStorage.getItem('sfxVolume');
+  const savedBgmEnabled = localStorage.getItem('bgmEnabled');
+  
+  globalBgmVolume = savedBgmVol ? parseFloat(savedBgmVol) : 0.10;
+  globalSfxVolume = savedSfxVol ? parseFloat(savedSfxVol) : 0.60;
+  globalBgmEnabled = savedBgmEnabled !== 'false';
+
   const files: Record<string, string> = { bgm: bgmSfx, hover: hoverSfx, click: clickSfx, match_start: matchStartSfx, waiting: waitingSfx, success: successSfx, error: errorSfx };
   Object.entries(files).forEach(([key, src]) => {
     const audio = new Audio(src);
@@ -127,13 +150,22 @@ function App() {
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [copyStatus, setCopyStatus] = useState(false);
   const [rankTab, setRankTab] = useState<number>(0);
-  const [bgmEnabled, setBgmEnabled] = useState(true);
-  const [sfxEnabled, setSfxEnabled] = useState(true);
-  const [bgmVolume, setBgmVolume] = useState(0.10);
-  const [sfxVolume, setSfxVolume] = useState(0.60);
+
+  // 🌟 개인별 환경설정 영구 저장 시스템
+  const [bgmEnabled, setBgmEnabled] = useState(localStorage.getItem('bgmEnabled') !== 'false');
+  const [sfxEnabled, setSfxEnabled] = useState(localStorage.getItem('sfxEnabled') !== 'false');
+  const [bgmVolume, setBgmVolume] = useState(parseFloat(localStorage.getItem('bgmVolume') || '0.10'));
+  const [sfxVolume, setSfxVolume] = useState(parseFloat(localStorage.getItem('sfxVolume') || '0.60'));
 
   useEffect(() => {
     globalBgmEnabled = bgmEnabled; globalSfxEnabled = sfxEnabled; globalBgmVolume = bgmVolume; globalSfxVolume = sfxVolume;
+    
+    // 로컬 스토리지 업데이트
+    localStorage.setItem('bgmEnabled', bgmEnabled.toString());
+    localStorage.setItem('sfxEnabled', sfxEnabled.toString());
+    localStorage.setItem('bgmVolume', bgmVolume.toString());
+    localStorage.setItem('sfxVolume', sfxVolume.toString());
+
     if (audioCache['bgm']) { audioCache['bgm'].muted = !bgmEnabled; audioCache['bgm'].volume = bgmVolume; }
     if (audioCache['waiting']) { audioCache['waiting'].muted = !bgmEnabled; audioCache['waiting'].volume = bgmVolume; }
     ['hover', 'click', 'match_start', 'success', 'error'].forEach(key => {
@@ -243,11 +275,12 @@ function App() {
     setTimeout(() => setCopyStatus(false), 2000);
   };
 
+  // 🌟 계급 이름 폰트 및 라벨 강화
   const getGrandRankInfo = (idx: number) => {
-    if (idx === 0) return { title: "왕좌", num: 1, color: "text-yellow-400", glow: "shadow-[0_0_20px_rgba(250,204,21,0.6)]", bg: "bg-yellow-400/20", icon: <Crown size={18} className="text-yellow-400 animate-pulse"/> };
-    if (idx < 6) return { title: "성좌", num: idx + 1, color: "text-purple-400", glow: "shadow-[0_0_15px_rgba(192,132,252,0.5)]", bg: "bg-purple-400/20", icon: <Star size={14} className="text-purple-400"/> };
-    if (idx < 12) return { title: "항성", num: idx - 5, color: "text-cyan-400", glow: "shadow-[0_0_15px_rgba(34,211,238,0.3)]", bg: "bg-cyan-400/20", icon: <Zap size={14} className="text-cyan-400"/> };
-    return { title: "정예", num: idx - 11, color: "text-slate-500", glow: "", bg: "bg-slate-500/20", icon: <Shield size={14} className="text-slate-500"/> };
+    if (idx === 0) return { title: "왕좌", num: 1, color: "text-yellow-400", glow: "shadow-[0_0_20px_rgba(250,204,21,0.6)]", bg: "bg-yellow-400/20", icon: <Crown size={22} className="text-yellow-400 animate-pulse"/> };
+    if (idx < 6) return { title: "성좌", num: idx + 1, color: "text-purple-400", glow: "shadow-[0_0_15px_rgba(192,132,252,0.5)]", bg: "bg-purple-400/20", icon: <Star size={18} className="text-purple-400"/> };
+    if (idx < 12) return { title: "항성", num: idx - 5, color: "text-cyan-400", glow: "shadow-[0_0_15px_rgba(34,211,238,0.3)]", bg: "bg-cyan-400/20", icon: <Zap size={18} className="text-cyan-400"/> };
+    return { title: "정예", num: idx - 11, color: "text-slate-500", glow: "", bg: "bg-slate-500/20", icon: <Shield size={18} className="text-slate-500"/> };
   };
 
   const renderCombatLogItem = (log: any, index: number) => {
@@ -318,8 +351,6 @@ function App() {
                         return (
                           <div key={i} className="bg-black/60 border border-white/10 p-3 rounded-xl flex items-center justify-between hover:border-cyan-400/50 transition-all group">
                              <div className="flex items-center gap-3"><div className="relative"><img src={ou.avatar_url} className="w-9 h-9 rounded-full border border-white/20" alt="profile"/><div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-black rounded-full"></div></div><div className="flex flex-col"><span className="text-sm font-black text-white truncate max-w-[90px]">{ou.display_name}</span><span className={`text-[9px] font-black uppercase ${rankInfo.color}`}>{rankInfo.title} {rankInfo.num}</span></div></div>
-                             
-                             {/* 🌟 [남철님 요청] 버튼 복구 및 닉네임 자동 입력 적용 */}
                              {ou.display_name.trim() === currentUserName?.trim() ? (
                                 <div className="px-3 py-1.5 rounded-xl text-[10px] font-black bg-blue-600/20 border border-blue-500/50 text-blue-400">나</div>
                              ) : (
@@ -356,34 +387,39 @@ function App() {
                       <div className="flex flex-col items-start mb-4 mt-1">
                           <div className="flex items-center gap-6 mb-1"><Trophy className="text-yellow-400 drop-shadow-lg" size={80}/><div className="flex flex-col"><h3 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500 uppercase tracking-tighter pt-1">은하단 랭킹</h3><p className="text-sm font-black text-cyan-400 italic pt-1 uppercase">명예의 전당 (HALL OF FAME)</p></div></div>
                       </div>
-                      {/* 🌟 [남철님 요청] 상단 여백 추가로 테두리 잘림 해결 */}
-                      <div className="overflow-y-auto space-y-5 custom-scrollbar pr-3 pb-2 pt-6 min-h-[200px]">
+                      
+                      {/* 🌟 랭킹보드 아이템 간의 여백(space-y-2) 줄임 & 상단 여백 추가 */}
+                      <div className="overflow-y-auto space-y-2.5 custom-scrollbar pr-3 pb-2 pt-6 min-h-[200px]">
                          {rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).filter(r => { if (rankTab === 0) return r.rankIndex < 6; if (rankTab === 1) return r.rankIndex >= 6 && r.rankIndex < 12; return r.rankIndex >= 12; }).map((r) => {
                               const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
                               return (
-                                <div key={r.id} onClick={() => { playSFX('click'); setSelectedPlayer(r); }} className={`mx-2 p-4 pt-10 rounded-[1.5rem] border transition-all cursor-pointer group bg-black/60 relative flex flex-col justify-center hover:scale-[1.02] ${grandRank.glow} border-cyan-400/30 hover:border-cyan-400`}>
-                                   {r.rankIndex === 0 && <div className="absolute inset-0 bg-yellow-400/5 animate-pulse rounded-[1.5rem]"></div>}
+                                <div key={r.id} onClick={() => { playSFX('click'); setSelectedPlayer(r); }} className={`mx-2 p-3.5 pt-9 rounded-[1.2rem] border transition-all cursor-pointer group bg-black/60 relative flex flex-col justify-center hover:scale-[1.01] ${grandRank.glow} border-cyan-400/30 hover:border-cyan-400`}>
+                                   {r.rankIndex === 0 && <div className="absolute inset-0 bg-yellow-400/5 animate-pulse rounded-[1.2rem]"></div>}
                                    
-                                   {/* 🌟 [남철님 요청] 계급 표시 크기 확대 및 디자인 개선 */}
-                                   <div className={`absolute top-0 left-1/2 -translate-x-1/2 px-5 py-1 rounded-b-xl border-x border-b border-cyan-400/30 ${grandRank.bg} flex items-center gap-2 shadow-lg z-20`}>
-                                       {grandRank.icon} <span className={`text-[12px] font-black uppercase tracking-widest ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span>
+                                   {/* 🌟 계급 라벨 크기 대폭 확대 및 시인성 강화 */}
+                                   <div className={`absolute top-0 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-b-xl border-x border-b border-cyan-400/30 ${grandRank.bg} flex items-center gap-2 shadow-lg z-20`}>
+                                       {grandRank.icon} <span className={`text-[14px] font-black uppercase tracking-widest ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span>
                                    </div>
                                    
-                                   <div className="flex items-center justify-between w-full mt-3 px-2">
-                                      <div className="flex items-center gap-5 flex-1 overflow-hidden">
-                                         <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-md' : 'border-white/20'}`} alt="p"/>
-                                         <span className={`text-white font-black truncate group-hover:text-cyan-400 transition-colors ${r.rankIndex === 0 ? 'text-3xl' : 'text-2xl'}`}>{r.display_name}</span>
+                                   <div className="flex items-center justify-between w-full mt-2 px-1">
+                                      <div className="flex items-center gap-4 flex-1 overflow-hidden">
+                                         <img src={r.avatar_url} className={`w-11 h-11 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-md' : 'border-white/20'}`} alt="p"/>
+                                         {/* 🌟 닉네임 길이에 따른 반응형 폰트 적용 */}
+                                         <span className={`text-white font-black truncate group-hover:text-cyan-400 transition-colors ${getNicknameFontSize(r.display_name, r.rankIndex === 0)}`}>
+                                           {r.display_name}
+                                         </span>
                                       </div>
-                                      <div className="flex flex-col items-end gap-1">
-                                         <span className="font-black text-slate-300 text-xl">{r.wins}승 {r.losses}패</span>
-                                         {r.rankIndex === 0 && (<span className="font-black text-[11px] px-3 py-1 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50">👑 방어전: {r.defense_stack || 0}</span>)}
+                                      <div className="flex flex-col items-end">
+                                         <span className="font-black text-slate-300 text-lg tracking-tight">{r.wins}승 {r.losses}패</span>
+                                         {r.rankIndex === 0 && (<span className="font-black text-[10px] px-2 py-0.5 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50 mt-0.5">👑 방어: {r.defense_stack || 0}</span>)}
                                       </div>
                                    </div>
                                 </div>
                               );
                            }) : (<div className="flex items-center justify-center h-[500px] opacity-50 text-cyan-400">랭커가 없습니다</div>)}
                       </div>
-                      <div className="flex gap-2 px-1 mt-6 mb-1"><button onClick={() => setRankTab(0)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 0 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>왕좌·성좌</button><button onClick={() => setRankTab(1)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 1 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>항성 (1~6)</button><button onClick={() => setRankTab(2)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 2 ? 'bg-slate-500/20 text-slate-300 border-slate-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>정예</button></div>
+
+                      <div className="flex gap-2 px-1 mt-4 mb-1"><button onClick={() => setRankTab(0)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 0 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>왕좌·성좌</button><button onClick={() => setRankTab(1)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 1 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>항성 (1~6)</button><button onClick={() => setRankTab(2)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 2 ? 'bg-slate-500/20 text-slate-300 border-slate-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>정예</button></div>
                       <div className="relative px-1 mt-3 mb-1"><Search className="absolute left-6 top-4.5 text-slate-500" size={18}/><input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="검색..." className="w-full bg-white/5 border border-white/10 pl-16 pr-8 py-4 rounded-full text-sm outline-none focus:border-cyan-400 text-white select-text"/></div>
                   </div></section>
             </div>
@@ -398,8 +434,8 @@ function App() {
              <div className="flex items-center gap-10 mb-10">
                 <img src={selectedPlayer.avatar_url} className={`w-32 h-32 rounded-[2.5rem] border-4 ${selectedPlayer.rankIndex === 0 ? 'border-yellow-400 shadow-lg' : 'border-cyan-400 shadow-md'}`} alt="p" />
                 <div className="flex-1 overflow-hidden">
-                   <h2 className="text-5xl font-black text-white italic truncate tracking-tighter">{selectedPlayer.display_name}</h2>
-                   <div className="flex gap-3">
+                   <h2 className={`font-black text-white italic truncate tracking-tighter ${getNicknameFontSize(selectedPlayer.display_name, true)}`}>{selectedPlayer.display_name}</h2>
+                   <div className="flex gap-3 mt-2">
                      <span className={`text-sm font-black px-6 py-1.5 rounded-full border border-white/20 ${getGrandRankInfo(selectedPlayer.rankIndex)?.color || 'text-slate-300'} bg-white/10 uppercase`}>RANK: {getGrandRankInfo(selectedPlayer.rankIndex)?.title} {getGrandRankInfo(selectedPlayer.rankIndex)?.num}</span>
                    </div>
                 </div>
