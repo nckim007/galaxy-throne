@@ -8,6 +8,10 @@ import { supabase } from './supabase';
 
 // @ts-ignore
 import bgImage from './assets/bg.png'; 
+
+// =====================================================================
+// 🔊 오디오 파일 Import 
+// =====================================================================
 // @ts-ignore
 import bgmSfx from './assets/sounds/bgm.mp3';
 // @ts-ignore
@@ -23,6 +27,9 @@ import successSfx from './assets/sounds/success.mp3';
 // @ts-ignore
 import errorSfx from './assets/sounds/error.mp3';
 
+// =====================================================================
+// 🌟 레전드 및 무기 카테고리 & 색상
+// =====================================================================
 const LEGEND_CATEGORIES = {
   "어설트": ["방갈로르", "레버넌트", "퓨즈", "매드 매기", "발리스틱"],
   "스커미셔": ["패스파인더", "레이스", "옥테인", "호라이즌", "애쉬", "알터"],
@@ -69,7 +76,8 @@ const getWeaponCategoryColorHex = (cat: string) => {
 const getAvatarFallback = (name: string | undefined | null, rankers: any[]) => {
   const safeName = name || 'GUEST';
   const ranker = rankers.find((r: any) => r.display_name === safeName);
-  return ranker?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeName}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+  if (ranker && ranker.avatar_url) return ranker.avatar_url;
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeName}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
 };
 
 const getNicknameFontSize = (name: string, isTopRank: boolean) => {
@@ -78,12 +86,16 @@ const getNicknameFontSize = (name: string, isTopRank: boolean) => {
     if (len > 12) return 'text-lg';
     if (len > 8) return 'text-xl';
     return 'text-3xl';
+  } else {
+    if (len > 12) return 'text-base';
+    if (len > 8) return 'text-lg';
+    return 'text-2xl';
   }
-  if (len > 12) return 'text-base';
-  if (len > 8) return 'text-lg';
-  return 'text-2xl';
 };
 
+// =====================================================================
+// 🔊 글로벌 사운드 엔진 (BGM 재생/정지 꼬임 완벽 해결)
+// =====================================================================
 let globalBgmEnabled = true;
 let globalSfxEnabled = true;
 let globalBgmVolume = 0.10;
@@ -91,44 +103,64 @@ let globalSfxVolume = 0.60;
 
 const audioCache: Record<string, HTMLAudioElement> = {};
 let isAudioUnlocked = false; 
+let currentMatchPhase = 'idle'; 
+
+const BASE_VOLUMES: Record<string, number> = { hover: 0.5, click: 1.0, match_start: 1.0, success: 1.0, error: 1.0 };
 
 if (typeof window !== 'undefined') {
-  globalBgmVolume = parseFloat(localStorage.getItem('bgmVolume') || '0.10');
-  globalSfxVolume = parseFloat(localStorage.getItem('sfxVolume') || '0.60');
-  globalBgmEnabled = localStorage.getItem('bgmEnabled') !== 'false';
+  const savedBgmVol = localStorage.getItem('bgmVolume');
+  const savedSfxVol = localStorage.getItem('sfxVolume');
+  const savedBgmEnabled = localStorage.getItem('bgmEnabled');
+  
+  globalBgmVolume = savedBgmVol ? parseFloat(savedBgmVol) : 0.10;
+  globalSfxVolume = savedSfxVol ? parseFloat(savedSfxVol) : 0.60;
+  globalBgmEnabled = savedBgmEnabled !== 'false';
 
   const files: Record<string, string> = { bgm: bgmSfx, hover: hoverSfx, click: clickSfx, match_start: matchStartSfx, waiting: waitingSfx, success: successSfx, error: errorSfx };
   Object.entries(files).forEach(([key, src]) => {
     const audio = new Audio(src);
     audio.preload = 'auto'; 
     if (key === 'bgm' || key === 'waiting') { audio.loop = true; audio.volume = globalBgmVolume; } 
-    else { audio.volume = globalSfxVolume; }
+    else { audio.volume = globalSfxVolume * (BASE_VOLUMES[key] || 1.0); }
     audioCache[key] = audio;
   });
 
   const unlockAudio = () => {
     if (isAudioUnlocked) return;
     isAudioUnlocked = true;
-    Object.values(audioCache).forEach(audio => { audio.muted = false; });
+    Object.keys(audioCache).forEach(key => {
+      audioCache[key].muted = false;
+    });
+    
+    // 🌟 첫 클릭 시 현재 상태에 맞는 BGM 즉시 재생
+    if (currentMatchPhase === 'idle' && globalBgmEnabled) {
+      audioCache['bgm']?.play().catch(() => {});
+    } else if (currentMatchPhase === 'waiting' && globalBgmEnabled) {
+      audioCache['waiting']?.play().catch(() => {});
+    }
     window.removeEventListener('click', unlockAudio);
   };
+  
   window.addEventListener('click', unlockAudio);
-  window.addEventListener('focus', () => { Object.values(audioCache).forEach(a => { a.muted = false; }); });
-  window.addEventListener('blur', () => { Object.values(audioCache).forEach(a => { a.muted = true; }); });
+  window.addEventListener('focus', () => { Object.values(audioCache).forEach(audio => { audio.muted = false; }); });
+  window.addEventListener('blur', () => { Object.values(audioCache).forEach(audio => { audio.muted = true; }); });
 }
 
 const playSFX = (type: string) => {
   if (!isAudioUnlocked || !audioCache[type]) return;
   if ((type === 'bgm' || type === 'waiting') && !globalBgmEnabled) return;
   if (type !== 'bgm' && type !== 'waiting' && !globalSfxEnabled) return;
-  if (type !== 'bgm' && type !== 'waiting') audioCache[type].currentTime = 0;
+  
+  if (type !== 'bgm' && type !== 'waiting') {
+    audioCache[type].currentTime = 0;
+  }
   audioCache[type].play().catch(() => {});
 };
 
 const MENU_ITEMS = [
   { id: 'home', icon: Home, label: '대시보드' },
   { id: 'profile', icon: User, label: '내 정보' },
-  { id: 'ranking', icon: Trophy, label: '명예의 전당' },
+  { id: 'ranking', icon: Trophy, label: '명예의 전당' }, // 🌟 복구된 명예의 전당
   { id: 'activity', icon: Activity, label: '활동 로그' },
   { id: 'settings', icon: Settings, label: '환경 설정' }
 ];
@@ -169,19 +201,32 @@ function App() {
     localStorage.setItem('sfxEnabled', sfxEnabled.toString());
     localStorage.setItem('bgmVolume', bgmVolume.toString());
     localStorage.setItem('sfxVolume', sfxVolume.toString());
+
     if (audioCache['bgm']) { audioCache['bgm'].muted = !bgmEnabled; audioCache['bgm'].volume = bgmVolume; }
     if (audioCache['waiting']) { audioCache['waiting'].muted = !bgmEnabled; audioCache['waiting'].volume = bgmVolume; }
-    ['hover', 'click', 'match_start', 'success', 'error'].forEach(k => {
-      if (audioCache[k]) { audioCache[k].muted = !sfxEnabled; audioCache[k].volume = sfxVolume; }
+    ['hover', 'click', 'match_start', 'success', 'error'].forEach(key => {
+      if (audioCache[key]) { audioCache[key].muted = !sfxEnabled; audioCache[key].volume = sfxVolume * (BASE_VOLUMES[key] || 1.0); }
     });
   }, [bgmEnabled, sfxEnabled, bgmVolume, sfxVolume]);
 
+  // 🌟 사운드 오버랩 해결 (상태에 따라 정확한 BGM 교체)
   useEffect(() => {
+    currentMatchPhase = matchPhase;
     if (!isAudioUnlocked) return;
-    audioCache['bgm']?.pause();
-    audioCache['waiting']?.pause();
-    if (matchPhase === 'idle') { if (globalBgmEnabled) playSFX('bgm'); } 
-    else if (matchPhase === 'waiting') { if (globalBgmEnabled) playSFX('waiting'); } 
+    
+    if (matchPhase === 'idle') {
+      audioCache['waiting']?.pause();
+      if (globalBgmEnabled) audioCache['bgm']?.play().catch(()=>{});
+    } else if (matchPhase === 'waiting') {
+      audioCache['bgm']?.pause();
+      if (globalBgmEnabled) {
+        if(audioCache['waiting']) audioCache['waiting'].currentTime = 0;
+        audioCache['waiting']?.play().catch(()=>{});
+      }
+    } else if (matchPhase === 'ready') {
+      audioCache['bgm']?.pause();
+      audioCache['waiting']?.pause();
+    }
   }, [matchPhase]);
 
   useEffect(() => {
@@ -225,12 +270,12 @@ function App() {
 
   const fetchData = async () => {
     const { data: matches } = await supabase.from('matches').select('*').order('created_at', { ascending: false });
-    if (matches) setLogs([...matches]);
+    if (matches && matches.length > 0) setLogs([...matches]); else setLogs([]);
   };
 
   const fetchRankers = async () => {
     const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: true });
-    if (profiles) {
+    if (profiles && profiles.length > 0) {
       const processed = profiles.map((r, i) => ({
         ...r, rankIndex: i, display_name: r.display_name || 'GUEST', wins: r.wins || 0, losses: r.losses || 0,
         win_rate: (r.wins + r.losses) > 0 ? (((r.wins) / (r.wins + r.losses)) * 100).toFixed(1) + '%' : '0.0%',
@@ -238,7 +283,7 @@ function App() {
         defense_stack: r.defense_stack || 0
       }));
       setRankers(processed);
-    }
+    } else { setRankers([]); }
   };
 
   const fetchProfile = async (id: string) => {
@@ -335,7 +380,6 @@ function App() {
   return (
     <div className="flex h-screen bg-black text-slate-300 font-sans overflow-hidden relative select-none">
       <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000" style={{ backgroundImage: `url(${bgImage})` }}><div className="absolute inset-0 bg-black/10"></div></div>
-      
       <aside className="w-20 bg-black/20 backdrop-blur-md border-r border-cyan-500/30 shadow-2xl flex flex-col items-center py-10 gap-10 z-20 shrink-0 h-screen fixed left-0">
         <div onMouseEnter={() => playSFX('hover')} className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 shadow-lg cursor-pointer"><Star className="text-cyan-400 animate-pulse" size={24}/></div>
         <div className="flex flex-col gap-10 text-slate-500 w-full items-center">
@@ -356,6 +400,7 @@ function App() {
 
         {activeMenu === 'home' && (
           <main className="flex-1 p-10 grid grid-cols-12 gap-8 items-stretch pb-20 animate-in fade-in duration-500 min-h-[1400px]">
+            {/* 좌측 패널 */}
             <div className="col-span-12 xl:col-span-3 flex flex-col gap-8 h-full relative">
                <section className="bg-black/40 backdrop-blur-2xl border-2 border-cyan-400 shadow-xl rounded-[2.5rem] p-3 shrink-0 h-fit flex flex-col overflow-hidden relative">
                   <div className="flex flex-col relative z-10"><h3 onMouseEnter={() => playSFX('hover')} className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-2 border-b border-white/5 pb-2">매치 엔트리</h3>
@@ -364,16 +409,8 @@ function App() {
                           <div className="bg-black/60 p-2.5 rounded-2xl border border-white/5"><p className="text-[9px] text-slate-500 font-black mb-1">Target Name</p><input value={entryOpponent} onChange={(e) => setEntryOpponent(e.target.value)} placeholder="상대방 닉네임" className="w-full bg-transparent outline-none text-white font-black text-lg select-text" /></div>
                           {entryMode === 'free' && (
                             <div className="space-y-2 flex flex-col">
-                               <select onMouseEnter={() => playSFX('hover')} value={entryLegend} onChange={(e) => { setEntryLegend(e.target.value); playSFX('click'); }} className="w-full bg-black/60 border border-white/10 p-2.5 rounded-xl text-sm font-black outline-none text-white">
-                                  <option value="" disabled hidden>👉 레전드 선택</option>
-                                  {Object.entries(LEGEND_CATEGORIES).map(([cat, list]) => (<optgroup key={cat} label={`■ ${cat}`} style={{color: getLegendCategoryColorHex(cat), backgroundColor: '#000'}}>{list.map(l => <option key={l} value={l} style={{color: '#fff'}}>{l}</option>)}</optgroup>))}
-                               </select>
-                               <div className="flex flex-col gap-2">{[0, 1].map(i => (
-                                 <select key={i} onMouseEnter={() => playSFX('hover')} value={entryWeapons[i]} onChange={(e) => {const w = [...entryWeapons]; w[i] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="w-full bg-black/60 border border-white/10 p-2.5 rounded-xl text-sm font-black outline-none text-white">
-                                    <option value="" disabled hidden>👉 {i+1}번 무기 선택</option>
-                                    {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (<optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>{list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}</optgroup>))}
-                                 </select>
-                               ))}</div>
+                               <select onMouseEnter={() => playSFX('hover')} value={entryLegend} onChange={(e) => { setEntryLegend(e.target.value); playSFX('click'); }} className="w-full bg-black/60 border border-white/10 p-2.5 rounded-xl text-sm font-black outline-none text-white"><option value="" disabled hidden>👉 레전드 선택</option>{Object.entries(LEGEND_CATEGORIES).map(([cat, list]) => (<optgroup key={cat} label={`■ ${cat}`} style={{color: getLegendCategoryColorHex(cat), backgroundColor: '#000'}}>{list.map(l => <option key={l} value={l} style={{color: '#fff'}}>{l}</option>)}</optgroup>))}</select>
+                               <div className="flex flex-col gap-2">{[0, 1].map(i => (<select key={i} onMouseEnter={() => playSFX('hover')} value={entryWeapons[i]} onChange={(e) => {const w = [...entryWeapons]; w[i] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="w-full bg-black/60 border border-white/10 p-2.5 rounded-xl text-sm font-black outline-none text-white"><option value="" disabled hidden>👉 {i+1}번 무기 선택</option>{Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (<optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>{list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}</optgroup>))}</select>))}</div>
                             </div>
                           )}
                           <button onMouseEnter={() => playSFX('hover')} onClick={handleStartMatch} className="w-full py-4 rounded-[1.5rem] font-black text-lg text-white bg-blue-600 shadow-lg hover:bg-blue-500 transition-all border border-white/10 cursor-pointer">대전 생성 (Entry)</button>
@@ -402,6 +439,7 @@ function App() {
                </section>
             </div>
 
+            {/* 중앙 패널 (매치 상태) */}
             <div className="col-span-12 xl:col-span-5 flex flex-col gap-8 h-full relative">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-4 flex flex-col h-fit shrink-0 relative">
                   <div className="flex flex-col relative z-10"><h3 onMouseEnter={() => playSFX('hover')} className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-2 border-b border-white/5 pb-2">현재 매치 상황</h3>
@@ -420,17 +458,32 @@ function App() {
                <section className="bg-black/40 backdrop-blur-2xl border-2 border-cyan-400 shadow-xl rounded-[2.5rem] p-6 flex flex-col h-[940px] shrink-0 overflow-hidden"><h3 onMouseEnter={() => playSFX('hover')} className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-2">최근 전투 기록</h3><div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2">{logs.length > 0 ? logs.slice(0, 10).map((log, i) => renderCombatLogItem(log, i)) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">전투 기록이 없습니다</div>)}</div></section>
             </div>
 
+            {/* 우측 패널 (랭킹) */}
             <div className="col-span-12 lg:col-span-4 flex flex-col h-full relative">
                <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-5 flex flex-col h-fit shrink-0 relative">
                   <div className="px-2 pt-2 flex flex-col relative z-10">
                       <div onMouseEnter={() => playSFX('hover')} className="flex flex-col items-start mb-4 mt-1"><div className="flex items-center gap-6 mb-1"><Trophy className="text-yellow-400 drop-shadow-lg" size={80}/><div className="flex flex-col"><h3 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500 uppercase tracking-tighter pt-1">은하단 랭킹</h3><p className="text-sm font-black text-cyan-400 italic pt-1 uppercase">명예의 전당 (HALL OF FAME)</p></div></div></div>
                       
-                      <div className="overflow-y-auto space-y-1.5 custom-scrollbar pr-3 pb-2 pt-8 min-h-[200px]">
+                      {/* 🌟 랭킹 라벨 정위치 복구 (안쪽으로 예쁘게 쏙!) */}
+                      <div className="overflow-y-auto space-y-2.5 custom-scrollbar pr-3 pb-2 pt-2 min-h-[200px]">
                          {rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).filter(r => { if (rankTab === 0) return r.rankIndex < 6; if (rankTab === 1) return r.rankIndex >= 6 && r.rankIndex < 12; return r.rankIndex >= 12; }).map((r) => {
                               const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
                               return (
-                                <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); }} className={`mx-2 p-3 pt-6 rounded-[1rem] border transition-all cursor-pointer group bg-black/60 relative flex flex-col justify-center hover:scale-[1.01] ${grandRank.glow} border-cyan-400/30 hover:border-cyan-400`}>
-                                   {r.rankIndex === 0 && <div className="absolute inset-0 bg-yellow-400/5 animate-pulse rounded-[1rem]"></div>}<div className={`absolute -top-3.5 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-xl border border-cyan-400/30 ${grandRank.bg} flex items-center gap-2 shadow-lg z-20`}>{grandRank.icon} <span className={`text-[16px] font-black uppercase tracking-widest ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span></div><div className="flex items-center justify-between w-full mt-1.5 px-1"><div className="flex items-center gap-4 flex-1 overflow-hidden"><img src={r.avatar_url} className={`w-11 h-11 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-md' : 'border-white/20'}`} alt="p"/><span className={`text-white font-black truncate group-hover:text-cyan-400 transition-colors ${getNicknameFontSize(r.display_name, r.rankIndex === 0)}`}>{r.display_name}</span></div><div className="flex flex-col items-end"><span className="font-black text-slate-300 text-lg tracking-tight">{r.wins}승 {r.losses}패</span>{r.rankIndex === 0 && (<span className="font-black text-[10px] px-2 py-0.5 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50 mt-0.5">👑 방어전: {r.defense_stack || 0}</span>)}</div></div>
+                                <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); }} className={`mx-2 p-3 pt-10 pb-4 rounded-[1.5rem] border transition-all cursor-pointer group bg-black/60 relative flex flex-col justify-center hover:scale-[1.01] ${grandRank.glow} border-cyan-400/30 hover:border-cyan-400`}>
+                                   {r.rankIndex === 0 && <div className="absolute inset-0 bg-yellow-400/5 animate-pulse rounded-[1.5rem]"></div>}
+                                   
+                                   {/* 🌟 라벨 위치를 absolute top-2.5 로 조정하여 테두리 밖으로 나가지 않게 함 */}
+                                   <div className={`absolute top-2.5 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-full border border-cyan-400/30 ${grandRank.bg} flex items-center gap-2 shadow-lg z-20`}>
+                                       {grandRank.icon} <span className={`text-[15px] font-black uppercase tracking-widest ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span>
+                                   </div>
+
+                                   <div className="flex items-center justify-between w-full mt-2 px-1 relative z-10">
+                                      <div className="flex items-center gap-4 flex-1 overflow-hidden">
+                                         <img src={r.avatar_url} className={`w-11 h-11 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-md' : 'border-white/20'}`} alt="p"/>
+                                         <span className={`text-white font-black truncate group-hover:text-cyan-400 transition-colors ${getNicknameFontSize(r.display_name, r.rankIndex === 0)}`}>{r.display_name}</span>
+                                      </div>
+                                      <div className="flex flex-col items-end"><span className="font-black text-slate-300 text-lg tracking-tight">{r.wins}승 {r.losses}패</span>{r.rankIndex === 0 && (<span className="font-black text-[10px] px-2 py-0.5 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50 mt-0.5">👑 방어전: {r.defense_stack || 0}</span>)}</div>
+                                   </div>
                                 </div>
                               );
                            }) : (<div className="flex items-center justify-center h-[500px] opacity-50 text-cyan-400">랭커가 없습니다</div>)}
@@ -443,6 +496,54 @@ function App() {
           </main>
         )}
 
+        {/* 🌟 [복구 완료] 독립적인 명예의 전당 (Ranking) 페이지 */}
+        {activeMenu === 'ranking' && (
+          <main className="flex-1 p-10 h-full overflow-y-auto custom-scrollbar pb-20 animate-in fade-in duration-500">
+            <div className="max-w-6xl mx-auto flex flex-col h-full relative">
+               <div onMouseEnter={() => playSFX('hover')} className="flex items-center gap-6 mb-10 cursor-default">
+                  <Trophy className="text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.6)]" size={100}/>
+                  <div className="flex flex-col">
+                      <h3 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500 uppercase tracking-tighter pt-1">은하단 랭킹</h3>
+                      <p className="text-xl font-black text-cyan-400 italic pt-2 uppercase">명예의 전당 (HALL OF FAME)</p>
+                  </div>
+               </div>
+               <div className="flex gap-4 mb-8">
+                 <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(0); }} className={`px-8 py-4 rounded-xl text-sm font-black transition-all border cursor-pointer ${rankTab === 0 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>👑 왕좌·성좌</button>
+                 <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(1); }} className={`px-8 py-4 rounded-xl text-sm font-black transition-all border cursor-pointer ${rankTab === 1 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>⚡ 항성 (1~6)</button>
+                 <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(2); }} className={`px-8 py-4 rounded-xl text-sm font-black transition-all border cursor-pointer ${rankTab === 2 ? 'bg-slate-500/20 text-slate-300 border-slate-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>🛡️ 정예</button>
+                 <div className="relative ml-auto w-80">
+                   <Search className="absolute left-6 top-4.5 text-slate-500" size={18}/>
+                   <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="랭커 검색..." className="w-full bg-black/40 border border-white/10 pl-16 pr-8 py-4 rounded-full text-sm outline-none focus:border-cyan-400 text-white select-text shadow-inner"/>
+                 </div>
+               </div>
+               <div className="grid grid-cols-2 gap-6 pb-20">
+                  {rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).filter(r => { if (rankTab === 0) return r.rankIndex < 6; if (rankTab === 1) return r.rankIndex >= 6 && r.rankIndex < 12; return r.rankIndex >= 12; }).map((r) => {
+                       const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
+                       return (
+                         <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); }} className={`p-6 pt-12 pb-6 rounded-[2rem] border transition-all cursor-pointer group bg-black/60 relative flex flex-col justify-center hover:scale-[1.02] ${grandRank.glow} border-cyan-400/30 hover:border-cyan-400 shadow-xl`}>
+                            {r.rankIndex === 0 && <div className="absolute inset-0 bg-yellow-400/5 animate-pulse rounded-[2rem]"></div>}
+                            <div className={`absolute top-4 left-1/2 -translate-x-1/2 px-8 py-2 rounded-full border border-cyan-400/30 ${grandRank.bg} flex items-center gap-2 shadow-lg z-20`}>
+                                {grandRank.icon} <span className={`text-[16px] font-black uppercase tracking-widest ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span>
+                            </div>
+                            <div className="flex items-center justify-between w-full mt-2 px-2 relative z-10">
+                               <div className="flex items-center gap-6 flex-1 overflow-hidden">
+                                  <img src={r.avatar_url} className={`w-16 h-16 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-md' : 'border-white/20'}`} alt="p"/>
+                                  <span className={`text-white font-black truncate group-hover:text-cyan-400 transition-colors ${getNicknameFontSize(r.display_name, r.rankIndex === 0)}`}>{r.display_name}</span>
+                               </div>
+                               <div className="flex flex-col items-end">
+                                  <span className="font-black text-slate-300 text-2xl tracking-tight">{r.wins}승 {r.losses}패</span>
+                                  {r.rankIndex === 0 && (<span className="font-black text-[12px] px-3 py-1 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50 mt-1">👑 방어전 스택: {r.defense_stack || 0}</span>)}
+                               </div>
+                            </div>
+                         </div>
+                       );
+                    }) : (<div className="col-span-2 flex items-center justify-center h-[300px] opacity-50 text-xl font-bold text-cyan-400 tracking-widest">해당하는 랭커가 없습니다.</div>)}
+               </div>
+            </div>
+          </main>
+        )}
+
+        {/* 내 정보, 활동 로그, 환경 설정 */}
         {activeMenu === 'profile' && (
           <main className="flex-1 p-10 h-full overflow-y-auto custom-scrollbar pb-20 animate-in fade-in duration-500"><h2 onMouseEnter={() => playSFX('hover')} className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 uppercase tracking-widest mb-8 text-left drop-shadow-[0_0_10px_cyan]">내 정보 (Profile)</h2><div onMouseEnter={() => playSFX('hover')} className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.5)] rounded-[3rem] p-12 max-w-4xl flex items-center gap-12 cursor-default"><img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest&backgroundColor=b6e3f4"} className="w-48 h-48 rounded-full border-4 border-cyan-500/50 shadow-[0_0_30px_rgba(34,211,238,0.3)]" alt="profile"/><div className="flex-1"><h3 className="text-6xl font-black text-white mb-2 italic tracking-tighter uppercase">{currentUserName || "GUEST PILOT"}</h3><p className="text-cyan-400 font-bold mb-8 tracking-widest">{user?.email || "로그인이 필요합니다"}</p><div className="grid grid-cols-3 gap-6"><div className="bg-white/5 p-6 rounded-3xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-xs mb-2 tracking-widest font-black">TOTAL MATCHES</p><p className="text-4xl font-black text-white">0</p></div><div className="bg-white/5 p-6 rounded-3xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-xs mb-2 tracking-widest font-black">TOTAL WINS</p><p className="text-4xl font-black text-cyan-400">0</p></div><div className="bg-white/5 p-6 rounded-3xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-xs mb-2 tracking-widest font-black">WIN RATE</p><p className="text-4xl font-black text-pink-400">0%</p></div></div></div></div></main>
         )}
