@@ -226,7 +226,7 @@ function App() {
          }
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'challenges', filter: `id=eq.${activeMatch.id}` }, payload => {
-         playSFX('success'); alert("쌍방 스코어 일치! 전투 결과가 성공적으로 저장되었습니다.");
+         playSFX('success'); alert("쌍방 스코어 일치! 전투 결과 및 랭크가 성공적으로 업데이트 되었습니다.");
          setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
          setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']); fetchData(); fetchRankers();
       }).subscribe();
@@ -264,8 +264,10 @@ function App() {
     if (!entryOpponent.trim()) { playSFX('error'); return alert("상대방 닉네임을 정확히 입력하세요!"); }
     if (entryMode === 'free' && (!entryLegend || !entryWeapons[0] || !entryWeapons[1])) { playSFX('error'); return alert("레전드와 무기를 모두 선택해주세요!"); }
     if (entryOpponent.trim() === currentUserName.trim()) { playSFX('error'); return alert("자기 자신에게는 도전할 수 없습니다!"); }
+    
     playSFX('click');
     const { data: existing } = await supabase.from('challenges').select('*').eq('challenger_name', entryOpponent.trim()).eq('target_name', currentUserName.trim()).limit(1).maybeSingle();
+    
     if (existing) {
       playSFX('match_start');
       setActiveMatch({ id: existing.id, mode: entryMode, opponent: entryOpponent.trim(), legend: entryMode === 'random' ? existing.legend : entryLegend, weapons: entryMode === 'random' ? existing.weapons : entryWeapons, isChallenger: false });
@@ -285,39 +287,94 @@ function App() {
     setMatchPhase('idle'); setActiveMatch(null);
   };
 
+  // 🌟 [핵심 업데이트] 랭크 스왑 및 프로필 전적 업데이트 엔진
   const handleReportScore = async () => {
     if (myWins === null || myLosses === null || !activeMatch) { playSFX('error'); return alert("승리 및 패배 횟수를 모두 선택하세요!"); }
     playSFX('click'); 
     const isC = activeMatch.isChallenger;
     const updatePayload = isC ? { c_win: myWins, c_lose: myLosses } : { t_win: myWins, t_lose: myLosses };
+    
     await supabase.from('challenges').update(updatePayload).eq('id', activeMatch.id);
     const { data: checkData } = await supabase.from('challenges').select('*').eq('id', activeMatch.id).single();
     if (!checkData) return;
+    
     const oppW = isC ? checkData.t_win : checkData.c_win;
     const oppL = isC ? checkData.t_lose : checkData.c_lose;
 
     if (oppW !== null && oppL !== null) {
        if (myWins === oppL && myLosses === oppW) {
+          // 스코어 검증 통과 - 정식 업데이트 절차 돌입
           const winnerName = myWins > myLosses ? currentUserName : activeMatch.opponent;
           const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
-          await supabase.from('matches').insert([{ match_type: activeMatch.mode, left_player_name: isC ? currentUserName : activeMatch.opponent, right_player_name: isC ? activeMatch.opponent : currentUserName, left_legend: activeMatch.legend, left_weapons: activeMatch.weapons, score_left: isC ? myWins : oppW, score_right: isC ? myLosses : oppL, winner_name: winnerName, winner_rank_num: winnerRankNum }]);
+          
+          // 1. 매치 기록 추가
+          await supabase.from('matches').insert([{ 
+             match_type: activeMatch.mode, 
+             left_player_name: isC ? currentUserName : activeMatch.opponent, 
+             right_player_name: isC ? activeMatch.opponent : currentUserName, 
+             left_legend: activeMatch.legend, 
+             left_weapons: activeMatch.weapons, 
+             score_left: isC ? myWins : oppW, 
+             score_right: isC ? myLosses : oppL, 
+             winner_name: winnerName, 
+             winner_rank_num: winnerRankNum 
+          }]);
+
+          // 2. 랭크 스왑 및 프로필 업데이트 로직
+          const challengerWon = (isC ? myWins : oppW) > (isC ? myLosses : oppL);
+          const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', isC ? currentUserName : activeMatch.opponent).single();
+          const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', isC ? activeMatch.opponent : currentUserName).single();
+
+          if (cProfile && tProfile) {
+              let cNewWins = (cProfile.wins || 0) + (challengerWon ? 1 : 0);
+              let cNewLosses = (cProfile.losses || 0) + (challengerWon ? 0 : 1);
+              let tNewWins = (tProfile.wins || 0) + (challengerWon ? 0 : 1);
+              let tNewLosses = (tProfile.losses || 0) + (challengerWon ? 1 : 0);
+
+              let cNewCreatedAt = cProfile.created_at;
+              let tNewCreatedAt = tProfile.created_at;
+              let cNewDefStack = cProfile.defense_stack || 0;
+              let tNewDefStack = tProfile.defense_stack || 0;
+
+              if (challengerWon) {
+                  // 도전자 승리: 서로의 계급(created_at)을 맞교환
+                  cNewCreatedAt = tProfile.created_at;
+                  tNewCreatedAt = cProfile.created_at;
+                  cNewDefStack = 0;
+                  tNewDefStack = 0;
+              } else {
+                  // 방어자 승리: 방어전 스택 상승
+                  tNewDefStack += 1;
+                  cNewDefStack = 0;
+              }
+
+              // DB 업데이트 적용
+              await supabase.from('profiles').update({ wins: cNewWins, losses: cNewLosses, created_at: cNewCreatedAt, defense_stack: cNewDefStack }).eq('id', cProfile.id);
+              await supabase.from('profiles').update({ wins: tNewWins, losses: tNewLosses, created_at: tNewCreatedAt, defense_stack: tNewDefStack }).eq('id', tProfile.id);
+          }
+
+          // 3. 검증 완료 후 삭제 (양쪽 UI 갱신 트리거)
           await supabase.from('challenges').delete().eq('id', activeMatch.id);
        } else {
+          // 스코어 불일치 시 리셋
           await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
           playSFX('error'); alert(`스코어가 일치하지 않습니다!\n(상대방 입력 -> 승:${oppW} 패:${oppL})\n상대방과 확인 후 다시 입력해주세요.`);
           setWaitingForScore(false); setMyWins(null); setMyLosses(null);
        }
-    } else { setWaitingForScore(true); }
+    } else { 
+       setWaitingForScore(true); 
+    }
   };
 
   const copyPlayerName = (name: string) => {
     if (!name) return; playSFX('click'); navigator.clipboard.writeText(name); setCopyStatus(true); setTimeout(() => setCopyStatus(false), 2000);
   };
 
+  // 🌟 [버그 수정 완료] 황금빛 테두리(Glow) 짤림 방지를 위해 그림자 크기(15px) 축소 최적화
   const getGrandRankInfo = (idx: number) => {
-    if (idx === 0) return { title: "왕좌", num: 1, color: "text-yellow-400", glow: "shadow-[0_0_40px_rgba(250,204,21,0.6)] hover:shadow-[0_0_60px_rgba(250,204,21,0.8)]", bg: "bg-yellow-400/20", icon: <Crown size={22} className="text-yellow-400 animate-pulse"/> };
-    if (idx < 6) return { title: "성좌", num: idx + 1, color: "text-purple-400", glow: "shadow-[0_0_15px_rgba(192,132,252,0.5)]", bg: "bg-purple-400/20", icon: <Star size={18} className="text-purple-400"/> };
-    if (idx < 12) return { title: "항성", num: idx - 5, color: "text-cyan-400", glow: "shadow-[0_0_15px_rgba(34,211,238,0.3)]", bg: "bg-cyan-400/20", icon: <Zap size={18} className="text-cyan-400"/> };
+    if (idx === 0) return { title: "왕좌", num: 1, color: "text-yellow-400", glow: "shadow-[0_0_15px_rgba(250,204,21,0.5)] hover:shadow-[0_0_25px_rgba(250,204,21,0.7)]", bg: "bg-yellow-400/20", icon: <Crown size={22} className="text-yellow-400 animate-pulse"/> };
+    if (idx < 6) return { title: "성좌", num: idx + 1, color: "text-purple-400", glow: "shadow-[0_0_10px_rgba(192,132,252,0.4)]", bg: "bg-purple-400/20", icon: <Star size={18} className="text-purple-400"/> };
+    if (idx < 12) return { title: "항성", num: idx - 5, color: "text-cyan-400", glow: "shadow-[0_0_10px_rgba(34,211,238,0.3)]", bg: "bg-cyan-400/20", icon: <Zap size={18} className="text-cyan-400"/> };
     return { title: "정예", num: idx - 11, color: "text-slate-500", glow: "", bg: "bg-slate-500/20", icon: <Shield size={18} className="text-slate-500"/> };
   };
 
@@ -422,20 +479,19 @@ function App() {
                <section className="bg-black/40 backdrop-blur-2xl border-2 border-cyan-400 shadow-xl rounded-[2.5rem] p-6 flex flex-col h-[940px] shrink-0 overflow-hidden"><h3 onMouseEnter={() => playSFX('hover')} className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-2">최근 전투 기록</h3><div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2">{logs.length > 0 ? logs.slice(0, 10).map((log, i) => renderCombatLogItem(log, i)) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">전투 기록이 없습니다</div>)}</div></section>
             </div>
 
-            {/* 🌟 100% 락(Lock) 걸린 홈 탭 우측 랭킹 패널 - 라벨 정위치(top-3) 및 카드 패딩(pt-11) 고정 */}
+            {/* 🌟 홈 탭 우측 랭킹 패널 (간격, 패딩, 황금빛 그림자 짤림 방지 완벽 적용) */}
             <div className="col-span-12 lg:col-span-4 flex flex-col h-full relative">
                <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-5 flex flex-col h-fit shrink-0 relative">
                   <div className="px-2 pt-2 flex flex-col relative z-10">
                       <div onMouseEnter={() => playSFX('hover')} className="flex flex-col items-start mb-4 mt-1"><div className="flex items-center gap-6 mb-1"><Trophy className="text-yellow-400 drop-shadow-lg" size={80}/><div className="flex flex-col"><h3 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500 uppercase tracking-tighter pt-1">은하단 랭킹</h3><p className="text-sm font-black text-cyan-400 italic pt-1 uppercase">명예의 전당 (HALL OF FAME)</p></div></div></div>
                       
-                      <div className="overflow-y-auto space-y-2.5 custom-scrollbar pr-3 pb-2 pt-2 min-h-[200px]">
+                      <div className="overflow-y-auto space-y-3 custom-scrollbar pr-3 pb-2 pt-4 min-h-[200px]">
                          {rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).filter(r => { if (rankTab === 0) return r.rankIndex < 6; if (rankTab === 1) return r.rankIndex >= 6 && r.rankIndex < 12; return r.rankIndex >= 12; }).map((r) => {
                               const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
                               return (
                                 <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); }} className={`mx-2 p-3 pt-11 pb-4 rounded-[1.5rem] border transition-all cursor-pointer group bg-black/60 relative flex flex-col justify-center hover:scale-[1.01] ${grandRank.glow} border-cyan-400/30 hover:border-cyan-400`}>
                                    {r.rankIndex === 0 && <div className="absolute inset-0 bg-yellow-400/5 animate-pulse rounded-[1.5rem]"></div>}
                                    
-                                   {/* 🌟 라벨 절대위치 고정 (top-3) 으로 카드 밖으로 벗어나지 않게 완벽하게 고정! */}
                                    <div className={`absolute top-3 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-full border border-cyan-400/30 ${grandRank.bg} flex items-center gap-2 shadow-lg z-20`}>
                                        {grandRank.icon} <span className={`text-[14px] font-black uppercase tracking-widest ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span>
                                    </div>
@@ -496,7 +552,7 @@ function App() {
                        let statSize = "text-2xl";
 
                        if (rankTab === 0) {
-                           if (isRank1) { spanClass = "col-span-12 flex justify-center"; cardClass = "w-full max-w-4xl p-8 pt-14 pb-8 rounded-[3rem] shadow-[0_0_40px_rgba(250,204,21,0.3)] hover:scale-[1.03]"; badgeClass = "top-5 px-10 py-3 text-[22px]"; avatarClass = "w-24 h-24"; nameSize = getNicknameFontSize(r.display_name, true); statSize = "text-4xl"; }
+                           if (isRank1) { spanClass = "col-span-12 flex justify-center"; cardClass = "w-full max-w-4xl p-8 pt-14 pb-8 rounded-[3rem] shadow-[0_0_20px_rgba(250,204,21,0.4)] hover:shadow-[0_0_30px_rgba(250,204,21,0.6)] hover:scale-[1.03]"; badgeClass = "top-5 px-10 py-3 text-[22px]"; avatarClass = "w-24 h-24"; nameSize = getNicknameFontSize(r.display_name, true); statSize = "text-4xl"; }
                            else if (isRank2_3) { spanClass = "col-span-6"; }
                            else if (isRank4_6) { spanClass = "col-span-4"; cardClass = "p-5 pt-10 pb-5 rounded-[1.5rem]"; badgeClass = "top-3 px-6 py-1.5 text-[14px]"; avatarClass = "w-12 h-12"; statSize = "text-xl"; }
                        } else if (rankTab === 1) {
