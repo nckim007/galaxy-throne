@@ -106,11 +106,17 @@ if (typeof window !== 'undefined') {
   window.addEventListener('click', unlockAudio);
 
   // 🌟 [남철님 요청] 다른 창 클릭 시(탭 전환 시) 모든 사운드 즉시 뮤트
-  document.addEventListener('visibilitychange', () => {
-    const isHidden = document.hidden;
+  // 1. 창을 클릭해서 다시 돌아왔을 때 (소리 켜기)
+  window.addEventListener('focus', () => {
     Object.values(audioCache).forEach(audio => {
-      // BGM이나 대기음이 재생 중일 때 탭을 나가면 무음처리
-      audio.muted = isHidden; 
+      audio.muted = false; 
+    });
+  });
+
+  // 2. 다른 프로그램, 바탕화면 등을 클릭해서 창을 벗어났을 때 (즉시 뮤트)
+  window.addEventListener('blur', () => {
+    Object.values(audioCache).forEach(audio => {
+      audio.muted = true;
     });
   });
 }
