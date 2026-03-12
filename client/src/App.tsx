@@ -10,7 +10,7 @@ import { supabase } from './supabase';
 import bgImage from './assets/bg.png'; 
 
 // =====================================================================
-// 🔊 오디오 파일 Import
+// 🔊 오디오 파일 Import 
 // =====================================================================
 // @ts-ignore
 import bgmSfx from './assets/sounds/bgm.mp3';
@@ -28,7 +28,7 @@ import successSfx from './assets/sounds/success.mp3';
 import errorSfx from './assets/sounds/error.mp3';
 
 // =====================================================================
-// 🌟 레전드 및 무기 데이터 & 색상 (남철님 요청 정밀 반영)
+// 🌟 레전드 및 무기 데이터 & 색상 맵핑 (남철님 요청 정밀 반영)
 // =====================================================================
 const LEGEND_CATEGORIES = {
   "어설트": ["방갈로르", "레버넌트", "퓨즈", "매드 매기", "발리스틱"],
@@ -38,40 +38,41 @@ const LEGEND_CATEGORIES = {
   "컨트롤러": ["코스틱", "왓슨", "렘파트", "카탈리스트"]
 };
 
-// 이미지 참고 레전드 색상
+// 🌟 [남철님 요청] 에이펙스 레전드 카테고리 색상 맵핑
 const getLegendCategoryColor = (cat: string) => {
   switch (cat) {
-    case "어설트": return "text-[#ff4d4d]";
-    case "스커미셔": return "text-[#ffcc00]";
-    case "리콘": return "text-[#b14fff]";
-    case "서포트": return "text-[#00d2ff]";
-    case "컨트롤러": return "text-[#3aff00]";
-    default: return "text-white";
+    case "어설트": return "text-red-500";
+    case "스커미셔": return "text-yellow-400";
+    case "리콘": return "text-purple-400";
+    case "서포트": return "text-cyan-400";
+    case "컨트롤러": return "text-green-500";
+    default: return "text-slate-300";
   }
 };
 
-// 🌟 [남철님 요청] 무기 카테고리 및 구성 변경
+// [복구] 탄종별 무기 분류 및 이름 수정
 const WEAPON_CATEGORIES = {
   "에너지": ["RE-45 버스트", "하복 라이플", "네메시스 버스트 AR", "볼트 SMG", "L-STAR EMG", "디보션", "트리플 테이크"],
   "경량": ["p2020 x 1", "p2020 x 2", "R-301 카빈", "R-99 SMG", "얼터네이터 SMG", "M600 스핏파이어", "G7 스카우트"],
-  "중량": ["VK-47 플랫라인", "햄록 버스트 AR", "프라울러 점사 PDW", "C.A.R SMG", "램페이지 LMG", "30-30 리피터"],
+  "중량": ["VK-47 플랫라인", "햄록 버스트 AR", "프라울러 PDW", "C.A.R. SMG", "램페이지 LMG", "30-30 리피터"],
   "샷건 쉘": ["모잠비크 x 1", "모잠비크 x 2", "EVA-8 자동", "마스티프", "피스키퍼"],
   "스나이퍼": ["윙맨", "보섹 컴파운드 보우", "롱보우 DMR", "센티넬", "차지 라이플"],
   "특수 무기": ["투척 나이프", "크레이버 .50구경 저격총"]
 };
 
+const ALL_LEGENDS = Object.values(LEGEND_CATEGORIES).flat();
 const ALL_WEAPONS = Object.values(WEAPON_CATEGORIES).flat();
 
-// 🌟 [남철님 요청] 탄종별 이미지 정밀 색상 (Hex)
+// 🌟 [남철님 요청] 탄종별 이미지 정밀 색상 맵핑
 const getWeaponCategoryColor = (cat: string) => {
   switch (cat) {
-    case "에너지": return "text-[#94b11f]"; // 연두색
-    case "경량": return "text-[#ff8a00]";   // 주황색
-    case "중량": return "text-[#1e7e6e]";   // 청록색
-    case "샷건 쉘": return "text-[#da2115]"; // 빨간색
-    case "스나이퍼": return "text-[#4e4fb1]"; // 남보라색
-    case "특수 무기": return "text-[#ffcc00] animate-pulse"; // 골드/희귀
-    default: return "text-white";
+    case "에너지": return "text-emerald-400"; // Green/Teal
+    case "경량": return "text-amber-300";   // Yellow
+    case "중량": return "text-orange-400";   // Orange
+    case "샷건 쉘": return "text-violet-500"; // Purple
+    case "스나이퍼": return "text-sky-400";   // Cyan/Light Blue
+    case "특수 무기": return "text-amber-400 animate-pulse"; // Gold/rare tier with glow
+    default: return "text-slate-300";
   }
 };
 
@@ -82,6 +83,7 @@ const getAvatarFallback = (name: string | undefined | null, rankers: any[]) => {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeName}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
 };
 
+// [복구] 닉네임 반응형 폰트
 const getNicknameFontSize = (name: string, isTopRank: boolean) => {
   const len = name.length;
   if (isTopRank) {
@@ -96,7 +98,7 @@ const getNicknameFontSize = (name: string, isTopRank: boolean) => {
 };
 
 // =====================================================================
-// 🔊 글로벌 사운드 엔진 (복구 및 최적화)
+// 🔊 글로벌 사운드 엔진 및 설정 저장 (복구 완료)
 // =====================================================================
 let globalBgmEnabled = true;
 let globalSfxEnabled = true;
@@ -107,7 +109,7 @@ const audioCache: Record<string, HTMLAudioElement> = {};
 let isAudioUnlocked = false; 
 let currentMatchPhase = 'idle'; 
 
-const BASE_VOLUMES: Record<string, number> = { hover: 0.4, click: 1.0, match_start: 1.0, success: 1.0, error: 1.0 };
+const BASE_VOLUMES: Record<string, number> = { hover: 0.5, click: 1.0, match_start: 1.0, success: 1.0, error: 1.0 };
 
 if (typeof window !== 'undefined') {
   const savedBgmVol = localStorage.getItem('bgmVolume');
@@ -151,6 +153,7 @@ const playSFX = (type: string) => {
   audioCache[type].play().catch(() => {});
 };
 
+// [복구] 사이드바 메뉴 데이터
 const MENU_ITEMS = [
   { id: 'home', icon: Home, label: '대시보드' },
   { id: 'profile', icon: User, label: '내 정보' },
@@ -177,6 +180,7 @@ function App() {
   const [copyStatus, setCopyStatus] = useState(false);
   const [rankTab, setRankTab] = useState<number>(0);
 
+  // [복구] 개인별 환경설정 로컬 저장 시스템
   const [bgmEnabled, setBgmEnabled] = useState(localStorage.getItem('bgmEnabled') !== 'false');
   const [sfxEnabled, setSfxEnabled] = useState(localStorage.getItem('sfxEnabled') !== 'false');
   const [bgmVolume, setBgmVolume] = useState(parseFloat(localStorage.getItem('bgmVolume') || '0.10'));
@@ -184,10 +188,13 @@ function App() {
 
   useEffect(() => {
     globalBgmEnabled = bgmEnabled; globalSfxEnabled = sfxEnabled; globalBgmVolume = bgmVolume; globalSfxVolume = sfxVolume;
+    
+    // 로컬 스토리지 업데이트
     localStorage.setItem('bgmEnabled', bgmEnabled.toString());
     localStorage.setItem('sfxEnabled', sfxEnabled.toString());
     localStorage.setItem('bgmVolume', bgmVolume.toString());
     localStorage.setItem('sfxVolume', sfxVolume.toString());
+
     if (audioCache['bgm']) { audioCache['bgm'].muted = !bgmEnabled; audioCache['bgm'].volume = bgmVolume; }
     if (audioCache['waiting']) { audioCache['waiting'].muted = !bgmEnabled; audioCache['waiting'].volume = bgmVolume; }
     ['hover', 'click', 'match_start', 'success', 'error'].forEach(key => {
@@ -306,15 +313,17 @@ function App() {
 
   const renderCombatLogItem = (log: any, index: number) => {
     const isLeftWinner = log.winner_name === log.left_player_name;
-    const winnerAvatar = getAvatarFallback(isLeftWinner ? log.left_player_name : log.right_player_name, rankers);
-    const loserAvatar = getAvatarFallback(isLeftWinner ? log.right_player_name : log.left_player_name, rankers);
+    const winnerName = isLeftWinner ? log.left_player_name : log.right_player_name;
+    const loserName = isLeftWinner ? log.right_player_name : log.left_player_name;
+    const winnerAvatar = getAvatarFallback(winnerName, rankers);
+    const loserAvatar = getAvatarFallback(loserName, rankers);
     return (
-      <div key={index} onMouseEnter={() => playSFX('hover')} className="bg-black/60 border border-cyan-500/30 p-5 rounded-[1.5rem] flex flex-col justify-center gap-3 relative h-[140px] shrink-0">
+      <div key={index} className="bg-black/60 border border-cyan-500/30 p-5 rounded-[1.5rem] flex flex-col justify-center gap-3 relative h-[140px] shrink-0">
         <div className={`absolute top-0 right-0 px-3 py-1 text-[9px] font-black uppercase rounded-bl-xl rounded-tr-[1.5rem] ${log.match_type === 'free' ? 'bg-pink-600 text-white' : 'bg-cyan-600 text-black'}`}>{log.match_type} MATCH</div>
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-3 flex-1 overflow-hidden pr-2">
              <div className="relative shrink-0"><span className="absolute -top-1.5 -left-1.5 bg-yellow-400 text-black text-[8px] font-black px-1 rounded z-10">WIN</span><img src={winnerAvatar} className="w-10 h-10 rounded-full border-2 border-yellow-400 bg-black" alt="winner"/></div>
-             <span className="font-black text-white text-xl truncate">{isLeftWinner ? log.left_player_name : log.right_player_name}</span><span className="text-[11px] text-slate-500 font-black mx-2">VS</span><img src={loserAvatar} className="w-8 h-8 rounded-full border-2 border-slate-600 opacity-60 bg-black" alt="loser"/><span className="font-bold text-slate-400 text-base truncate">{isLeftWinner ? log.right_player_name : log.left_player_name}</span>
+             <span className="font-black text-white text-xl truncate">{winnerName}</span><span className="text-[11px] text-slate-500 font-black mx-2">VS</span><img src={loserAvatar} className="w-8 h-8 rounded-full border-2 border-slate-600 opacity-60 bg-black" alt="loser"/><span className="font-bold text-slate-400 text-base truncate">{loserName}</span>
           </div>
           <div className="text-3xl font-black text-white shrink-0"><span className="text-yellow-400">{isLeftWinner ? log.score_left : log.score_right}</span><span className="text-slate-600 mx-1">:</span><span className="text-slate-400">{isLeftWinner ? log.score_right : log.score_left}</span></div>
         </div>
@@ -326,11 +335,20 @@ function App() {
   return (
     <div className="flex h-screen bg-black text-slate-300 font-sans overflow-hidden relative select-none">
       <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000" style={{ backgroundImage: `url(${bgImage})` }}><div className="absolute inset-0 bg-black/10"></div></div>
+      {/* 🌟 [복구완료] 사이드바 복구 */}
       <aside className="w-20 bg-black/20 backdrop-blur-md border-r border-cyan-500/30 shadow-2xl flex flex-col items-center py-10 gap-10 z-20 shrink-0 h-screen fixed left-0">
         <div onMouseEnter={() => playSFX('hover')} className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 shadow-lg cursor-pointer"><Star className="text-cyan-400 animate-pulse" size={24}/></div>
         <div className="flex flex-col gap-10 text-slate-500 w-full items-center">
           {MENU_ITEMS.map((item) => (
-            <div key={item.id} title={item.label} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setActiveMenu(item.id); }} className={`cursor-pointer transition-all ${activeMenu === item.id ? 'text-cyan-400 drop-shadow-[0_0_10px_cyan] scale-110' : 'hover:text-slate-300'}`}><item.icon size={24}/></div>
+            <div 
+              key={item.id} 
+              title={item.label}
+              onMouseEnter={() => playSFX('hover')}
+              onClick={() => { playSFX('click'); setActiveMenu(item.id); }} 
+              className={`cursor-pointer transition-all ${activeMenu === item.id ? 'text-cyan-400 drop-shadow-[0_0_10px_cyan] scale-110' : 'hover:text-slate-300'}`}
+            >
+              <item.icon size={24}/>
+            </div>
           ))}
         </div>
         <div onMouseEnter={() => playSFX('hover')} className="mt-auto mb-6 hover:text-pink-500 cursor-pointer transition-colors" onClick={handleLogout}><LogOut size={24}/></div>
@@ -346,21 +364,25 @@ function App() {
 
         {activeMenu === 'home' && (
           <main className="flex-1 p-10 grid grid-cols-12 gap-8 items-stretch pb-20 animate-in fade-in duration-500 min-h-[1400px]">
+            {/* 좌측 패널 */}
             <div className="col-span-12 xl:col-span-3 flex flex-col gap-8 h-full relative">
                <section className="bg-black/40 backdrop-blur-2xl border-2 border-cyan-400 shadow-xl rounded-[2.5rem] p-3 shrink-0 h-fit flex flex-col overflow-hidden relative">
-                  <div className="flex flex-col relative z-10"><h3 className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-2 border-b border-white/5 pb-2">매치 엔트리</h3>
+                  <div className="flex flex-col relative z-10"><h3 onMouseEnter={() => playSFX('hover')} className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-2 border-b border-white/5 pb-2">매치 엔트리</h3>
                       <div className="space-y-3 flex flex-col pb-1">
                           <div className="flex gap-2 p-0.5 bg-black/50 rounded-2xl border border-white/5"><button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setEntryMode('free'); }} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${entryMode === 'free' ? 'bg-pink-600 text-white shadow-lg' : 'text-slate-500'}`}>자유대전</button><button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setEntryMode('random'); }} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${entryMode === 'random' ? 'bg-cyan-600 text-black shadow-lg' : 'text-slate-500'}`}>랜덤대전</button></div>
                           <div className="bg-black/60 p-2.5 rounded-2xl border border-white/5"><p className="text-[9px] text-slate-500 font-black mb-1">Target Name</p><input value={entryOpponent} onChange={(e) => setEntryOpponent(e.target.value)} placeholder="상대방 닉네임" className="w-full bg-transparent outline-none text-white font-black text-lg select-text" /></div>
                           {entryMode === 'free' && (
                             <div className="space-y-2 flex flex-col">
+                               {/* 🌟 [남철님 요청] 레전드 카테고리 색상 적용 */}
                                <select onMouseEnter={() => playSFX('hover')} value={entryLegend} onChange={(e) => { setEntryLegend(e.target.value); playSFX('click'); }} className="w-full bg-black/60 border border-white/10 p-2.5 rounded-xl text-sm font-black outline-none text-white"><option value="" disabled hidden>👉 레전드 선택</option>{Object.entries(LEGEND_CATEGORIES).map(([cat, list]) => (<optgroup key={cat} label={cat} className={`bg-black font-black ${getLegendCategoryColor(cat)}`}>{list.map(l => <option key={l} value={l} className="text-white">{l}</option>)}</optgroup>))}</select>
+                               {/* 🌟 [남철님 요청] 무기 카테고리 색상 적용 */}
                                <div className="flex flex-col gap-2">{[0, 1].map(i => (<select key={i} onMouseEnter={() => playSFX('hover')} value={entryWeapons[i]} onChange={(e) => {const w = [...entryWeapons]; w[i] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="w-full bg-black/60 border border-white/10 p-2.5 rounded-xl text-sm font-black outline-none text-white"><option value="" disabled hidden>👉 {i+1}번 무기 선택</option>{Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (<optgroup key={cat} label={cat} className={`bg-black font-black ${getWeaponCategoryColor(cat)}`}>{list.map(w => <option key={w} value={w} className="text-white">{w}</option>)}</optgroup>))}</select>))}</div>
                             </div>
                           )}
                           <button onMouseEnter={() => playSFX('hover')} onClick={handleStartMatch} className="w-full py-4 rounded-[1.5rem] font-black text-lg text-white bg-blue-600 shadow-lg hover:bg-blue-500 transition-all border border-white/10 cursor-pointer">대전 생성 (Entry)</button>
                       </div>
                   </div></section>
+
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-4 flex flex-col overflow-hidden h-[880px] shrink-0 shadow-lg">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-cyan-400 text-center mb-2 border-b border-white/5 pb-2 flex items-center justify-center gap-2"><span className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-md"></span> 접속 현황</h3>
                   <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1">
@@ -375,7 +397,8 @@ function App() {
                              {ou.display_name.trim() === currentUserName?.trim() ? (
                                 <div className="px-3 py-1.5 rounded-xl text-[10px] font-black bg-blue-600/20 border border-blue-500/50 text-blue-400">나</div>
                              ) : (
-                                <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setEntryOpponent(ou.display_name); }} disabled={!isChallengeableByRank} className={`px-3 py-1.5 rounded-xl text-[10px] font-black shadow-md transition-all ${isChallengeableByRank ? 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-500 hover:text-black' : 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'}`}>{isChallengeableByRank ? '도전 가능' : '도전 불가'}</button>
+                                /* 🌟 [남철님 요청] 도전 가능 버튼 커서 수정 */
+                                <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setEntryOpponent(ou.display_name); }} disabled={!isChallengeableByRank} className={`px-3 py-1.5 rounded-xl text-[10px] font-black shadow-md transition-all cursor-pointer ${isChallengeableByRank ? 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-500 hover:text-black' : 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'}`}>{isChallengeableByRank ? '도전 가능' : '도전 불가'}</button>
                              )}
                           </div>
                         )
@@ -384,6 +407,7 @@ function App() {
                </section>
             </div>
 
+            {/* 중앙 패널 */}
             <div className="col-span-12 xl:col-span-5 flex flex-col gap-8 h-full relative">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-4 flex flex-col h-fit shrink-0 relative">
                   <div className="flex flex-col relative z-10"><h3 onMouseEnter={() => playSFX('hover')} className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-2 border-b border-white/5 pb-2">현재 매치 상황</h3>
@@ -402,28 +426,20 @@ function App() {
                <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-5 flex flex-col h-fit shrink-0 relative">
                   <div className="px-2 pt-2 flex flex-col relative z-10">
                       <div onMouseEnter={() => playSFX('hover')} className="flex flex-col items-start mb-4 mt-1"><div className="flex items-center gap-6 mb-1"><Trophy className="text-yellow-400 drop-shadow-lg" size={80}/><div className="flex flex-col"><h3 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500 uppercase tracking-tighter pt-1">은하단 랭킹</h3><p className="text-sm font-black text-cyan-400 italic pt-1 uppercase">명예의 전당 (HALL OF FAME)</p></div></div></div>
-                      <div className="overflow-y-auto space-y-1.5 custom-scrollbar pr-3 pb-2 pt-8 min-h-[200px]">
+                      
+                      <div className="overflow-y-auto space-y-2.5 custom-scrollbar pr-3 pb-2 pt-6 min-h-[200px]">
                          {rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).filter(r => { if (rankTab === 0) return r.rankIndex < 6; if (rankTab === 1) return r.rankIndex >= 6 && r.rankIndex < 12; return r.rankIndex >= 12; }).map((r) => {
                               const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
                               return (
                                 <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); }} className={`mx-2 p-3 pt-6 rounded-[1rem] border transition-all cursor-pointer group bg-black/60 relative flex flex-col justify-center hover:scale-[1.01] ${grandRank.glow} border-cyan-400/30 hover:border-cyan-400`}>
-                                   {r.rankIndex === 0 && <div className="absolute inset-0 bg-yellow-400/5 animate-pulse rounded-[1rem]"></div>}
-                                   {/* 🌟 [남철님 요청] 계급 라벨 위치 수정 (카드 안쪽 top-2) 및 크기 확대 */}
-                                   <div className={`absolute top-1.5 left-1/2 -translate-x-1/2 px-6 py-1 rounded-xl border border-cyan-400/30 ${grandRank.bg} flex items-center gap-2 shadow-lg z-20`}>
-                                       {grandRank.icon} <span className={`text-[16px] font-black uppercase tracking-widest ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span>
-                                   </div>
-                                   <div className="flex items-center justify-between w-full mt-4 px-1">
-                                      <div className="flex items-center gap-4 flex-1 overflow-hidden">
-                                         <img src={r.avatar_url} className={`w-11 h-11 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-md' : 'border-white/20'}`} alt="p"/>
-                                         <span className={`text-white font-black truncate group-hover:text-cyan-400 transition-colors ${getNicknameFontSize(r.display_name, r.rankIndex === 0)}`}>{r.display_name}</span>
-                                      </div>
-                                      <div className="flex flex-col items-end"><span className="font-black text-slate-300 text-lg tracking-tight">{r.wins}승 {r.losses}패</span>{r.rankIndex === 0 && (<span className="font-black text-[10px] px-2 py-0.5 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50 mt-0.5">👑 방어전: {r.defense_stack || 0}</span>)}</div>
-                                   </div>
+                                   {r.rankIndex === 0 && <div className="absolute inset-0 bg-yellow-400/5 animate-pulse rounded-[1rem]"></div>}<div className={`absolute top-1.5 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-xl border border-cyan-400/30 ${grandRank.bg} flex items-center gap-2 shadow-lg z-20`}>{grandRank.icon} <span className={`text-[16px] font-black uppercase tracking-widest ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span></div><div className="flex items-center justify-between w-full mt-4 px-1"><div className="flex items-center gap-4 flex-1 overflow-hidden"><img src={r.avatar_url} className={`w-11 h-11 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-md' : 'border-white/20'}`} alt="p"/><span className={`text-white font-black truncate group-hover:text-cyan-400 transition-colors ${getNicknameFontSize(r.display_name, r.rankIndex === 0)}`}>{r.display_name}</span></div><div className="flex flex-col items-end"><span className="font-black text-slate-300 text-lg tracking-tight">{r.wins}승 {r.losses}패</span>{r.rankIndex === 0 && (<span className="font-black text-[10px] px-2 py-0.5 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50 mt-0.5">👑 방어전: {r.defense_stack || 0}</span>)}</div></div>
                                 </div>
                               );
                            }) : (<div className="flex items-center justify-center h-[500px] opacity-50 text-cyan-400">랭커가 없습니다</div>)}
                       </div>
-                      <div className="flex gap-2 px-1 mt-4 mb-1"><button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(0); }} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 0 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>왕좌·성좌</button><button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(1); }} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 1 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>항성 (1~6)</button><button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(2); }} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 2 ? 'bg-slate-500/20 text-slate-300 border-slate-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>정예</button></div>
+
+                      {/* 🌟 [복구완료] 명예의 전당 카테고리(탭) 복구 */}
+                      <div className="flex gap-2 px-1 mt-4 mb-1"><button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(0); }} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border cursor-pointer ${rankTab === 0 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>왕좌·성좌</button><button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(1); }} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border cursor-pointer ${rankTab === 1 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>항성 (1~6)</button><button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(2); }} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border cursor-pointer ${rankTab === 2 ? 'bg-slate-500/20 text-slate-300 border-slate-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>정예</button></div>
                       <div className="relative px-1 mt-3 mb-1"><Search className="absolute left-6 top-4.5 text-slate-500" size={18}/><input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="검색..." className="w-full bg-white/5 border border-white/10 pl-16 pr-8 py-4 rounded-full text-sm outline-none focus:border-cyan-400 text-white select-text"/></div>
                   </div></section>
             </div>
@@ -440,10 +456,11 @@ function App() {
         )}
 
         {activeMenu === 'settings' && (
-          <main className="flex-1 p-10 h-full overflow-y-auto custom-scrollbar pb-20 animate-in fade-in duration-500"><h2 onMouseEnter={() => playSFX('hover')} className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-300 to-slate-500 uppercase tracking-widest mb-8 text-left flex items-center gap-4 drop-shadow-[0_0_10px_white]"><Settings size={36} className="text-slate-400"/> 환경 설정 (Settings)</h2><div className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.5)] rounded-[3rem] p-12 max-w-3xl space-y-10"><div className="flex items-center gap-8 border-b border-white/10 pb-10 cursor-default"><img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest&backgroundColor=b6e3f4"} className="w-24 h-24 rounded-full border-4 border-cyan-400 shadow-[0_0_20px_cyan]" alt="profile"/><div><h3 className="text-3xl font-black text-white italic tracking-tighter uppercase">{currentUserName || "GUEST PILOT"}</h3><p className="text-cyan-400 font-bold tracking-widest mt-1">{user?.email || "디스코드 로그인이 필요합니다"}</p></div></div><div className="flex items-center justify-between border-b border-white/10 pb-8"><div className="flex-1"><div className="flex justify-between items-center mb-2"><h4 className="text-xl font-black text-white tracking-widest cursor-default">배경음악 (BGM)</h4><div onMouseEnter={() => playSFX('hover')} onClick={() => { setBgmEnabled(!bgmEnabled); playSFX('click'); }} className={`w-14 h-7 rounded-full relative cursor-pointer transition-all ${bgmEnabled ? 'bg-cyan-500 shadow-[0_0_15px_cyan]' : 'bg-white/20'}`}><div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${bgmEnabled ? 'right-1' : 'left-1'}`}></div></div></div><p className="text-sm text-slate-400 font-bold mb-4">로비 및 대기 화면의 배경음악을 재생합니다.</p><div className="flex items-center gap-4"><span className="text-xs font-black text-slate-500">0</span><input onMouseEnter={() => playSFX('hover')} type="range" min="0" max="1" step="0.01" value={bgmVolume} onChange={(e) => setBgmVolume(parseFloat(e.target.value))} className="w-full bg-white/10 h-2 rounded-lg cursor-pointer volume-slider" disabled={!bgmEnabled}/><span className="text-xs font-black text-cyan-400 w-8 text-right">{Math.round(bgmVolume * 100)}</span></div></div></div><div className="flex items-center justify-between border-b border-white/10 pb-8"><div className="flex-1"><div className="flex justify-between items-center mb-2"><h4 className="text-xl font-black text-white tracking-widest cursor-default">효과음 (SFX)</h4><div onMouseEnter={() => playSFX('hover')} onClick={() => { setSfxEnabled(!sfxEnabled); playSFX('click'); }} className={`w-14 h-7 rounded-full relative cursor-pointer transition-all ${sfxEnabled ? 'bg-cyan-500 shadow-[0_0_15px_cyan]' : 'bg-white/20'}`}><div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${sfxEnabled ? 'right-1' : 'left-1'}`}></div></div></div><p className="text-sm text-slate-400 font-bold mb-4">버튼 클릭 및 매칭 시 효과음을 재생합니다.</p><div className="flex items-center gap-4"><span className="text-xs font-black text-slate-500">0</span><input onMouseEnter={() => playSFX('hover')} type="range" min="0" max="1" step="0.01" value={sfxVolume} onChange={(e) => setSfxVolume(parseFloat(e.target.value))} className="w-full bg-white/10 h-2 rounded-lg cursor-pointer volume-slider" disabled={!sfxEnabled}/><span className="text-xs font-black text-cyan-400 w-8 text-right">{Math.round(sfxVolume * 100)}</span></div></div></div></div></main>
+          <main className="flex-1 p-10 h-full overflow-y-auto custom-scrollbar pb-20 animate-in fade-in duration-500"><h2 onMouseEnter={() => playSFX('hover')} className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-300 to-slate-500 uppercase tracking-widest mb-8 text-left flex items-center gap-4 drop-shadow-[0_0_10px_white]"><Settings size={36} className="text-slate-400"/> 환경 설정 (Settings)</h2><div className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.5)] rounded-[3rem] p-12 max-w-3xl space-y-10"><div className="flex items-center gap-8 border-b border-white/10 pb-10 cursor-default"><img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest&backgroundColor=b6e3f4"} className="w-24 h-24 rounded-full border-4 border-cyan-400 shadow-[0_0_20px_cyan]" alt="profile"/><div onMouseEnter={() => playSFX('hover')}><h3 className="text-3xl font-black text-white italic tracking-tighter uppercase">{currentUserName || "GUEST PILOT"}</h3><p className="text-cyan-400 font-bold tracking-widest mt-1">{user?.email || "디스코드 로그인이 필요합니다"}</p></div></div><div className="flex items-center justify-between border-b border-white/10 pb-8"><div className="flex-1"><div className="flex justify-between items-center mb-2"><h4 onMouseEnter={() => playSFX('hover')} className="text-xl font-black text-white tracking-widest cursor-default">배경음악 (BGM)</h4><div onMouseEnter={() => playSFX('hover')} onClick={() => { setBgmEnabled(!bgmEnabled); playSFX('click'); }} className={`w-14 h-7 rounded-full relative cursor-pointer transition-all ${bgmEnabled ? 'bg-cyan-500 shadow-[0_0_15px_cyan]' : 'bg-white/20'}`}><div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${bgmEnabled ? 'right-1' : 'left-1'}`}></div></div></div><p className="text-sm text-slate-400 font-bold mb-4">로비 및 대기 화면의 배경음악을 재생합니다.</p><div className="flex items-center gap-4"><span className="text-xs font-black text-slate-500">0</span><input type="range" min="0" max="1" step="0.01" value={bgmVolume} onChange={(e) => setBgmVolume(parseFloat(e.target.value))} className="w-full bg-white/10 h-2 rounded-lg cursor-pointer volume-slider" disabled={!bgmEnabled}/><span className="text-xs font-black text-cyan-400 w-8 text-right">{Math.round(bgmVolume * 100)}</span></div></div></div><div className="flex items-center justify-between border-b border-white/10 pb-8"><div className="flex-1"><div className="flex justify-between items-center mb-2"><h4 onMouseEnter={() => playSFX('hover')} className="text-xl font-black text-white tracking-widest cursor-default">효과음 (SFX)</h4><div onMouseEnter={() => playSFX('hover')} onClick={() => { setSfxEnabled(!sfxEnabled); playSFX('click'); }} className={`w-14 h-7 rounded-full relative cursor-pointer transition-all ${sfxEnabled ? 'bg-cyan-500 shadow-[0_0_15px_cyan]' : 'bg-white/20'}`}><div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${sfxEnabled ? 'right-1' : 'left-1'}`}></div></div></div><p className="text-sm text-slate-400 font-bold mb-4">버튼 클릭 및 매칭 시 효과음을 재생합니다.</p><div className="flex items-center gap-4"><span className="text-xs font-black text-slate-500">0</span><input type="range" min="0" max="1" step="0.01" value={sfxVolume} onChange={(e) => setSfxVolume(parseFloat(e.target.value))} className="w-full bg-white/10 h-2 rounded-lg cursor-pointer volume-slider" disabled={!sfxEnabled}/><span className="text-xs font-black text-cyan-400 w-8 text-right">{Math.round(sfxVolume * 100)}</span></div></div></div></div></main>
         )}
       </div>
 
+      {/* 선택 유저 팝업 */}
       {selectedPlayer && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[300] flex items-center justify-center p-6 animate-in fade-in duration-300 cursor-pointer" onClick={() => { setSelectedPlayer(null); playSFX('click'); }}>
           <div className="bg-[#0A0C14] border-2 border-cyan-400 w-full max-w-2xl rounded-[4rem] p-12 shadow-2xl relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
