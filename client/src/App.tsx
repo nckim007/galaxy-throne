@@ -56,6 +56,7 @@ const getAvatarFallback = (name: string | undefined | null, rankers: any[]) => {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeName}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
 };
 
+// 글로벌 사운드 매니저
 let globalBgmEnabled = true;
 let globalSfxEnabled = true;
 let globalBgmVolume = 0.10;
@@ -101,12 +102,6 @@ const playSFX = (type: string) => {
   audioCache[type].play().catch(() => {});
 };
 
-const stopSFX = (type: string) => {
-  if (!audioCache[type]) return;
-  audioCache[type].pause();
-  if (type !== 'bgm' && type !== 'waiting') audioCache[type].currentTime = 0;
-};
-
 const MENU_ITEMS = [
   { id: 'home', icon: Home, label: '대시보드' },
   { id: 'profile', icon: User, label: '내 정보' },
@@ -131,14 +126,11 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [copyStatus, setCopyStatus] = useState(false);
-  const [showComet, setShowComet] = useState(false);
-  const prevTopPlayer = useRef<string | null>(null);
   const [rankTab, setRankTab] = useState<number>(0);
   const [bgmEnabled, setBgmEnabled] = useState(true);
   const [sfxEnabled, setSfxEnabled] = useState(true);
   const [bgmVolume, setBgmVolume] = useState(0.10);
   const [sfxVolume, setSfxVolume] = useState(0.60);
-  const [vfxEnabled, setVfxEnabled] = useState(true);
 
   useEffect(() => {
     globalBgmEnabled = bgmEnabled; globalSfxEnabled = sfxEnabled; globalBgmVolume = bgmVolume; globalSfxVolume = sfxVolume;
@@ -155,10 +147,9 @@ function App() {
   useEffect(() => {
     currentMatchPhase = matchPhase;
     if (!isAudioUnlocked) return;
-    if (matchPhase === 'idle') { stopSFX('waiting'); if (globalBgmEnabled) playSFX('bgm'); } 
-    else if (matchPhase === 'waiting') { stopSFX('bgm'); if (globalBgmEnabled) playSFX('waiting'); } 
-    else if (matchPhase === 'ready') { stopSFX('bgm'); stopSFX('waiting'); }
-    return () => stopSFX('waiting');
+    if (matchPhase === 'idle') { if (globalBgmEnabled) playSFX('bgm'); } 
+    else if (matchPhase === 'waiting') { if (globalBgmEnabled) playSFX('waiting'); } 
+    return () => { audioCache['bgm']?.pause(); audioCache['waiting']?.pause(); };
   }, [matchPhase]);
 
   useEffect(() => {
@@ -195,7 +186,7 @@ function App() {
         ...r, rankIndex: i, display_name: r.display_name || 'GUEST', wins: r.wins || 0, losses: r.losses || 0,
         win_rate: (r.wins + r.losses) > 0 ? (((r.wins) / (r.wins + r.losses)) * 100).toFixed(1) + '%' : '0.0%',
         avatar_url: r.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.id}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
-        favorite_legend: r.favorite_legend, favorite_weapon: r.favorite_weapon, defense_stack: r.defense_stack || 0
+        defense_stack: r.defense_stack || 0
       }));
       setRankers(processed);
     } else { setRankers([]); }
@@ -253,10 +244,10 @@ function App() {
   };
 
   const getGrandRankInfo = (idx: number) => {
-    if (idx === 0) return { title: "왕좌", num: 1, color: "text-yellow-400", glow: "shadow-[0_0_15px_gold]", bg: "bg-yellow-400/20", icon: <Crown size={14} className="text-yellow-400 animate-pulse"/> };
-    if (idx < 6) return { title: "성좌", num: idx + 1, color: "text-purple-400", glow: "shadow-[0_0_10px_rgba(192,132,252,0.6)]", bg: "bg-purple-400/20", icon: <Star size={12} className="text-purple-400"/> };
-    if (idx < 12) return { title: "항성", num: idx - 5, color: "text-cyan-400", glow: "shadow-[0_0_10px_rgba(34,211,238,0.4)]", bg: "bg-cyan-400/20", icon: <Zap size={12} className="text-cyan-400"/> };
-    return { title: "정예", num: idx - 11, color: "text-slate-500", glow: "", bg: "bg-slate-500/20", icon: <Shield size={12} className="text-slate-500"/> };
+    if (idx === 0) return { title: "왕좌", num: 1, color: "text-yellow-400", glow: "shadow-[0_0_20px_rgba(250,204,21,0.6)]", bg: "bg-yellow-400/20", icon: <Crown size={18} className="text-yellow-400 animate-pulse"/> };
+    if (idx < 6) return { title: "성좌", num: idx + 1, color: "text-purple-400", glow: "shadow-[0_0_15px_rgba(192,132,252,0.5)]", bg: "bg-purple-400/20", icon: <Star size={14} className="text-purple-400"/> };
+    if (idx < 12) return { title: "항성", num: idx - 5, color: "text-cyan-400", glow: "shadow-[0_0_15px_rgba(34,211,238,0.3)]", bg: "bg-cyan-400/20", icon: <Zap size={14} className="text-cyan-400"/> };
+    return { title: "정예", num: idx - 11, color: "text-slate-500", glow: "", bg: "bg-slate-500/20", icon: <Shield size={14} className="text-slate-500"/> };
   };
 
   const renderCombatLogItem = (log: any, index: number) => {
@@ -327,10 +318,18 @@ function App() {
                         return (
                           <div key={i} className="bg-black/60 border border-white/10 p-3 rounded-xl flex items-center justify-between hover:border-cyan-400/50 transition-all group">
                              <div className="flex items-center gap-3"><div className="relative"><img src={ou.avatar_url} className="w-9 h-9 rounded-full border border-white/20" alt="profile"/><div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-black rounded-full"></div></div><div className="flex flex-col"><span className="text-sm font-black text-white truncate max-w-[90px]">{ou.display_name}</span><span className={`text-[9px] font-black uppercase ${rankInfo.color}`}>{rankInfo.title} {rankInfo.num}</span></div></div>
+                             
+                             {/* 🌟 [남철님 요청] 버튼 복구 및 닉네임 자동 입력 적용 */}
                              {ou.display_name.trim() === currentUserName?.trim() ? (
                                 <div className="px-3 py-1.5 rounded-xl text-[10px] font-black bg-blue-600/20 border border-blue-500/50 text-blue-400">나</div>
                              ) : (
-                                <div className={`px-3 py-1.5 rounded-xl text-[10px] font-black shadow-md ${isChallengeableByRank ? 'bg-green-600/20 border border-green-500/50 text-green-400' : 'bg-slate-800/50 border border-slate-700 text-slate-500'}`}>{isChallengeableByRank ? '도전 가능' : '도전 불가'}</div>
+                                <button 
+                                  onClick={() => { playSFX('click'); setEntryOpponent(ou.display_name); }}
+                                  disabled={!isChallengeableByRank} 
+                                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black shadow-md transition-all ${isChallengeableByRank ? 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-500 hover:text-black' : 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'}`}
+                                >
+                                  {isChallengeableByRank ? '도전 가능' : '도전 불가'}
+                                </button>
                              )}
                           </div>
                         )
@@ -352,18 +351,39 @@ function App() {
                <section className="bg-black/40 backdrop-blur-2xl border-2 border-cyan-400 shadow-xl rounded-[2.5rem] p-6 flex flex-col h-[940px] shrink-0 overflow-hidden"><h3 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-2">최근 전투 기록</h3><div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2">{logs.length > 0 ? logs.slice(0, 5).map((log, i) => renderCombatLogItem(log, i)) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">전투 기록이 없습니다</div>)}</div></section>
             </div>
             <div className="col-span-12 lg:col-span-4 flex flex-col h-full relative">
-               <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-5 flex flex-col h-fit shrink-0 relative"><div className="px-2 pt-2 flex flex-col relative z-10"><div className="flex flex-col items-start mb-4 mt-1"><div className="flex items-center gap-6 mb-1"><Trophy className="text-yellow-400 drop-shadow-lg" size={80}/><div className="flex flex-col"><h3 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500 uppercase tracking-tighter pt-1">은하단 랭킹</h3><p className="text-sm font-black text-cyan-400 italic pt-1 uppercase">명예의 전당</p></div></div></div>
-                      <div className="overflow-y-auto space-y-4 custom-scrollbar pr-3 pb-2 min-h-[200px]">
+               <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-5 flex flex-col h-fit shrink-0 relative">
+                  <div className="px-2 pt-2 flex flex-col relative z-10">
+                      <div className="flex flex-col items-start mb-4 mt-1">
+                          <div className="flex items-center gap-6 mb-1"><Trophy className="text-yellow-400 drop-shadow-lg" size={80}/><div className="flex flex-col"><h3 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500 uppercase tracking-tighter pt-1">은하단 랭킹</h3><p className="text-sm font-black text-cyan-400 italic pt-1 uppercase">명예의 전당 (HALL OF FAME)</p></div></div>
+                      </div>
+                      {/* 🌟 [남철님 요청] 상단 여백 추가로 테두리 잘림 해결 */}
+                      <div className="overflow-y-auto space-y-5 custom-scrollbar pr-3 pb-2 pt-6 min-h-[200px]">
                          {rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).filter(r => { if (rankTab === 0) return r.rankIndex < 6; if (rankTab === 1) return r.rankIndex >= 6 && r.rankIndex < 12; return r.rankIndex >= 12; }).map((r) => {
                               const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
                               return (
-                                <div key={r.id} onClick={() => { playSFX('click'); setSelectedPlayer(r); }} className={`mx-1 p-3 pt-8 rounded-[1.2rem] border transition-all cursor-pointer group bg-black/60 relative flex flex-col justify-center hover:scale-[1.02] ${grandRank.glow} border-cyan-400/30 hover:border-cyan-400`}>
-                                   {r.rankIndex === 0 && <div className="absolute inset-0 bg-yellow-400/5 animate-pulse rounded-[1.2rem]"></div>}<div className={`absolute top-0 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-b-lg border-x border-b border-cyan-400/30 ${grandRank.bg} flex items-center gap-1 shadow-md`}>{grandRank.icon} <span className={`text-[10px] font-black uppercase ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span></div><div className="flex items-center justify-between w-full mt-3 px-2"><div className="flex items-center gap-4 flex-1 overflow-hidden"><img src={r.avatar_url} className={`w-10 h-10 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-md' : 'border-white/20'}`} alt="p"/><span className={`text-white font-black truncate group-hover:text-cyan-400 transition-colors ${r.rankIndex === 0 ? 'text-2xl' : 'text-xl'}`}>{r.display_name}</span></div><div className="flex flex-col items-end gap-1"><span className="font-black text-slate-300 text-lg">{r.wins}승 {r.losses}패</span>{r.rankIndex === 0 && (<span className="font-black text-[10px] px-2 py-0.5 rounded bg-yellow-400/20 text-yellow-400 border border-yellow-400/50">👑 방어: {r.defense_stack || 0}</span>)}</div></div>
+                                <div key={r.id} onClick={() => { playSFX('click'); setSelectedPlayer(r); }} className={`mx-2 p-4 pt-10 rounded-[1.5rem] border transition-all cursor-pointer group bg-black/60 relative flex flex-col justify-center hover:scale-[1.02] ${grandRank.glow} border-cyan-400/30 hover:border-cyan-400`}>
+                                   {r.rankIndex === 0 && <div className="absolute inset-0 bg-yellow-400/5 animate-pulse rounded-[1.5rem]"></div>}
+                                   
+                                   {/* 🌟 [남철님 요청] 계급 표시 크기 확대 및 디자인 개선 */}
+                                   <div className={`absolute top-0 left-1/2 -translate-x-1/2 px-5 py-1 rounded-b-xl border-x border-b border-cyan-400/30 ${grandRank.bg} flex items-center gap-2 shadow-lg z-20`}>
+                                       {grandRank.icon} <span className={`text-[12px] font-black uppercase tracking-widest ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span>
+                                   </div>
+                                   
+                                   <div className="flex items-center justify-between w-full mt-3 px-2">
+                                      <div className="flex items-center gap-5 flex-1 overflow-hidden">
+                                         <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-md' : 'border-white/20'}`} alt="p"/>
+                                         <span className={`text-white font-black truncate group-hover:text-cyan-400 transition-colors ${r.rankIndex === 0 ? 'text-3xl' : 'text-2xl'}`}>{r.display_name}</span>
+                                      </div>
+                                      <div className="flex flex-col items-end gap-1">
+                                         <span className="font-black text-slate-300 text-xl">{r.wins}승 {r.losses}패</span>
+                                         {r.rankIndex === 0 && (<span className="font-black text-[11px] px-3 py-1 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50">👑 방어전: {r.defense_stack || 0}</span>)}
+                                      </div>
+                                   </div>
                                 </div>
                               );
                            }) : (<div className="flex items-center justify-center h-[500px] opacity-50 text-cyan-400">랭커가 없습니다</div>)}
                       </div>
-                      <div className="flex gap-2 px-1 mt-1 mb-1"><button onClick={() => setRankTab(0)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 0 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>왕좌·성좌</button><button onClick={() => setRankTab(1)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 1 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>항성 (1~6)</button><button onClick={() => setRankTab(2)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 2 ? 'bg-slate-500/20 text-slate-300 border-slate-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>정예</button></div>
+                      <div className="flex gap-2 px-1 mt-6 mb-1"><button onClick={() => setRankTab(0)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 0 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>왕좌·성좌</button><button onClick={() => setRankTab(1)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 1 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>항성 (1~6)</button><button onClick={() => setRankTab(2)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${rankTab === 2 ? 'bg-slate-500/20 text-slate-300 border-slate-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500'}`}>정예</button></div>
                       <div className="relative px-1 mt-3 mb-1"><Search className="absolute left-6 top-4.5 text-slate-500" size={18}/><input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="검색..." className="w-full bg-white/5 border border-white/10 pl-16 pr-8 py-4 rounded-full text-sm outline-none focus:border-cyan-400 text-white select-text"/></div>
                   </div></section>
             </div>
@@ -374,8 +394,22 @@ function App() {
       {selectedPlayer && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[300] flex items-center justify-center p-6 animate-in fade-in duration-300 cursor-pointer" onClick={() => setSelectedPlayer(null)}>
           <div className="bg-[#0A0C14] border-2 border-cyan-400 w-full max-w-2xl rounded-[4rem] p-12 shadow-2xl relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
-             <button onClick={() => setSelectedPlayer(null)} className="absolute top-10 right-10 text-slate-500 hover:text-white"><X size={36}/></button><div className="flex items-center gap-10 mb-10"><img src={selectedPlayer.avatar_url} className={`w-32 h-32 rounded-[2.5rem] border-4 ${selectedPlayer.rankIndex === 0 ? 'border-yellow-400 shadow-lg' : 'border-cyan-400 shadow-md'}`} alt="p" /><div className="flex-1 overflow-hidden"><h2 className="text-5xl font-black text-white italic truncate tracking-tighter">{selectedPlayer.display_name}</h2><div className="flex gap-3"><span className={`text-sm font-black px-6 py-1.5 rounded-full border border-white/20 ${getGrandRankInfo(selectedPlayer.rankIndex)?.color || 'text-slate-300'} bg-white/10 uppercase`}>RANK: {getGrandRankInfo(selectedPlayer.rankIndex)?.title} {getGrandRankInfo(selectedPlayer.rankIndex)?.num}</span></div></div></div>
-             <div className="grid grid-cols-2 gap-6 mb-10"><div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] text-center shadow-inner"><p className="text-xs font-black text-slate-400 mb-2">RECORD (W/L)</p><p className="text-4xl font-black text-white">{selectedPlayer.wins}승 {selectedPlayer.losses}패</p></div><div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] text-center shadow-inner"><p className="text-xs font-black text-slate-400 mb-2">WIN RATE</p><p className="text-4xl font-black text-pink-400">{selectedPlayer.win_rate || "0.0%"}</p></div><div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] text-center shadow-inner"><p className="text-xs font-black text-slate-400 mb-2">FAVORITE LEGEND</p><p className="text-2xl font-black text-cyan-400 truncate">{selectedPlayer.favorite_legend || "미선택"}</p></div><div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] text-center shadow-inner"><p className="text-xs font-black text-slate-400 mb-2">FAVORITE WEAPON</p><p className="text-xl font-black text-cyan-400 truncate">{selectedPlayer.favorite_weapon || "미선택"}</p></div></div>
+             <button onClick={() => setSelectedPlayer(null)} className="absolute top-10 right-10 text-slate-500 hover:text-white"><X size={36}/></button>
+             <div className="flex items-center gap-10 mb-10">
+                <img src={selectedPlayer.avatar_url} className={`w-32 h-32 rounded-[2.5rem] border-4 ${selectedPlayer.rankIndex === 0 ? 'border-yellow-400 shadow-lg' : 'border-cyan-400 shadow-md'}`} alt="p" />
+                <div className="flex-1 overflow-hidden">
+                   <h2 className="text-5xl font-black text-white italic truncate tracking-tighter">{selectedPlayer.display_name}</h2>
+                   <div className="flex gap-3">
+                     <span className={`text-sm font-black px-6 py-1.5 rounded-full border border-white/20 ${getGrandRankInfo(selectedPlayer.rankIndex)?.color || 'text-slate-300'} bg-white/10 uppercase`}>RANK: {getGrandRankInfo(selectedPlayer.rankIndex)?.title} {getGrandRankInfo(selectedPlayer.rankIndex)?.num}</span>
+                   </div>
+                </div>
+             </div>
+             <div className="grid grid-cols-2 gap-6 mb-10">
+                <div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] text-center shadow-inner"><p className="text-xs font-black text-slate-400 mb-2">RECORD (W/L)</p><p className="text-4xl font-black text-white">{selectedPlayer.wins}승 {selectedPlayer.losses}패</p></div>
+                <div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] text-center shadow-inner"><p className="text-xs font-black text-slate-400 mb-2">WIN RATE</p><p className="text-4xl font-black text-pink-400">{selectedPlayer.win_rate || "0.0%"}</p></div>
+                <div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] text-center shadow-inner"><p className="text-xs font-black text-slate-400 mb-2">FAVORITE LEGEND</p><p className="text-2xl font-black text-cyan-400 truncate">{selectedPlayer.favorite_legend || "미선택"}</p></div>
+                <div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] text-center shadow-inner"><p className="text-xs font-black text-slate-400 mb-2">FAVORITE WEAPON</p><p className="text-xl font-black text-cyan-400 truncate">{selectedPlayer.favorite_weapon || "미선택"}</p></div>
+             </div>
              <button onClick={() => copyPlayerName(selectedPlayer.display_name)} className="w-full bg-cyan-600/20 hover:bg-cyan-600/40 border-2 border-cyan-400/50 text-cyan-400 py-6 rounded-[2rem] font-black text-lg flex items-center justify-center gap-4 active:scale-95 shadow-lg">{copyStatus ? <Check size={24}/> : <Copy size={24}/>}{copyStatus ? 'NICKNAME COPIED!' : `COPY NICKNAME`}</button>
           </div>
         </div>
