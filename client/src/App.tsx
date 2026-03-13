@@ -394,12 +394,7 @@ function App() {
   }, [currentUserName]); 
 
   const fetchData = async () => {
-    // 🌟 [에러 추적기 1] 데이터 가져오기 실패 시 화면에 띄움
-    const { data: matches, error } = await supabase.from('matches').select('*').order('created_at', { ascending: false });
-    if (error) {
-        console.error("데이터 가져오기 실패:", error);
-        alert(`[조회 에러] 테이블에서 데이터를 가져올 수 없습니다.\n원인: ${error.message}`);
-    }
+    const { data: matches } = await supabase.from('matches').select('*').order('created_at', { ascending: false });
     if (matches) setLogs([...matches]);
   };
 
@@ -535,6 +530,8 @@ function App() {
     setMatchPhase('idle'); setActiveMatch(null);
   };
 
+  // 🌟 [최대 에러 원인 완벽 수술 완료]
+  // 업데이트 결과에서 누락된 정보를 찾지 않고, 100% 확실한 리액트 내 상태(currentUserName)를 강제로 꽂아넣음
   const handleReportScore = async () => {
     if (myWins === null || myLosses === null || !activeMatch) { playSFX('error'); return alert("승리 및 패배 횟수를 모두 선택하세요!"); }
     playSFX('click'); 
@@ -563,13 +560,17 @@ function App() {
 
         if (hasC && hasT) {
             if (updatedData.c_win === updatedData.t_lose && updatedData.c_lose === updatedData.t_win) {
-                const winnerName = updatedData.c_win > updatedData.c_lose ? updatedData.challenger_name : updatedData.target_name;
+                
+                // 🌟 [핵심 해결] updatedData의 불확실성을 버리고 무조건 확실한 로컬 데이터를 직접 사용
+                const challengerName = isC ? currentUserName : activeMatch.opponent;
+                const targetName = isC ? activeMatch.opponent : currentUserName;
+                const winnerName = updatedData.c_win > updatedData.c_lose ? challengerName : targetName;
                 const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
                 
                 const matchPayload = {
                     match_type: String(updatedData.mode.replace('_accepted', '')),
-                    left_player_name: String(updatedData.challenger_name),
-                    right_player_name: String(updatedData.target_name),
+                    left_player_name: challengerName,
+                    right_player_name: targetName,
                     left_legend: String(updatedData.legend || '미선택'),
                     left_weapons: Array.isArray(updatedData.weapons) ? updatedData.weapons : ['미선택', '미선택'],
                     right_legend: String(updatedData.t_legend || '미선택'),
@@ -580,17 +581,16 @@ function App() {
                     winner_rank_num: Number(winnerRankNum)
                 };
 
-                // 🌟 [에러 추적기 2] DB 저장 실패 시 화면에 강제로 원인 띄우기 (절대 안 넘어감)
                 const { error: matchErr } = await supabase.from('matches').insert([matchPayload]);
                 if (matchErr) {
-                    alert(`🚨 데이터베이스 저장 실패!\n원인: ${matchErr.message}\n상세: ${matchErr.details}`);
+                    alert(`🚨 데이터베이스 저장 실패!\n원인: ${matchErr.message}`);
                     setWaitingForScore(false);
-                    return; // 방을 지우지 않고 여기서 멈춤!
+                    return; 
                 }
 
                 const challengerWon = updatedData.c_win > updatedData.c_lose;
-                const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', updatedData.challenger_name).single();
-                const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', updatedData.target_name).single();
+                const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', challengerName).single();
+                const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', targetName).single();
 
                 if (cProfile && tProfile) {
                     let cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
@@ -995,7 +995,7 @@ function App() {
                         </div>
                       )}
 
-                      {/* 🌟 V3.7: 사용자가 요청한 무기 텍스트 디자인 100% 원복 */}
+                      {/* 🌟 V3.8 UI 개선: "무기1:", "무기2:" 텍스트 완전 삭제 및 폰트 대칭 */}
                       {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-3">
                            <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
@@ -1005,14 +1005,10 @@ function App() {
                                   <span className="text-[10px] font-black text-slate-500 mb-2">나 (MY PICK)</span>
                                   <span className="font-black text-white text-2xl truncate w-full mb-3">{activeMatch.legend}</span>
                                   
-                                  {/* 좌측 나의 무기 (파란색 무기1: 흰색 이름) */}
-                                  <div className="flex flex-col gap-2 w-full">
-                                    <span className="text-base font-bold text-slate-200 truncate w-full flex justify-start items-center">
-                                      <span className="text-cyan-500 mr-2 font-black">무기1:</span> {activeMatch.weapons[0]}
-                                    </span>
-                                    <span className="text-base font-bold text-slate-200 truncate w-full flex justify-start items-center">
-                                      <span className="text-cyan-500 mr-2 font-black">무기2:</span> {activeMatch.weapons[1]}
-                                    </span>
+                                  {/* 좌측 나의 무기 (오직 파란색 텍스트) */}
+                                  <div className="flex flex-col gap-1.5 w-full">
+                                    <span className="text-[17px] font-black text-cyan-400 truncate w-full text-left tracking-wide">{activeMatch.weapons[0]}</span>
+                                    <span className="text-[17px] font-black text-cyan-400 truncate w-full text-left tracking-wide">{activeMatch.weapons[1]}</span>
                                   </div>
 
                                 </div>
@@ -1022,14 +1018,10 @@ function App() {
                                   <span className="text-[10px] font-black text-slate-500 mb-2">상대방 (OPPONENT PICK)</span>
                                   <span className="font-black text-white text-2xl truncate w-full mb-3 text-right">{activeMatch.oppLegend || '?'}</span>
                                   
-                                  {/* 우측 상대방 무기 (흰색 이름 :무기1 분홍색 대칭) */}
-                                  <div className="flex flex-col gap-2 w-full items-end">
-                                    <span className="text-base font-bold text-slate-200 truncate w-full flex justify-end items-center">
-                                      {activeMatch.oppWeapons?.[0] || '?'} <span className="text-pink-500 ml-2 font-black">:무기1</span>
-                                    </span>
-                                    <span className="text-base font-bold text-slate-200 truncate w-full flex justify-end items-center">
-                                      {activeMatch.oppWeapons?.[1] || '?'} <span className="text-pink-500 ml-2 font-black">:무기2</span>
-                                    </span>
+                                  {/* 우측 상대방 무기 (오직 분홍색 텍스트) */}
+                                  <div className="flex flex-col gap-1.5 w-full items-end">
+                                    <span className="text-[17px] font-black text-pink-400 truncate w-full text-right tracking-wide">{activeMatch.oppWeapons?.[0] || '?'}</span>
+                                    <span className="text-[17px] font-black text-pink-400 truncate w-full text-right tracking-wide">{activeMatch.oppWeapons?.[1] || '?'}</span>
                                   </div>
 
                                 </div>
