@@ -73,16 +73,27 @@ const getAvatarFallback = (name: string | undefined | null, rankers: any[]) => {
   return ranker?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeName}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
 };
 
-const getNicknameFontSize = (name: string, isTopRank: boolean) => {
-  const len = name.length;
-  if (isTopRank) {
-    if (len > 12) return 'text-xl';
-    if (len > 8) return 'text-2xl';
-    return 'text-4xl';
+// 🌟 [버그 수정 4] 닉네임 짤림(...) 방지 및 자동 줄바꿈 폰트 클래스
+// 🌟 [V3.2 수정] 닉네임 짤림 및 줄바꿈 완전 제거, 한줄 핏(Fit) 자동 조절
+const getResponsiveNameClass = (name: string, sizeType: 'small' | 'medium' | 'large') => {
+  const len = name?.length || 0;
+  const baseClass = 'font-black text-white transition-colors whitespace-nowrap tracking-tighter';
+  if (sizeType === 'small') {
+    if (len > 12) return `${baseClass} text-[9px]`;
+    if (len > 8) return `${baseClass} text-[11px]`;
+    return `${baseClass} text-sm`;
   }
-  if (len > 12) return 'text-base';
-  if (len > 8) return 'text-lg';
-  return 'text-2xl';
+  if (sizeType === 'medium') {
+    if (len > 12) return `${baseClass} text-[10px]`;
+    if (len > 8) return `${baseClass} text-xs`;
+    return `${baseClass} text-lg`;
+  }
+  if (sizeType === 'large') {
+    if (len > 12) return `${baseClass} text-lg`;
+    if (len > 8) return `${baseClass} text-2xl`;
+    return `${baseClass} text-3xl`;
+  }
+  return baseClass;
 };
 
 let globalBgmEnabled = true;
@@ -165,7 +176,6 @@ function App() {
   const [betAmount, setBetAmount] = useState<number>(100); 
   const [rerollCount, setRerollCount] = useState<number>(0); 
 
-  // 🌟 V3.1 세분화된 상태 머신 (블라인드 픽 대응)
   const [matchPhase, setMatchPhase] = useState<'idle' | 'setup_mode' | 'waiting_sync' | 'picking' | 'waiting_ready' | 'scoring'>('idle');
   const [activeMatch, setActiveMatch] = useState<{ 
     id: string, mode: string, opponent: string, 
@@ -221,7 +231,7 @@ function App() {
     }
   }, [matchPhase]);
 
-  // 🌟 V3.1 F5(새로고침) 및 창 꺼짐 완벽 복구 엔진 (DB 조회)
+  // 🌟 [버그 수정 3] F5(새로고침) 및 창 꺼짐 완벽 복구 엔진
   const checkActiveChallenge = async (username: string) => {
     if (!username) return;
     const { data } = await supabase
@@ -246,12 +256,10 @@ function App() {
         isChallenger: isC
       });
 
-      // 입력창 데이터 복구 연동
       setEntryOpponent(opp);
       setEntryMode(data.mode.replace('_accepted', '') as 'free' | 'random');
       setBetAmount(data.bet_gc || 0);
 
-      // 단계별 복구 (Phase 복원)
       if (data.c_ready && data.t_ready) {
         setMatchPhase('scoring');
       } else if (data.mode.includes('_accepted')) {
@@ -280,62 +288,83 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 🌟 로그인 되자마자 끊긴 매치 없는지 확인
   useEffect(() => {
     if (currentUserName) {
       checkActiveChallenge(currentUserName);
     }
   }, [currentUserName]);
 
-  // 🌟 V3.1 통합 실시간 동기화 엔진 (단 1개의 리스너로 모든 상황 통제)
+  // 🌟 [버그 수정 1 & 2] 완벽한 실시간 동기화 엔진 (단 1개로 통제)
   useEffect(() => {
     if (!currentUserName) return;
     
     const channel = supabase.channel('unified_challenge_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'challenges' }, payload => {
-           // 1. 결과 입력 중 서로 값이 틀렸을 때 (에러 발생)
+           
+           if (payload.eventType === 'INSERT') {
+              const newChallenge = payload.new;
+              if (newChallenge.target_name.trim() === currentUserName.trim()) {
+                 playSFX('matchStart');
+                 setEntryOpponent(newChallenge.challenger_name);
+                 setEntryMode(newChallenge.mode.replace('_accepted', '') as 'free' | 'random');
+                 setBetAmount(newChallenge.bet_gc || 0);
+                 setMatchPhase('setup_mode');
+              }
+           }
+
            if (payload.eventType === 'UPDATE') {
                const updated = payload.new;
+               
                if (activeMatch && updated.id === activeMatch.id) {
+                   
+                   // 수락되어 픽창으로 넘어감
+                   if (matchPhase === 'waiting_sync' && updated.mode.includes('_accepted')) {
+                       playSFX('matchStart');
+                       setMatchPhase('picking');
+                       if (updated.mode.includes('random')) handleModeChange('random');
+                   }
+                   
+                   // 양쪽 모두 레디 완료 시 스코어 보드로 이동
+                   if ((matchPhase === 'picking' || matchPhase === 'waiting_ready') && updated.c_ready && updated.t_ready) {
+                       playSFX('success');
+                       setActiveMatch(prev => prev ? {
+                           ...prev,
+                           oppLegend: prev.isChallenger ? updated.t_legend : updated.legend,
+                           oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons
+                       } : prev);
+                       setMatchPhase('scoring');
+                   }
+                   
+                   // 결과 입력 불일치로 초기화 됨
                    if (updated.c_win === null && updated.t_win === null && waitingForScore) {
-                       playSFX('error'); 
+                       playSFX('error');
                        alert("상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다.\n다시 합의 후 정확히 입력해주세요!");
                        setWaitingForScore(false); setMyWins(null); setMyLosses(null);
                    }
                }
            }
 
-           // 2. 매치가 종료되거나 취소되었을 때 (DELETE)
            if (payload.eventType === 'DELETE') {
-               if (activeMatch && payload.old.id === activeMatch.id) {
+               const deletedRow = payload.old;
+               if (deletedRow.challenger_name === currentUserName || deletedRow.target_name === currentUserName) {
                    if (matchPhase === 'scoring') {
-                       playSFX('success'); 
+                       playSFX('success');
                        alert("쌍방 스코어 일치! 전투 결과 및 랭크가 성공적으로 업데이트 되었습니다.");
-                       setWaitingForScore(false); setMyWins(null); setMyLosses(null);
-                       setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']); 
+                       setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+                       setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']);
                        fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
-                   } else {
+                   } else if (matchPhase !== 'idle') {
                        playSFX('click');
-                       alert("상대방이 매치를 취소했거나 거절했습니다.");
+                       alert("매치가 취소되었거나 정상적으로 종료되었습니다.");
+                       setMatchPhase('idle'); setActiveMatch(null);
                    }
                }
            }
 
-           // 어떤 변화든 발생하면 무조건 내 상태를 DB와 다시 동기화
-           checkActiveChallenge(currentUserName);
-           
       }).subscribe();
       
     return () => { supabase.removeChannel(channel); };
-  }, [currentUserName, activeMatch, matchPhase, waitingForScore]);
-
-  // 🌟 V3.1 픽창 최초 진입 시 무료 랜덤 롤 자동 부여
-  useEffect(() => {
-     if (matchPhase === 'picking' && entryMode === 'random' && rerollCount === 0 && !entryLegend) {
-         setEntryLegend(ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)]);
-         setEntryWeapons([...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2));
-     }
-  }, [matchPhase, entryMode, rerollCount, entryLegend]);
+  }, [currentUserName, activeMatch, matchPhase, waitingForScore, user]);
 
 
   const fetchData = async () => {
@@ -379,6 +408,9 @@ function App() {
     setEntryMode(mode);
     setEntryLegend(''); 
     setEntryWeapons(['', '']);
+    if (mode === 'free' && betAmount < 100) {
+       setBetAmount(100);
+    }
   };
 
   const handleReroll = async () => {
@@ -393,34 +425,56 @@ function App() {
     setEntryWeapons([...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2));
   };
 
-  // 🌟 V3.1 단계 1: 방 생성 및 수락 (모드와 금액만 크로스 체크)
+  // 🌟 블라인드 픽 단계 1: 방 생성 및 수락 (모드와 금액만 크로스 체크)
   const handleStartMatch = async () => {
     if (entryMode === 'free' && betAmount < 100) { playSFX('error'); return alert("자유대전 배팅 금액은 최소 100 GC 이상이어야 합니다."); }
     if (betAmount > 0 && (!profile || profile.gc < betAmount)) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc || 0} GC)`); }
 
     playSFX('click');
-    const { data: existing } = await supabase.from('challenges').select('*').eq('challenger_name', entryOpponent.trim()).eq('target_name', currentUserName.trim()).limit(1).maybeSingle();
+    const { data: existing } = await supabase.from('challenges').select('*')
+        .eq('challenger_name', entryOpponent.trim())
+        .eq('target_name', currentUserName.trim())
+        .limit(1).maybeSingle();
     
     if (existing) {
-      // 상대방이 먼저 방을 팠을 때 수락하는 로직 (조건 검증)
       if (existing.mode.replace('_accepted', '') !== entryMode) {
           playSFX('error'); return alert(`상대방이 [${existing.mode.includes('free') ? '자유' : '랜덤'}대전]을 신청했습니다. 모드를 맞춰주세요!`);
       }
       if (existing.bet_gc !== betAmount) {
           playSFX('error'); return alert(`상대방이 배팅금 [${existing.bet_gc} GC]를 걸었습니다. 배팅금을 맞춰주세요!`);
       }
-      
-      // 통과되면 수락 상태로 업데이트 -> 실시간 엔진이 양쪽을 픽창(picking)으로 보냄
+
+      setActiveMatch({
+        id: existing.id,
+        mode: entryMode,
+        opponent: entryOpponent.trim(),
+        legend: '', weapons: ['', ''],
+        isChallenger: false
+      });
+
       await supabase.from('challenges').update({ mode: existing.mode + '_accepted' }).eq('id', existing.id);
+      setMatchPhase('picking');
+      if (entryMode === 'random') handleModeChange('random');
+
     } else {
-      // 내가 처음 방을 팔 때
-      await supabase.from('challenges').insert([{ 
+      const { data: newChall } = await supabase.from('challenges').insert([{ 
           challenger_name: currentUserName.trim(), target_name: entryOpponent.trim(), mode: entryMode, bet_gc: betAmount
-      }]);
+      }]).select().single();
+      
+      if (newChall) { 
+        setActiveMatch({
+          id: newChall.id,
+          mode: entryMode,
+          opponent: entryOpponent.trim(),
+          legend: '', weapons: ['', ''],
+          isChallenger: true
+        }); 
+        setMatchPhase('waiting_sync'); 
+      }
     }
   };
 
-  // 🌟 V3.1 단계 2: 무기 선택 완료 및 레디 처리 (블라인드 픽 확정)
+  // 🌟 블라인드 픽 단계 2: 무기 선택 완료 및 레디 처리
   const handlePickReady = async () => {
     if (!entryLegend || !entryWeapons[0] || !entryWeapons[1]) { 
       playSFX('error'); return alert("레전드와 무기를 모두 선택해주세요!"); 
@@ -433,7 +487,7 @@ function App() {
         : { t_legend: entryLegend, t_weapons: entryWeapons, t_ready: true };
 
     await supabase.from('challenges').update(updatePayload).eq('id', activeMatch.id);
-    // 실시간 엔진이 업데이트를 감지하고, 양쪽 다 true면 스코어보드(scoring)로 넘깁니다.
+    setMatchPhase('waiting_ready');
   };
 
   const handleCancelMatch = async () => {
@@ -442,6 +496,7 @@ function App() {
     setMatchPhase('idle'); setActiveMatch(null);
   };
 
+  // 🌟 [버그 수정 1] 스코어 무한 대기 해결 (Delete Lock 방식 도입)
   const handleReportScore = async () => {
     if (myWins === null || myLosses === null || !activeMatch) { playSFX('error'); return alert("승리 및 패배 횟수를 모두 선택하세요!"); }
     playSFX('click'); 
@@ -449,7 +504,6 @@ function App() {
     const isC = activeMatch.isChallenger;
     const updatePayload = isC ? { c_win: myWins, c_lose: myLosses } : { t_win: myWins, t_lose: myLosses };
     
-    // 점수 업데이트 실행
     await supabase.from('challenges').update(updatePayload).eq('id', activeMatch.id);
     const { data: checkData } = await supabase.from('challenges').select('*').eq('id', activeMatch.id).single();
     
@@ -460,57 +514,70 @@ function App() {
 
     if (oppW !== null && oppL !== null) {
        if (myWins === oppL && myLosses === oppW) {
-          const winnerName = myWins > myLosses ? currentUserName : activeMatch.opponent;
-          const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
           
-          await supabase.from('matches').insert([{ 
-             match_type: activeMatch.mode.replace('_accepted', ''), left_player_name: checkData.challenger_name, right_player_name: checkData.target_name, left_legend: checkData.legend, left_weapons: checkData.weapons, right_legend: checkData.t_legend, right_weapons: checkData.t_weapons, score_left: isC ? myWins : oppW, score_right: isC ? myLosses : oppL, winner_name: winnerName, winner_rank_num: winnerRankNum 
-          }]);
+          // 🏆 삭제 락(Delete Lock): 동시에 DB가 써지는 것을 막기 위해 지우는 사람만 인서트 권한 획득
+          const { data: deletedRow } = await supabase.from('challenges').delete().eq('id', activeMatch.id).select().maybeSingle();
 
-          const challengerWon = (isC ? myWins : oppW) > (isC ? myLosses : oppL);
-          const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', checkData.challenger_name).single();
-          const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', checkData.target_name).single();
+          if (deletedRow) {
+             const winnerName = myWins > myLosses ? currentUserName : activeMatch.opponent;
+             const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
+             
+             await supabase.from('matches').insert([{ 
+                match_type: activeMatch.mode.replace('_accepted', ''), 
+                left_player_name: deletedRow.challenger_name, 
+                right_player_name: deletedRow.target_name, 
+                left_legend: deletedRow.legend, 
+                left_weapons: deletedRow.weapons, 
+                right_legend: deletedRow.t_legend, 
+                right_weapons: deletedRow.t_weapons, 
+                score_left: isC ? myWins : oppW, 
+                score_right: isC ? myLosses : oppL, 
+                winner_name: winnerName, 
+                winner_rank_num: winnerRankNum 
+             }]);
 
-          if (cProfile && tProfile) {
-              let cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
-              let tUpdates: any = { wins: tProfile.wins + (challengerWon ? 0 : 1), losses: tProfile.losses + (challengerWon ? 1 : 0) };
+             const challengerWon = deletedRow.c_win > deletedRow.c_lose;
+             const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', deletedRow.challenger_name).single();
+             const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', deletedRow.target_name).single();
 
-              if (activeMatch.mode.includes('free')) {
-                  const bet = checkData.bet_gc || 0;
-                  if (challengerWon) {
-                      cUpdates.created_at = tProfile.created_at; tUpdates.created_at = cProfile.created_at;
-                      cUpdates.defense_stack = 0; tUpdates.defense_stack = 0;
-                      cUpdates.gc = (cProfile.gc || 0) + bet; tUpdates.gc = (tProfile.gc || 0) - bet;
-                  } else {
-                      tUpdates.defense_stack = (tProfile.defense_stack || 0) + 1; cUpdates.defense_stack = 0;
-                      cUpdates.gc = (cProfile.gc || 0) - bet; tUpdates.gc = (tProfile.gc || 0) + bet;
-                  }
-              } else {
-                  const calcRP = (prof: any, won: boolean, oppProf: any) => {
-                      let rpChg = won ? 50 : -20;
-                      let nStreak = won ? (prof.win_streak || 0) + 1 : 0;
-                      if (won) {
-                          if (nStreak === 2) rpChg = 60; else if (nStreak === 3) rpChg = 75; else if (nStreak >= 4) rpChg = 100;
-                          if ((oppProf.rp || 1000) - (prof.rp || 1000) > 300) rpChg += 100;
-                      }
-                      const bet = checkData.bet_gc || 0;
-                      const gcChg = (won ? 100 : 30) + (won ? bet : -bet);
-                      return { rp: (prof.rp || 1000) + rpChg, streak: nStreak, gc: (prof.gc || 0) + gcChg };
-                  };
-                  const cRes = calcRP(cProfile, challengerWon, tProfile);
-                  const tRes = calcRP(tProfile, !challengerWon, cProfile);
-                  cUpdates.rp = cRes.rp; cUpdates.win_streak = cRes.streak; cUpdates.gc = cRes.gc;
-                  tUpdates.rp = tRes.rp; tUpdates.win_streak = tRes.streak; tUpdates.gc = tRes.gc;
-              }
+             if (cProfile && tProfile) {
+                 let cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
+                 let tUpdates: any = { wins: tProfile.wins + (challengerWon ? 0 : 1), losses: tProfile.losses + (challengerWon ? 1 : 0) };
 
-              await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
-              await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
+                 if (activeMatch.mode.includes('free')) {
+                     const bet = deletedRow.bet_gc || 0;
+                     if (challengerWon) {
+                         cUpdates.created_at = tProfile.created_at; tUpdates.created_at = cProfile.created_at;
+                         cUpdates.defense_stack = 0; tUpdates.defense_stack = 0;
+                         cUpdates.gc = (cProfile.gc || 0) + bet; tUpdates.gc = (tProfile.gc || 0) - bet;
+                     } else {
+                         tUpdates.defense_stack = (tProfile.defense_stack || 0) + 1; cUpdates.defense_stack = 0;
+                         cUpdates.gc = (cProfile.gc || 0) - bet; tUpdates.gc = (tProfile.gc || 0) + bet;
+                     }
+                 } else {
+                     const calcRP = (prof: any, won: boolean, oppProf: any) => {
+                         let rpChg = won ? 50 : -20;
+                         let nStreak = won ? (prof.win_streak || 0) + 1 : 0;
+                         if (won) {
+                             if (nStreak === 2) rpChg = 60; else if (nStreak === 3) rpChg = 75; else if (nStreak >= 4) rpChg = 100;
+                             if ((oppProf.rp || 1000) - (prof.rp || 1000) > 300) rpChg += 100;
+                         }
+                         const bet = deletedRow.bet_gc || 0;
+                         const gcChg = (won ? 100 : 30) + (won ? bet : -bet);
+                         return { rp: (prof.rp || 1000) + rpChg, streak: nStreak, gc: (prof.gc || 0) + gcChg };
+                     };
+                     const cRes = calcRP(cProfile, challengerWon, tProfile);
+                     const tRes = calcRP(tProfile, !challengerWon, cProfile);
+                     cUpdates.rp = cRes.rp; cUpdates.win_streak = cRes.streak; cUpdates.gc = cRes.gc;
+                     tUpdates.rp = tRes.rp; tUpdates.win_streak = tRes.streak; tUpdates.gc = tRes.gc;
+                 }
+                 await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
+                 await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
+             }
           }
-          await supabase.from('challenges').delete().eq('id', activeMatch.id);
        } else {
           await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
-          // 실시간 엔진이 이 null 상태를 감지하여 양쪽 클라이언트에 에러 경고를 띄웁니다.
-          setWaitingForScore(true); 
+          // 실시간 엔진에서 에러 알림 처리
        }
     } else { setWaitingForScore(true); }
   };
@@ -602,10 +669,10 @@ function App() {
                  <span className="absolute -top-1.5 -left-1.5 bg-yellow-400 text-black text-[8px] font-black px-1 rounded z-10 shadow-md">WIN</span>
                  <img src={winnerAvatar} className="w-10 h-10 rounded-full border-2 border-yellow-400 bg-black hover:scale-110 transition-transform" alt="winner"/>
              </div>
-             <span className="font-black text-white text-xl truncate cursor-pointer hover:text-cyan-400 transition-colors" onClick={() => handleProfileClick(winnerName)}>{winnerName}</span>
-             <span className="text-[11px] text-slate-500 font-black mx-2">VS</span>
-             <img src={loserAvatar} className="w-8 h-8 rounded-full border-2 border-slate-600 opacity-60 bg-black cursor-pointer hover:opacity-100 transition-opacity" alt="loser" onClick={() => handleProfileClick(loserName)}/>
-             <span className="font-bold text-slate-400 text-base truncate cursor-pointer hover:text-white transition-colors" onClick={() => handleProfileClick(loserName)}>{loserName}</span>
+             <span className={`cursor-pointer hover:text-cyan-400 ${getResponsiveNameClass(winnerName, 'medium')}`} onClick={() => handleProfileClick(winnerName)}>{winnerName}</span>
+             <span className="text-[11px] text-slate-500 font-black mx-2 shrink-0">VS</span>
+             <img src={loserAvatar} className="w-8 h-8 rounded-full border-2 border-slate-600 opacity-60 bg-black cursor-pointer hover:opacity-100 transition-opacity shrink-0" alt="loser" onClick={() => handleProfileClick(loserName)}/>
+             <span className={`text-slate-400 cursor-pointer hover:text-white ${getResponsiveNameClass(loserName, 'small')}`} onClick={() => handleProfileClick(loserName)}>{loserName}</span>
           </div>
           <div className="text-3xl font-black text-white shrink-0">
             <span className="text-yellow-400">{isLeftWinner ? log.score_left : log.score_right}</span>
@@ -700,24 +767,24 @@ function App() {
                         
                         return (
                           <div key={i} onMouseEnter={() => playSFX('hover')} className="bg-black/60 border border-white/10 p-3 rounded-xl flex items-center justify-between hover:border-cyan-400/50 transition-all group">
-                             <div className="flex items-center gap-3 cursor-pointer group/profile" onClick={() => handleProfileClick(ou.display_name)}>
-                                <div className="relative">
+                             <div className="flex items-center gap-3 cursor-pointer group/profile w-[120px]" onClick={() => handleProfileClick(ou.display_name)}>
+                                <div className="relative shrink-0">
                                    <img src={ou.avatar_url} className="w-9 h-9 rounded-full border border-white/20 group-hover/profile:border-cyan-400 transition-colors" alt="profile"/>
                                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-black rounded-full"></div>
                                 </div>
-                                <div className="flex flex-col">
-                                   <span className="text-sm font-black text-white truncate max-w-[90px] group-hover/profile:text-cyan-400 transition-colors">{ou.display_name}</span>
-                                   <span className={`text-[9px] font-black uppercase ${rankInfo?.color || ''}`}>{rankInfo?.title} {rankInfo?.num}</span>
+                                <div className="flex flex-col flex-1 min-w-0">
+                                   <span className={`group-hover/profile:text-cyan-400 ${getResponsiveNameClass(ou.display_name, 'small')}`}>{ou.display_name}</span>
+                                   <span className={`text-[9px] font-black uppercase mt-0.5 ${rankInfo?.color || ''}`}>{rankInfo?.title} {rankInfo?.num}</span>
                                 </div>
                              </div>
                              {ou.display_name.trim() === currentUserName?.trim() ? (
-                                <div className="px-3 py-1.5 rounded-xl text-[10px] font-black bg-blue-600/20 border border-blue-500/50 text-blue-400">나</div>
+                                <div className="px-3 py-1.5 rounded-xl text-[10px] font-black bg-blue-600/20 border border-blue-500/50 text-blue-400 shrink-0">나</div>
                              ) : (
                                 <button 
                                   onMouseEnter={() => playSFX('hover')} 
                                   onClick={() => { playSFX('click'); handleTargetLock(ou.display_name); }} 
                                   disabled={!isChallengeableByRank || matchPhase !== 'idle'} 
-                                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black shadow-md transition-all cursor-pointer ${(isChallengeableByRank && matchPhase === 'idle') ? 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-500 hover:text-black' : 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'}`}
+                                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black shadow-md transition-all shrink-0 cursor-pointer ${(isChallengeableByRank && matchPhase === 'idle') ? 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-500 hover:text-black' : 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'}`}
                                 >
                                   {(isChallengeableByRank && matchPhase === 'idle') ? '도전 가능' : '도전 불가'}
                                 </button>
@@ -733,6 +800,7 @@ function App() {
             <div className="col-span-12 xl:col-span-5 flex flex-col gap-8 h-full relative">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-6 flex flex-col h-fit shrink-0 relative z-10">
                   <div className="flex flex-col relative z-10">
+                      {/* 🌟 동적 타이틀 적용 */}
                       <h3 onMouseEnter={() => playSFX('hover')} className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3">
                          {(matchPhase === 'idle' || matchPhase === 'setup_mode') && '대전 신청 (Match Entry)'}
                          {(matchPhase === 'waiting_sync' || matchPhase === 'picking' || matchPhase === 'waiting_ready') && '대전 준비 (Match Prep)'}
@@ -757,11 +825,11 @@ function App() {
                       {matchPhase === 'setup_mode' && (
                         <div className="flex flex-col pt-2 pb-2 animate-in fade-in gap-4">
                            <div className="flex items-center justify-between bg-black/40 p-4 rounded-[2rem] border border-white/10 shadow-inner mb-2">
-                              <div className="flex flex-col cursor-pointer group/target" onClick={() => handleProfileClick(entryOpponent)}>
+                              <div className="flex flex-col cursor-pointer group/target flex-1 min-w-0 pr-4" onClick={() => handleProfileClick(entryOpponent)}>
                                  <p className="text-[10px] text-slate-500 font-black">SELECTED TARGET</p>
-                                 <h4 className="text-2xl font-black text-pink-400 italic truncate group-hover/target:text-cyan-400 transition-colors">{entryOpponent}</h4>
+                                 <h4 className={`text-pink-400 italic group-hover/target:text-cyan-400 mt-1 ${getResponsiveNameClass(entryOpponent, 'large')}`}>{entryOpponent}</h4>
                               </div>
-                              <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setMatchPhase('idle'); }} className="px-5 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-black border border-white/10 transition-colors cursor-pointer">변경</button>
+                              <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setMatchPhase('idle'); }} className="px-5 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-black border border-white/10 transition-colors cursor-pointer shrink-0">변경</button>
                            </div>
                            
                            <div className="flex gap-2 p-1.5 bg-black/50 rounded-2xl border border-white/5">
@@ -769,13 +837,38 @@ function App() {
                               <button onMouseEnter={() => playSFX('hover')} onClick={() => handleModeChange('random')} className={`flex-1 py-4 rounded-xl text-sm font-black transition-all cursor-pointer ${entryMode === 'random' ? 'bg-cyan-600 text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}>랜덤대전 (RP)</button>
                            </div>
                            
-                           <div className="bg-black/60 p-4 rounded-2xl border border-white/5 mt-1 flex justify-between items-center">
-                              <p className="text-sm text-pink-400 font-black">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">{entryMode === 'free' ? '최소 100' : '0 가능'}</span></p>
-                              <input type="number" min={entryMode === 'free' ? 100 : 0} value={betAmount} onChange={(e) => setBetAmount(Number(e.target.value))} className="w-24 bg-white/5 border border-white/10 p-2 rounded-xl outline-none text-white font-black text-right select-text cursor-pointer" />
+                           {/* 🌟 자유/랜덤 모두 베팅 가능하게 노출 */}
+                           <div className="bg-black/60 p-4 rounded-2xl border border-white/5 mt-1 flex flex-col gap-3">
+                              <div className="flex justify-between items-center">
+                                 <p className="text-sm text-pink-400 font-black">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">{entryMode === 'free' ? '최소 100' : '0 가능'}</span></p>
+                                 <input 
+                                   type="number" 
+                                   min={entryMode === 'free' ? 100 : 0} 
+                                   value={betAmount} 
+                                   onChange={(e) => setBetAmount(Number(e.target.value))} 
+                                   onBlur={() => {
+                                     if (entryMode === 'free' && betAmount < 100) setBetAmount(100);
+                                     if (entryMode === 'random' && betAmount < 0) setBetAmount(0);
+                                   }}
+                                   className="w-24 bg-white/5 border border-white/10 p-2 rounded-xl outline-none text-white font-black text-right select-text cursor-pointer" 
+                                 />
+                              </div>
+                              <div className="flex justify-between gap-2">
+                                 <div className="flex gap-1">
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(entryMode === 'free' ? 100 : 0, p - 50)); }} className="px-2 py-1.5 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-xs font-black hover:bg-pink-500 hover:text-white transition-colors">-50</button>
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(entryMode === 'free' ? 100 : 0, p - 100)); }} className="px-2 py-1.5 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-xs font-black hover:bg-pink-500 hover:text-white transition-colors">-100</button>
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(entryMode === 'free' ? 100 : 0, p - 500)); }} className="px-2 py-1.5 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-xs font-black hover:bg-pink-500 hover:text-white transition-colors">-500</button>
+                                 </div>
+                                 <div className="flex gap-1">
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => p + 50); }} className="px-2 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 rounded-lg text-xs font-black hover:bg-cyan-500 hover:text-black transition-colors">+50</button>
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => p + 100); }} className="px-2 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 rounded-lg text-xs font-black hover:bg-cyan-500 hover:text-black transition-colors">+100</button>
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => p + 500); }} className="px-2 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 rounded-lg text-xs font-black hover:bg-cyan-500 hover:text-black transition-colors">+500</button>
+                                 </div>
+                              </div>
                            </div>
 
                            <button onMouseEnter={() => playSFX('hover')} onClick={handleStartMatch} className="w-full py-5 mt-4 rounded-[2rem] font-black text-xl text-white bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.6)] hover:bg-blue-500 transition-all border border-blue-400 cursor-pointer">
-                              매치 생성 및 수락 (Create/Accept)
+                              매칭 신청 및 수락 (Create/Accept)
                            </button>
                         </div>
                       )}
@@ -796,6 +889,7 @@ function App() {
                            <h4 className="text-center font-black text-pink-400 mb-2">매치 성사! 무기를 선택하세요</h4>
                            {entryMode === 'free' ? (
                               <div className="space-y-3 flex flex-col">
+                                 {/* 🌟 Select Overflow 및 화살표 겹침 방지 완벽 적용 */}
                                  <select onMouseEnter={() => playSFX('hover')} value={entryLegend} onChange={(e) => { setEntryLegend(e.target.value); playSFX('click'); }} className="w-full min-w-0 bg-black/60 border border-white/10 py-4 pl-3 pr-8 rounded-2xl text-xs sm:text-sm font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
                                     <option value="" disabled hidden>👉 레전드 선택</option>
                                     {Object.entries(LEGEND_CATEGORIES).map(([cat, list]) => (
@@ -852,14 +946,15 @@ function App() {
                       {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-3">
                            <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
-                             <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                                <div className="flex flex-col flex-1 items-start">
+                             <div className="flex items-center justify-between border-b border-white/10 pb-4 gap-4">
+                                <div className="flex flex-col flex-1 min-w-0 items-start">
+                                  {/* 🌟 나 / 상대방 직관적 문구 적용 */}
                                   <span className="text-xs font-black text-cyan-400 mb-1">나 (MY PICK)</span>
                                   <span className="font-black text-white text-lg truncate w-full">{activeMatch.legend}</span>
                                   <span className="text-[10px] text-slate-400 mt-1 truncate w-full">{activeMatch.weapons.join(' / ')}</span>
                                 </div>
-                                <span className="font-black text-2xl text-slate-600 mx-4">VS</span>
-                                <div className="flex flex-col flex-1 items-end text-right">
+                                <span className="font-black text-2xl text-slate-600 shrink-0">VS</span>
+                                <div className="flex flex-col flex-1 min-w-0 items-end text-right">
                                   <span className="text-xs font-black text-pink-400 mb-1">상대방 (OPPONENT PICK)</span>
                                   <span className="font-black text-white text-lg truncate w-full">{activeMatch.oppLegend || '?'}</span>
                                   <span className="text-[10px] text-slate-400 mt-1 truncate w-full">{(activeMatch.oppWeapons || []).join(' / ')}</span>
@@ -925,10 +1020,10 @@ function App() {
                                    </div>
                                    <div className="flex items-center justify-between w-full mt-1 px-1 relative z-10">
                                       <div className="flex items-center gap-4 flex-1 overflow-hidden">
-                                         <img src={r.avatar_url} className={`w-11 h-11 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-md' : 'border-white/20'}`} alt="p"/>
-                                         <span className={`text-white font-black truncate group-hover:text-cyan-400 transition-colors ${getNicknameFontSize(r.display_name, r.rankIndex === 0)}`}>{r.display_name}</span>
+                                         <img src={r.avatar_url} className={`w-11 h-11 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-md' : 'border-white/20'} shrink-0`} alt="p"/>
+                                         <span className={`group-hover:text-cyan-400 ${getResponsiveNameClass(r.display_name, r.rankIndex === 0 ? 'large' : 'medium')}`}>{r.display_name}</span>
                                       </div>
-                                      <div className="flex flex-col items-end">
+                                      <div className="flex flex-col items-end shrink-0 ml-2">
                                         <span className="font-black text-slate-300 text-lg tracking-tight">{r.wins}승 {r.losses}패</span>
                                         {r.rankIndex === 0 && (<span className="font-black text-[10px] px-2 py-0.5 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50 mt-0.5">👑 방어전: {r.defense_stack || 0}</span>)}
                                       </div>
@@ -986,17 +1081,18 @@ function App() {
                            let cardClass = "p-6 pt-12 pb-6 rounded-[2rem]";
                            let badgeClass = "top-4 px-8 py-2 text-[16px]";
                            let avatarClass = "w-16 h-16";
-                           let nameSize = getNicknameFontSize(r.display_name, false);
+                           let nameSize = r.rankIndex === 0 ? 'large' : 'medium';
                            let statSize = "text-2xl";
 
                            if (rankTab === 0) {
-                               if (isRank1) { spanClass = "col-span-12 flex justify-center"; cardClass = "w-full max-w-4xl p-8 pt-14 pb-8 rounded-[3rem] shadow-[0_0_20px_rgba(250,204,21,0.4)] hover:shadow-[0_0_30px_rgba(250,204,21,0.6)] hover:scale-[1.03]"; badgeClass = "top-5 px-10 py-3 text-[22px]"; avatarClass = "w-24 h-24"; nameSize = getNicknameFontSize(r.display_name, true); statSize = "text-4xl"; }
+                               if (isRank1) { spanClass = "col-span-12 flex justify-center"; cardClass = "w-full max-w-4xl p-8 pt-14 pb-8 rounded-[3rem] shadow-[0_0_20px_rgba(250,204,21,0.4)] hover:shadow-[0_0_30px_rgba(250,204,21,0.6)] hover:scale-[1.03]"; badgeClass = "top-5 px-10 py-3 text-[22px]"; avatarClass = "w-24 h-24"; statSize = "text-4xl"; }
                                else if (isRank2_3) { spanClass = "col-span-6"; }
                                else if (isRank4_6) { spanClass = "col-span-4"; cardClass = "p-5 pt-10 pb-5 rounded-[1.5rem]"; badgeClass = "top-3 px-6 py-1.5 text-[14px]"; avatarClass = "w-12 h-12"; statSize = "text-xl"; }
                            } else if (rankTab === 1) {
                                spanClass = "col-span-4"; cardClass = "p-5 pt-10 pb-5 rounded-[1.5rem]"; badgeClass = "top-3 px-6 py-1.5 text-[14px]"; avatarClass = "w-12 h-12"; statSize = "text-xl";
                            } else {
                                spanClass = "col-span-3"; cardClass = "p-4 pt-10 pb-4 rounded-xl"; badgeClass = "top-2.5 px-4 py-1 text-[12px]"; avatarClass = "w-10 h-10"; statSize = "text-lg";
+                               nameSize = 'small';
                            }
 
                            return (
@@ -1009,7 +1105,7 @@ function App() {
                                    <div className="flex items-center justify-between w-full mt-2 px-2 relative z-10">
                                      <div className="flex items-center gap-4 flex-1 overflow-hidden">
                                        <img src={r.avatar_url} className={`${avatarClass} rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_20px_gold]' : 'border-white/20'} shrink-0`} alt="p"/>
-                                       <span className={`text-white font-black truncate group-hover:text-cyan-400 transition-colors ${nameSize}`}>{r.display_name}</span>
+                                       <span className={`group-hover:text-cyan-400 ${getResponsiveNameClass(r.display_name, nameSize as any)}`}>{r.display_name}</span>
                                      </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
                                        <span className={`font-black text-slate-300 tracking-tight ${statSize}`}>{r.wins}승 {r.losses}패</span>
@@ -1032,7 +1128,7 @@ function App() {
                                      <span className={`text-3xl font-black ${tier.color} w-10 text-center drop-shadow-md`}>{i + 1}</span>
                                      <img src={r.avatar_url} className={`w-16 h-16 rounded-full border-2 ${i < 3 ? 'border-red-500 shadow-[0_0_15px_red]' : 'border-white/20'} group-hover:scale-105 transition-transform`} alt="p"/>
                                      <div className="flex flex-col">
-                                         <span className="text-2xl font-black text-white group-hover:text-cyan-400 transition-colors">{r.display_name}</span>
+                                         <span className={`group-hover:text-cyan-400 ${getResponsiveNameClass(r.display_name, 'medium')}`}>{r.display_name}</span>
                                          <span className={`text-sm font-black tracking-widest ${tier.color} ${tier.bg} px-3 py-0.5 rounded-full w-fit mt-1 border border-white/10`}>{tier.icon} {tier.name}</span>
                                      </div>
                                  </div>
@@ -1056,7 +1152,7 @@ function App() {
             <div onMouseEnter={() => playSFX('hover')} className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.5)] rounded-[3rem] p-12 max-w-4xl flex items-center gap-12 cursor-default">
               <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest&backgroundColor=b6e3f4"} className="w-48 h-48 rounded-full border-4 border-cyan-500/50 shadow-[0_0_30px_rgba(34,211,238,0.3)]" alt="profile"/>
               <div className="flex-1">
-                <h3 className="text-6xl font-black text-white mb-2 italic tracking-tighter uppercase">{currentUserName || "GUEST PILOT"}</h3>
+                <h3 className={`italic uppercase mb-2 ${getResponsiveNameClass(currentUserName || "GUEST PILOT", 'large')}`}>{currentUserName || "GUEST PILOT"}</h3>
                 <p className="text-cyan-400 font-bold mb-8 tracking-widest">{user?.email || "로그인이 필요합니다"}</p>
                 <div className="grid grid-cols-3 gap-6">
                   <div className="bg-white/5 p-6 rounded-3xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-xs mb-2 tracking-widest font-black">TOTAL WINS</p><p className="text-4xl font-black text-white">{profile?.wins || 0}</p></div>
@@ -1090,7 +1186,7 @@ function App() {
               <div className="flex items-center gap-8 border-b border-white/10 pb-10 cursor-default">
                 <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest&backgroundColor=b6e3f4"} className="w-24 h-24 rounded-full border-4 border-cyan-400 shadow-[0_0_20px_cyan]" alt="profile"/>
                 <div onMouseEnter={() => playSFX('hover')}>
-                  <h3 className="text-3xl font-black text-white italic tracking-tighter uppercase">{currentUserName || "GUEST PILOT"}</h3>
+                  <h3 className={`italic uppercase ${getResponsiveNameClass(currentUserName || "GUEST PILOT", 'medium')}`}>{currentUserName || "GUEST PILOT"}</h3>
                   <p className="text-cyan-400 font-bold tracking-widest mt-1">{user?.email || "디스코드 로그인이 필요합니다"}</p>
                 </div>
               </div>
@@ -1136,9 +1232,9 @@ function App() {
              </button>
              
              <div className="flex items-center gap-8 mb-6 mt-2">
-                <img src={selectedPlayer.avatar_url} className={`w-28 h-28 rounded-[2.5rem] border-4 ${selectedPlayer.rankIndex === 0 ? 'border-yellow-400 shadow-lg' : 'border-cyan-400 shadow-md'}`} alt="p" />
-                <div className="flex-1 min-w-0">
-                   <h2 className={`font-black text-white italic tracking-tighter pb-1 pr-2 truncate ${getNicknameFontSize(selectedPlayer.display_name, true)}`} style={{ lineHeight: '1.1' }}>
+                <img src={selectedPlayer.avatar_url} className={`w-28 h-28 rounded-[2.5rem] border-4 ${selectedPlayer.rankIndex === 0 ? 'border-yellow-400 shadow-lg' : 'border-cyan-400 shadow-md'} shrink-0`} alt="p" />
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                   <h2 className={`italic pb-1 ${getResponsiveNameClass(selectedPlayer.display_name, 'large')}`}>
                      {selectedPlayer.display_name}
                    </h2>
                    <div className="flex gap-3 mt-1">
