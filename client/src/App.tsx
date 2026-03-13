@@ -244,7 +244,6 @@ function App() {
       let localLegend = isC ? (data.legend || '') : (data.t_legend || '');
       let localWeapons = isC ? (data.weapons || ['', '']) : (data.t_weapons || ['', '']);
 
-      // 🌟 [버그 수정] 복구 시에도 랜덤 픽이 안 된 상태면 즉시 할당
       if (data.mode.includes('random') && data.mode.includes('_accepted') && !amIReady && (!localLegend || localLegend === '')) {
           localLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
           localWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
@@ -304,7 +303,7 @@ function App() {
     }
   }, [currentUserName]);
 
-  // 🌟 완벽한 실시간 동기화 엔진 (무한대기, 스코어 충돌 박멸)
+  // 🌟 [버그 수정 1] 완벽한 실시간 동기화 엔진 (무한 대기 방지)
   useEffect(() => {
     if (!currentUserName) return;
     
@@ -324,20 +323,12 @@ function App() {
 
            if (payload.eventType === 'UPDATE') {
                const updated = payload.new;
-               
                if (activeMatch && updated.id === activeMatch.id) {
-                   
-                   // 수락 확인 후 픽창 진입 시 랜덤 무기 즉시 부여!
                    if (matchPhase === 'waiting_sync' && updated.mode.includes('_accepted')) {
                        playSFX('matchStart');
                        setMatchPhase('picking');
-                       if (updated.mode.includes('random')) {
-                           setEntryLegend(ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)]);
-                           setEntryWeapons([...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2));
-                       }
+                       if (updated.mode.includes('random')) handleModeChange('random');
                    }
-                   
-                   // 양쪽 모두 레디 완료 시 스코어 보드
                    if ((matchPhase === 'picking' || matchPhase === 'waiting_ready') && updated.c_ready && updated.t_ready) {
                        playSFX('success');
                        setActiveMatch(prev => prev ? {
@@ -347,8 +338,6 @@ function App() {
                        } : prev);
                        setMatchPhase('scoring');
                    }
-                   
-                   // 🌟 스코어 엇갈림 시 경고 띄우고 다시 입력 대기로!
                    if (updated.c_win === null && updated.t_win === null && waitingForScore) {
                        playSFX('error');
                        alert("상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다.\n다시 합의 후 정확히 입력해주세요!");
@@ -357,7 +346,7 @@ function App() {
                }
            }
 
-           // 🌟 가장 중요했던 [무한 대기] 해결 엔진! (uuid로 방 파악)
+           // 🌟 가장 중요한 DELETE 동기화! (이름이 아닌 방 ID로 캐치)
            if (payload.eventType === 'DELETE') {
                const deletedRow = payload.old;
                if (activeMatch && deletedRow.id === activeMatch.id) {
@@ -454,7 +443,6 @@ function App() {
           playSFX('error'); return alert(`상대방이 배팅금 [${existing.bet_gc} GC]를 걸었습니다. 배팅금을 맞춰주세요!`);
       }
 
-      // 수락하는 쪽도 랜덤이면 여기서 미리 뽑아줍니다.
       let initL = ''; let initW = ['', ''];
       if (entryMode === 'random') {
           initL = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
@@ -581,13 +569,12 @@ function App() {
                  await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
                  await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
              }
+             // 🌟 [버그 수정 3] 기록 업데이트 후 즉시 Fetch 호출하여 데이터 새로고침
+             fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
           }
        } else {
-          // 로컬 리셋 및 DB 초기화
           await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
-          playSFX('error'); 
-          alert(`스코어가 일치하지 않습니다!\n(상대방 입력 -> 승:${oppW} 패:${oppL})\n다시 합의 후 정확히 입력해주세요.`);
-          setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+          setWaitingForScore(true); 
        }
     } else { setWaitingForScore(true); }
   };
@@ -755,6 +742,7 @@ function App() {
 
         {activeMenu === 'home' && (
           <main className="flex-1 p-10 grid grid-cols-12 gap-8 items-stretch pb-20 animate-in fade-in duration-500 min-h-[1400px]">
+            {/* 좌측 패널: 접속 현황 */}
             <div className="col-span-12 xl:col-span-3 flex flex-col h-full relative max-h-[880px]">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-4 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-cyan-400 text-center mb-2 border-b border-white/5 pb-2 flex items-center justify-center gap-2">
@@ -805,6 +793,7 @@ function App() {
                </section>
             </div>
 
+            {/* 중앙 패널: 통합 작전 통제소 */}
             <div className="col-span-12 xl:col-span-5 flex flex-col gap-8 h-full relative">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-6 flex flex-col h-fit shrink-0 relative z-10">
                   <div className="flex flex-col relative z-10">
@@ -948,22 +937,29 @@ function App() {
                         </div>
                       )}
 
+                      {/* 🌟 [UI 개선] 무기 텍스트 크기 확대 및 세로 정렬 적용 */}
                       {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-3">
                            <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
                              <div className="flex items-center justify-between border-b border-white/10 pb-4 gap-4">
                                 <div className="flex flex-col flex-1 min-w-0 items-start">
-                                  <span className={`mb-0.5 text-cyan-400 ${getResponsiveNameClass(currentUserName || '', 'medium')}`}>{currentUserName}</span>
-                                  <span className="text-[10px] font-black text-slate-500 mb-1">나 (MY PICK)</span>
-                                  <span className="font-black text-white text-xl truncate w-full">{activeMatch.legend}</span>
-                                  <span className="text-[10px] text-slate-400 mt-1 truncate w-full">{activeMatch.weapons.join(' / ')}</span>
+                                  <span className={`mb-1 text-cyan-400 ${getResponsiveNameClass(currentUserName || '', 'medium')}`}>{currentUserName}</span>
+                                  <span className="text-[10px] font-black text-slate-500 mb-2">나 (MY PICK)</span>
+                                  <span className="font-black text-white text-2xl truncate w-full mb-3">{activeMatch.legend}</span>
+                                  <div className="flex flex-col gap-1.5 w-full">
+                                    <span className="text-sm font-bold text-slate-300 truncate w-full"><span className="text-cyan-500 mr-1">무기1:</span> {activeMatch.weapons[0]}</span>
+                                    <span className="text-sm font-bold text-slate-300 truncate w-full"><span className="text-cyan-500 mr-1">무기2:</span> {activeMatch.weapons[1]}</span>
+                                  </div>
                                 </div>
                                 <span className="font-black text-2xl text-slate-600 shrink-0">VS</span>
                                 <div className="flex flex-col flex-1 min-w-0 items-end text-right">
-                                  <span className={`mb-0.5 text-pink-400 ${getResponsiveNameClass(activeMatch.opponent, 'medium')}`}>{activeMatch.opponent}</span>
-                                  <span className="text-[10px] font-black text-slate-500 mb-1">상대방 (OPPONENT PICK)</span>
-                                  <span className="font-black text-white text-xl truncate w-full">{activeMatch.oppLegend || '?'}</span>
-                                  <span className="text-[10px] text-slate-400 mt-1 truncate w-full">{(activeMatch.oppWeapons || []).join(' / ')}</span>
+                                  <span className={`mb-1 text-pink-400 ${getResponsiveNameClass(activeMatch.opponent, 'medium')}`}>{activeMatch.opponent}</span>
+                                  <span className="text-[10px] font-black text-slate-500 mb-2">상대방 (OPPONENT PICK)</span>
+                                  <span className="font-black text-white text-2xl truncate w-full mb-3">{activeMatch.oppLegend || '?'}</span>
+                                  <div className="flex flex-col gap-1.5 w-full items-end">
+                                    <span className="text-sm font-bold text-slate-300 truncate w-full"><span className="text-pink-500 mr-1">무기1:</span> {activeMatch.oppWeapons?.[0] || '?'}</span>
+                                    <span className="text-sm font-bold text-slate-300 truncate w-full"><span className="text-pink-500 mr-1">무기2:</span> {activeMatch.oppWeapons?.[1] || '?'}</span>
+                                  </div>
                                 </div>
                              </div>
                            </div>
@@ -1001,6 +997,7 @@ function App() {
                </section>
             </div>
 
+            {/* 우측 패널: 미니 랭킹 */}
             <div className="col-span-12 lg:col-span-4 flex flex-col h-full relative">
                <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-5 flex flex-col h-fit shrink-0 relative z-10">
                   <div className="px-2 pt-2 flex flex-col relative z-10">
