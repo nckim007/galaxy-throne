@@ -73,7 +73,6 @@ const getAvatarFallback = (name: string | undefined | null, rankers: any[]) => {
   return ranker?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeName}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
 };
 
-// 🌟 [UI 개선] 닉네임 짤림 완전 제거 & 시원한 자동 조절 폰트
 const getResponsiveNameClass = (name: string, sizeType: 'small' | 'medium' | 'large') => {
   const len = name?.length || 0;
   const baseClass = 'font-black text-white transition-colors whitespace-nowrap tracking-tighter';
@@ -230,8 +229,6 @@ function App() {
     }
   }, [matchPhase]);
 
-  // 🌟 [버그 수정] F5(새로고침) 및 창 꺼짐 완벽 복구 엔진
-  // 띄어쓰기가 있는 닉네임도 완벽하게 추적할 수 있도록 개별 분리 조회 적용
   const checkActiveChallenge = async (username: string) => {
     if (!username) return;
     
@@ -244,12 +241,26 @@ function App() {
       const opp = isC ? data.target_name : data.challenger_name;
       const amIReady = isC ? data.c_ready : data.t_ready;
       
+      let localLegend = isC ? (data.legend || '') : (data.t_legend || '');
+      let localWeapons = isC ? (data.weapons || ['', '']) : (data.t_weapons || ['', '']);
+
+      // 🌟 [버그 수정] 복구 시에도 랜덤 픽이 안 된 상태면 즉시 할당
+      if (data.mode.includes('random') && data.mode.includes('_accepted') && !amIReady && (!localLegend || localLegend === '')) {
+          localLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
+          localWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+          setEntryLegend(localLegend);
+          setEntryWeapons(localWeapons);
+      } else {
+          setEntryLegend(localLegend);
+          setEntryWeapons(localWeapons);
+      }
+
       setActiveMatch({
         id: data.id,
         mode: data.mode,
         opponent: opp,
-        legend: isC ? (data.legend || '') : (data.t_legend || ''),
-        weapons: isC ? (data.weapons || ['', '']) : (data.t_weapons || ['', '']),
+        legend: localLegend,
+        weapons: localWeapons,
         oppLegend: isC ? data.t_legend : data.legend,
         oppWeapons: isC ? data.t_weapons : data.weapons,
         isChallenger: isC
@@ -293,7 +304,7 @@ function App() {
     }
   }, [currentUserName]);
 
-  // 🌟 완벽한 실시간 동기화 엔진 (레이스 컨디션 해결)
+  // 🌟 완벽한 실시간 동기화 엔진 (무한대기, 스코어 충돌 박멸)
   useEffect(() => {
     if (!currentUserName) return;
     
@@ -313,16 +324,20 @@ function App() {
 
            if (payload.eventType === 'UPDATE') {
                const updated = payload.new;
+               
                if (activeMatch && updated.id === activeMatch.id) {
                    
-                   // 수락되어 픽창으로 넘어감
+                   // 수락 확인 후 픽창 진입 시 랜덤 무기 즉시 부여!
                    if (matchPhase === 'waiting_sync' && updated.mode.includes('_accepted')) {
                        playSFX('matchStart');
                        setMatchPhase('picking');
-                       if (updated.mode.includes('random')) handleModeChange('random');
+                       if (updated.mode.includes('random')) {
+                           setEntryLegend(ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)]);
+                           setEntryWeapons([...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2));
+                       }
                    }
                    
-                   // 양쪽 모두 레디 완료 시 스코어 보드로 이동
+                   // 양쪽 모두 레디 완료 시 스코어 보드
                    if ((matchPhase === 'picking' || matchPhase === 'waiting_ready') && updated.c_ready && updated.t_ready) {
                        playSFX('success');
                        setActiveMatch(prev => prev ? {
@@ -333,7 +348,7 @@ function App() {
                        setMatchPhase('scoring');
                    }
                    
-                   // [버그 수정] 두 번째 제출 먹통 해결: 스코어가 리셋(null)되면 알림 띄우기
+                   // 🌟 스코어 엇갈림 시 경고 띄우고 다시 입력 대기로!
                    if (updated.c_win === null && updated.t_win === null && waitingForScore) {
                        playSFX('error');
                        alert("상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다.\n다시 합의 후 정확히 입력해주세요!");
@@ -342,12 +357,13 @@ function App() {
                }
            }
 
+           // 🌟 가장 중요했던 [무한 대기] 해결 엔진! (uuid로 방 파악)
            if (payload.eventType === 'DELETE') {
                const deletedRow = payload.old;
-               if (deletedRow.challenger_name === currentUserName || deletedRow.target_name === currentUserName) {
-                   if (matchPhase === 'scoring') {
+               if (activeMatch && deletedRow.id === activeMatch.id) {
+                   if (matchPhase === 'scoring' || waitingForScore) {
                        playSFX('success');
-                       alert("전투 결과 및 랭크가 성공적으로 업데이트 되었습니다.");
+                       alert("쌍방 스코어 일치! 전투 결과 및 랭크가 성공적으로 업데이트 되었습니다.");
                        setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
                        setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']);
                        fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
@@ -405,9 +421,7 @@ function App() {
     setEntryMode(mode);
     setEntryLegend(''); 
     setEntryWeapons(['', '']);
-    if (mode === 'free' && betAmount < 100) {
-       setBetAmount(100);
-    }
+    if (mode === 'free' && betAmount < 100) setBetAmount(100);
   };
 
   const handleReroll = async () => {
@@ -422,7 +436,6 @@ function App() {
     setEntryWeapons([...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2));
   };
 
-  // 🌟 블라인드 픽 단계 1: 방 생성 및 수락 (모드와 금액만 크로스 체크)
   const handleStartMatch = async () => {
     if (entryMode === 'free' && betAmount < 100) { playSFX('error'); return alert("자유대전 배팅 금액은 최소 100 GC 이상이어야 합니다."); }
     if (betAmount > 0 && (!profile || profile.gc < betAmount)) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc || 0} GC)`); }
@@ -441,17 +454,21 @@ function App() {
           playSFX('error'); return alert(`상대방이 배팅금 [${existing.bet_gc} GC]를 걸었습니다. 배팅금을 맞춰주세요!`);
       }
 
+      // 수락하는 쪽도 랜덤이면 여기서 미리 뽑아줍니다.
+      let initL = ''; let initW = ['', ''];
+      if (entryMode === 'random') {
+          initL = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
+          initW = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+          setEntryLegend(initL); setEntryWeapons(initW);
+      }
+
       setActiveMatch({
-        id: existing.id,
-        mode: entryMode,
-        opponent: entryOpponent.trim(),
-        legend: '', weapons: ['', ''],
-        isChallenger: false
+        id: existing.id, mode: entryMode, opponent: entryOpponent.trim(),
+        legend: initL, weapons: initW, isChallenger: false
       });
 
       await supabase.from('challenges').update({ mode: existing.mode + '_accepted' }).eq('id', existing.id);
       setMatchPhase('picking');
-      if (entryMode === 'random') handleModeChange('random');
 
     } else {
       const { data: newChall } = await supabase.from('challenges').insert([{ 
@@ -459,23 +476,14 @@ function App() {
       }]).select().single();
       
       if (newChall) { 
-        setActiveMatch({
-          id: newChall.id,
-          mode: entryMode,
-          opponent: entryOpponent.trim(),
-          legend: '', weapons: ['', ''],
-          isChallenger: true
-        }); 
+        setActiveMatch({ id: newChall.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: true }); 
         setMatchPhase('waiting_sync'); 
       }
     }
   };
 
-  // 🌟 블라인드 픽 단계 2: 무기 선택 완료 및 레디 처리
   const handlePickReady = async () => {
-    if (!entryLegend || !entryWeapons[0] || !entryWeapons[1]) { 
-      playSFX('error'); return alert("레전드와 무기를 모두 선택해주세요!"); 
-    }
+    if (!entryLegend || !entryWeapons[0] || !entryWeapons[1]) { playSFX('error'); return alert("레전드와 무기를 모두 선택해주세요!"); }
     playSFX('click');
     if (!activeMatch) return;
 
@@ -494,7 +502,6 @@ function App() {
     setMatchPhase('idle'); setActiveMatch(null);
   };
 
-  // 🌟 [버그 수정] 최근 전투 기록 (데이터 없음) 및 스코어 제출 완벽 해결 엔진
   const handleReportScore = async () => {
     if (myWins === null || myLosses === null || !activeMatch) { playSFX('error'); return alert("승리 및 패배 횟수를 모두 선택하세요!"); }
     playSFX('click'); 
@@ -519,7 +526,6 @@ function App() {
              const winnerName = myWins > myLosses ? currentUserName : activeMatch.opponent;
              const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
              
-             // 🌟 [버그 수정] 패킷 누락 방지 (명시적 타입 변환으로 Insert 100% 성공 보장)
              const matchPayload = {
                  match_type: String(activeMatch.mode.replace('_accepted', '')),
                  left_player_name: String(deletedRow.challenger_name),
@@ -577,7 +583,7 @@ function App() {
              }
           }
        } else {
-          // [버그 수정] 틀렸을 때 나도 로컬에서 즉시 리셋 후 알림 띄우기
+          // 로컬 리셋 및 DB 초기화
           await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
           playSFX('error'); 
           alert(`스코어가 일치하지 않습니다!\n(상대방 입력 -> 승:${oppW} 패:${oppL})\n다시 합의 후 정확히 입력해주세요.`);
@@ -749,7 +755,6 @@ function App() {
 
         {activeMenu === 'home' && (
           <main className="flex-1 p-10 grid grid-cols-12 gap-8 items-stretch pb-20 animate-in fade-in duration-500 min-h-[1400px]">
-            {/* 🌟 좌측 패널: 접속 현황 (UI 확장 적용) */}
             <div className="col-span-12 xl:col-span-3 flex flex-col h-full relative max-h-[880px]">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-4 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-cyan-400 text-center mb-2 border-b border-white/5 pb-2 flex items-center justify-center gap-2">
@@ -800,7 +805,6 @@ function App() {
                </section>
             </div>
 
-            {/* 중앙 패널: 통합 작전 통제소 */}
             <div className="col-span-12 xl:col-span-5 flex flex-col gap-8 h-full relative">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-6 flex flex-col h-fit shrink-0 relative z-10">
                   <div className="flex flex-col relative z-10">
@@ -944,20 +948,19 @@ function App() {
                         </div>
                       )}
 
-                      {/* 🌟 [UI 개선] 스코어 제출 창 닉네임 및 상세 정보 강화 */}
                       {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-3">
                            <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
                              <div className="flex items-center justify-between border-b border-white/10 pb-4 gap-4">
                                 <div className="flex flex-col flex-1 min-w-0 items-start">
-                                  <span className="text-xs font-black text-cyan-400 mb-0.5">{currentUserName}</span>
+                                  <span className={`mb-0.5 text-cyan-400 ${getResponsiveNameClass(currentUserName || '', 'medium')}`}>{currentUserName}</span>
                                   <span className="text-[10px] font-black text-slate-500 mb-1">나 (MY PICK)</span>
                                   <span className="font-black text-white text-xl truncate w-full">{activeMatch.legend}</span>
                                   <span className="text-[10px] text-slate-400 mt-1 truncate w-full">{activeMatch.weapons.join(' / ')}</span>
                                 </div>
                                 <span className="font-black text-2xl text-slate-600 shrink-0">VS</span>
                                 <div className="flex flex-col flex-1 min-w-0 items-end text-right">
-                                  <span className="text-xs font-black text-pink-400 mb-0.5">{activeMatch.opponent}</span>
+                                  <span className={`mb-0.5 text-pink-400 ${getResponsiveNameClass(activeMatch.opponent, 'medium')}`}>{activeMatch.opponent}</span>
                                   <span className="text-[10px] font-black text-slate-500 mb-1">상대방 (OPPONENT PICK)</span>
                                   <span className="font-black text-white text-xl truncate w-full">{activeMatch.oppLegend || '?'}</span>
                                   <span className="text-[10px] text-slate-400 mt-1 truncate w-full">{(activeMatch.oppWeapons || []).join(' / ')}</span>
@@ -998,7 +1001,6 @@ function App() {
                </section>
             </div>
 
-            {/* 🌟 우측 패널: 미니 랭킹 (UI 넓게 확장 완료) */}
             <div className="col-span-12 lg:col-span-4 flex flex-col h-full relative">
                <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-5 flex flex-col h-fit shrink-0 relative z-10">
                   <div className="px-2 pt-2 flex flex-col relative z-10">
@@ -1021,7 +1023,6 @@ function App() {
                                    <div className={`absolute top-3 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-full border border-cyan-400/30 ${grandRank.bg} flex items-center gap-2 shadow-lg z-20`}>
                                        {grandRank.icon} <span className={`text-[14px] font-black uppercase tracking-widest ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span>
                                    </div>
-                                   {/* 🌟 닉네임 칸을 pr-4로 늘려서 공간을 넉넉하게 사용 */}
                                    <div className="flex items-center justify-between w-full mt-1 px-1 relative z-10 gap-2">
                                       <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
                                          <img src={r.avatar_url} className={`w-11 h-11 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-md' : 'border-white/20'} shrink-0`} alt="p"/>
@@ -1111,7 +1112,7 @@ function App() {
                                        <img src={r.avatar_url} className={`${avatarClass} rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_20px_gold]' : 'border-white/20'} shrink-0`} alt="p"/>
                                        <span className={`group-hover:text-cyan-400 ${getResponsiveNameClass(r.display_name, nameSize as any)}`}>{r.display_name}</span>
                                      </div>
-                                     <div className="flex flex-col items-end shrink-0">
+                                     <div className="flex flex-col items-end shrink-0 ml-2">
                                        <span className={`font-black text-slate-300 tracking-tight ${statSize}`}>{r.wins}승 {r.losses}패</span>
                                        {r.rankIndex === 0 && (<span className="font-black text-[12px] px-3 py-1 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50 mt-1 shadow-[0_0_10px_gold]">👑 방어전 스택: {r.defense_stack || 0}</span>)}
                                      </div>
@@ -1189,7 +1190,7 @@ function App() {
             <div className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.5)] rounded-[3rem] p-12 max-w-3xl space-y-10">
               <div className="flex items-center gap-8 border-b border-white/10 pb-10 cursor-default">
                 <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest&backgroundColor=b6e3f4"} className="w-24 h-24 rounded-full border-4 border-cyan-400 shadow-[0_0_20px_cyan]" alt="profile"/>
-                <div onMouseEnter={() => playSFX('hover')}>
+                <div onMouseEnter={() => playSFX('hover')} className="flex-1 min-w-0">
                   <h3 className={`italic uppercase ${getResponsiveNameClass(currentUserName || "GUEST PILOT", 'medium')}`}>{currentUserName || "GUEST PILOT"}</h3>
                   <p className="text-cyan-400 font-bold tracking-widest mt-1 truncate">{user?.email || "디스코드 로그인이 필요합니다"}</p>
                 </div>
