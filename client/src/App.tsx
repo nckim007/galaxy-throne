@@ -165,10 +165,11 @@ function App() {
   const [betAmount, setBetAmount] = useState<number>(100); 
   const [rerollCount, setRerollCount] = useState<number>(0); 
 
-  const [matchPhase, setMatchPhase] = useState<'idle' | 'setup' | 'waiting' | 'ready'>('idle');
+  // 🌟 V3 세분화된 상태 머신 (5단계 블라인드 픽 시스템)
+  const [matchPhase, setMatchPhase] = useState<'idle' | 'setup_mode' | 'waiting_sync' | 'picking' | 'waiting_ready' | 'scoring'>('idle');
   const [activeMatch, setActiveMatch] = useState<{ 
     id: string, mode: string, opponent: string, 
-    legend: string, weapons: string[], isChallenger: boolean 
+    legend: string, weapons: string[], oppLegend?: string, oppWeapons?: string[], isChallenger: boolean 
   } | null>(null);
   
   const [myWins, setMyWins] = useState<number | null>(null);
@@ -195,98 +196,81 @@ function App() {
   const currentUserAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || profile?.avatar_url || null;
 
   useEffect(() => {
-    globalBgmEnabled = bgmEnabled; 
-    globalSfxEnabled = sfxEnabled; 
-    globalBgmVolume = bgmVolume; 
-    globalSfxVolume = sfxVolume;
-    localStorage.setItem('bgmEnabled', bgmEnabled.toString());
-    localStorage.setItem('sfxEnabled', sfxEnabled.toString());
-    localStorage.setItem('bgmVolume', bgmVolume.toString());
-    localStorage.setItem('sfxVolume', sfxVolume.toString());
+    globalBgmEnabled = bgmEnabled; globalSfxEnabled = sfxEnabled; globalBgmVolume = bgmVolume; globalSfxVolume = sfxVolume;
+    localStorage.setItem('bgmEnabled', bgmEnabled.toString()); localStorage.setItem('sfxEnabled', sfxEnabled.toString());
+    localStorage.setItem('bgmVolume', bgmVolume.toString()); localStorage.setItem('sfxVolume', sfxVolume.toString());
     
-    if (audioCache['bgm']) { 
-      audioCache['bgm'].muted = !bgmEnabled; 
-      audioCache['bgm'].volume = bgmVolume; 
-    }
-    if (audioCache['waiting']) { 
-      audioCache['waiting'].muted = !bgmEnabled; 
-      audioCache['waiting'].volume = bgmVolume; 
-    }
+    if (audioCache['bgm']) { audioCache['bgm'].muted = !bgmEnabled; audioCache['bgm'].volume = bgmVolume; }
+    if (audioCache['waiting']) { audioCache['waiting'].muted = !bgmEnabled; audioCache['waiting'].volume = bgmVolume; }
     ['hover', 'click', 'matchStart', 'success', 'error'].forEach(k => {
-      if (audioCache[k]) { 
-        audioCache[k].muted = !sfxEnabled; 
-        audioCache[k].volume = sfxVolume; 
-      }
+      if (audioCache[k]) { audioCache[k].muted = !sfxEnabled; audioCache[k].volume = sfxVolume; }
     });
   }, [bgmEnabled, sfxEnabled, bgmVolume, sfxVolume]);
 
   useEffect(() => {
     currentMatchPhase = matchPhase;
     if (!isAudioUnlocked) return;
-    if (matchPhase === 'idle' || matchPhase === 'setup') {
+    if (matchPhase === 'idle' || matchPhase === 'setup_mode') {
       audioCache['waiting']?.pause();
       if (globalBgmEnabled) audioCache['bgm']?.play().catch(()=>{});
-    } else if (matchPhase === 'waiting') {
+    } else if (matchPhase === 'waiting_sync' || matchPhase === 'waiting_ready') {
       audioCache['bgm']?.pause();
-      if (globalBgmEnabled) {
-        if(audioCache['waiting']) audioCache['waiting'].currentTime = 0;
-        audioCache['waiting']?.play().catch(()=>{});
-      }
-    } else if (matchPhase === 'ready') {
-      audioCache['bgm']?.pause();
-      audioCache['waiting']?.pause();
+      if (globalBgmEnabled) { audioCache['waiting'].currentTime = 0; audioCache['waiting']?.play().catch(()=>{}); }
+    } else if (matchPhase === 'picking' || matchPhase === 'scoring') {
+      audioCache['bgm']?.pause(); audioCache['waiting']?.pause();
     }
   }, [matchPhase]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => { 
-      setUser(session?.user ?? null); 
-      if (session?.user) fetchProfile(session.user.id); 
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { 
-      setUser(session?.user ?? null); 
-      if (session?.user) fetchProfile(session.user.id); 
-    });
-    fetchData(); 
-    fetchRankers(); 
+    supabase.auth.getSession().then(({ data: { session } }) => { setUser(session?.user ?? null); if (session?.user) fetchProfile(session.user.id); });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { setUser(session?.user ?? null); if (session?.user) fetchProfile(session.user.id); });
+    fetchData(); fetchRankers(); 
     return () => subscription.unsubscribe();
   }, []);
 
+  // 🌟 V3 대전 매칭 및 레디 동기화 엔진
   useEffect(() => {
     if (!currentUserName) return;
     
     const channel = supabase.channel('challenges_realtime')
-      .on('postgres_changes', { 
-        event: 'UPDATE', 
-        schema: 'public', 
-        table: 'challenges', 
-        filter: activeMatch ? `id=eq.${activeMatch.id}` : '' 
-      }, payload => {
-        if (payload.new.mode.includes('_accepted')) { 
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'challenges', filter: activeMatch ? `id=eq.${activeMatch.id}` : '' }, payload => {
+        const updated = payload.new;
+        
+        // 1. 방 수락 확인 -> 픽창으로 이동
+        if (matchPhase === 'waiting_sync' && updated.mode.includes('_accepted')) { 
           playSFX('matchStart'); 
-          setMatchPhase('ready'); 
+          setMatchPhase('picking'); 
+          if(updated.mode.includes('random')) handleModeChange('random'); // 자동 뽑기
+        }
+        
+        // 2. 양쪽 모두 레디 완료 -> 스코어 보드로 이동 (상대방 무기 공개)
+        if ((matchPhase === 'picking' || matchPhase === 'waiting_ready') && updated.c_ready && updated.t_ready) {
+          playSFX('success');
+          setActiveMatch(prev => prev ? { 
+            ...prev, 
+            oppLegend: prev.isChallenger ? updated.t_legend : updated.legend, 
+            oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons 
+          } : prev);
+          setMatchPhase('scoring');
         }
       })
-      .on('postgres_changes', { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'challenges' 
-      }, payload => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'challenges' }, payload => {
         const newChallenge = payload.new;
         if (newChallenge.target_name.trim() === currentUserName.trim()) {
           playSFX('matchStart'); 
           
-          // 🌟 [버그 수정] TypeScript 타입 규격에 맞춰 명시적으로 할당하여 오류 제거
           setActiveMatch({ 
             id: newChallenge.id,
             mode: newChallenge.mode,
             opponent: newChallenge.challenger_name, 
-            legend: newChallenge.legend,
-            weapons: newChallenge.weapons,
+            legend: '',
+            weapons: ['', ''],
             isChallenger: false 
           }); 
           
-          setMatchPhase('ready');
+          setEntryMode(newChallenge.mode.includes('random') ? 'random' : 'free');
+          setMatchPhase('picking'); // 수락자는 바로 픽창 진입
+          supabase.from('challenges').update({ mode: newChallenge.mode + '_accepted' }).eq('id', newChallenge.id);
         }
       }).subscribe();
       
@@ -294,43 +278,20 @@ function App() {
   }, [matchPhase, currentUserName, activeMatch]);
 
   useEffect(() => {
-    if (matchPhase !== 'ready' || !activeMatch) return;
+    if (matchPhase !== 'scoring' || !activeMatch) return;
     
     const channel = supabase.channel('score_sync')
-      .on('postgres_changes', { 
-        event: 'UPDATE', 
-        schema: 'public', 
-        table: 'challenges', 
-        filter: `id=eq.${activeMatch.id}` 
-      }, payload => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'challenges', filter: `id=eq.${activeMatch.id}` }, payload => {
          const updated = payload.new;
          if (updated.c_win === null && updated.t_win === null && waitingForScore) {
-             playSFX('error'); 
-             alert("상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다.\n다시 합의 후 정확히 입력해주세요!");
-             setWaitingForScore(false); 
-             setMyWins(null); 
-             setMyLosses(null);
+             playSFX('error'); alert("상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다.\n다시 합의 후 정확히 입력해주세요!");
+             setWaitingForScore(false); setMyWins(null); setMyLosses(null);
          }
       })
-      .on('postgres_changes', { 
-        event: 'DELETE', 
-        schema: 'public', 
-        table: 'challenges', 
-        filter: `id=eq.${activeMatch.id}` 
-      }, payload => {
-         playSFX('success'); 
-         alert("쌍방 스코어 일치! 전투 결과 및 랭크가 성공적으로 업데이트 되었습니다.");
-         setMatchPhase('idle'); 
-         setActiveMatch(null); 
-         setWaitingForScore(false); 
-         setMyWins(null); 
-         setMyLosses(null);
-         setEntryOpponent(''); 
-         setEntryLegend(''); 
-         setEntryWeapons(['', '']); 
-         fetchData(); 
-         fetchRankers(); 
-         if(user) fetchProfile(user.id);
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'challenges', filter: `id=eq.${activeMatch.id}` }, payload => {
+         playSFX('success'); alert("쌍방 스코어 일치! 전투 결과 및 랭크가 성공적으로 업데이트 되었습니다.");
+         setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+         setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']); fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
       }).subscribe();
       
     return () => { supabase.removeChannel(channel); };
@@ -345,17 +306,11 @@ function App() {
     const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: true });
     if (profiles) {
       const processed = profiles.map((r, i) => ({
-        ...r, 
-        rankIndex: i, 
-        display_name: r.display_name || 'GUEST', 
-        wins: r.wins || 0, 
-        losses: r.losses || 0,
+        ...r, rankIndex: i, display_name: r.display_name || 'GUEST', wins: r.wins || 0, losses: r.losses || 0,
         win_rate: (r.wins + r.losses) > 0 ? (((r.wins) / (r.wins + r.losses)) * 100).toFixed(1) + '%' : '0.0%',
         avatar_url: r.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.id}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
         defense_stack: r.defense_stack || 0,
-        rp: r.rp || 1000, 
-        gc: r.gc || 0, 
-        win_streak: r.win_streak || 0
+        rp: r.rp || 1000, gc: r.gc || 0, win_streak: r.win_streak || 0
       }));
       setRankers(processed);
     }
@@ -366,16 +321,8 @@ function App() {
     if (data) setProfile(data);
   };
 
-  const handleLogin = async () => { 
-    playSFX('click'); 
-    await supabase.auth.signInWithOAuth({ provider: 'discord' }); 
-  };
-  
-  const handleLogout = async () => { 
-    playSFX('click'); 
-    await supabase.auth.signOut(); 
-    setProfile(null); 
-  };
+  const handleLogin = async () => { playSFX('click'); await supabase.auth.signInWithOAuth({ provider: 'discord' }); };
+  const handleLogout = async () => { playSFX('click'); await supabase.auth.signOut(); setProfile(null); };
 
   const handleTargetLock = (name = entryOpponent) => {
       if (!user) return alert("로그인이 필요합니다!");
@@ -383,7 +330,7 @@ function App() {
       if (name.trim() === currentUserName?.trim()) return alert("자기 자신에게는 도전할 수 없습니다!");
       playSFX('click');
       setEntryOpponent(name);
-      setMatchPhase('setup');
+      setMatchPhase('setup_mode');
   };
 
   const handleModeChange = (mode: 'free' | 'random') => {
@@ -411,88 +358,63 @@ function App() {
     setEntryWeapons([...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2));
   };
 
+  // 🌟 V3 단계 1: 방 생성 및 대기 (모드와 금액만 확정)
   const handleStartMatch = async () => {
+    if (entryMode === 'free') {
+       if (betAmount < 100) { playSFX('error'); return alert("자유대전 배팅 금액은 최소 100 GC 이상이어야 합니다."); }
+       if (!profile || profile.gc < betAmount) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc || 0} GC)`); }
+    }
+
+    playSFX('click');
+    const { data: existing } = await supabase.from('challenges').select('*').eq('challenger_name', entryOpponent.trim()).eq('target_name', currentUserName.trim()).limit(1).maybeSingle();
+    
+    if (existing) {
+      if (existing.mode === 'free' && (!profile || profile.gc < existing.bet_gc)) {
+          playSFX('error'); return alert(`상대방의 배팅 금액(${existing.bet_gc} GC)을 감당할 수 없습니다!`);
+      }
+      setActiveMatch({ id: existing.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: false });
+      await supabase.from('challenges').update({ mode: existing.mode + '_accepted' }).eq('id', existing.id);
+      
+      setMatchPhase('picking');
+      if (entryMode === 'random') handleModeChange('random');
+    } else {
+      const { data: newChall } = await supabase.from('challenges').insert([{ 
+          challenger_name: currentUserName.trim(), target_name: entryOpponent.trim(), mode: entryMode, bet_gc: entryMode === 'free' ? betAmount : 0
+      }]).select().single();
+      
+      if (newChall) { 
+        setActiveMatch({ id: newChall.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: true }); 
+        setMatchPhase('waiting_sync'); 
+      }
+    }
+  };
+
+  // 🌟 V3 단계 2: 픽 완료 및 레디 (무기 확정)
+  const handlePickReady = async () => {
     if (!entryLegend || !entryWeapons[0] || !entryWeapons[1]) { 
       playSFX('error'); 
       return alert("레전드와 무기를 모두 선택해주세요!"); 
     }
-    
-    if (entryMode === 'free') {
-       if (betAmount < 100) { 
-         playSFX('error'); 
-         return alert("자유대전 배팅 금액은 최소 100 GC 이상이어야 합니다."); 
-       }
-       if (!profile || profile.gc < betAmount) { 
-         playSFX('error'); 
-         return alert(`GC가 부족합니다! (보유: ${profile?.gc || 0} GC)`); 
-       }
-    }
-
     playSFX('click');
-    const { data: existing } = await supabase.from('challenges')
-      .select('*')
-      .eq('challenger_name', entryOpponent.trim())
-      .eq('target_name', currentUserName.trim())
-      .limit(1)
-      .maybeSingle();
-    
-    if (existing) {
-      if (existing.mode === 'free' && (!profile || profile.gc < existing.bet_gc)) {
-          playSFX('error'); 
-          return alert(`상대방의 배팅 금액(${existing.bet_gc} GC)을 감당할 수 없습니다!`);
-      }
-      playSFX('matchStart');
-      setActiveMatch({ 
-        id: existing.id, 
-        mode: entryMode, 
-        opponent: entryOpponent.trim(), 
-        legend: entryLegend, 
-        weapons: entryWeapons, 
-        isChallenger: false 
-      });
-      await supabase.from('challenges').update({ 
-        mode: existing.mode + '_accepted', 
-        t_legend: entryLegend, 
-        t_weapons: entryWeapons 
-      }).eq('id', existing.id);
-      
-      setMatchPhase('ready');
-    } else {
-      const { data: newChall } = await supabase.from('challenges').insert([{ 
-          challenger_name: currentUserName.trim(), 
-          target_name: entryOpponent.trim(), 
-          mode: entryMode, 
-          legend: entryLegend, 
-          weapons: entryWeapons, 
-          bet_gc: entryMode === 'free' ? betAmount : 0
-      }]).select().single();
-      
-      if (newChall) { 
-        setActiveMatch({ 
-          id: newChall.id, 
-          mode: entryMode, 
-          opponent: entryOpponent.trim(), 
-          legend: entryLegend, 
-          weapons: entryWeapons, 
-          isChallenger: true 
-        }); 
-        setMatchPhase('waiting'); 
-      }
-    }
+    if (!activeMatch) return;
+
+    const updatePayload = activeMatch.isChallenger 
+        ? { legend: entryLegend, weapons: entryWeapons, c_ready: true } 
+        : { t_legend: entryLegend, t_weapons: entryWeapons, t_ready: true };
+
+    setActiveMatch({ ...activeMatch, legend: entryLegend, weapons: entryWeapons });
+    await supabase.from('challenges').update(updatePayload).eq('id', activeMatch.id);
+    setMatchPhase('waiting_ready');
   };
 
   const handleCancelMatch = async () => {
     playSFX('click');
     await supabase.from('challenges').delete().eq('challenger_name', currentUserName.trim());
-    setMatchPhase('idle'); 
-    setActiveMatch(null);
+    setMatchPhase('idle'); setActiveMatch(null);
   };
 
   const handleReportScore = async () => {
-    if (myWins === null || myLosses === null || !activeMatch) { 
-      playSFX('error'); 
-      return alert("승리 및 패배 횟수를 모두 선택하세요!"); 
-    }
+    if (myWins === null || myLosses === null || !activeMatch) { playSFX('error'); return alert("승리 및 패배 횟수를 모두 선택하세요!"); }
     playSFX('click'); 
     
     const isC = activeMatch.isChallenger;
@@ -512,17 +434,7 @@ function App() {
           const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
           
           await supabase.from('matches').insert([{ 
-             match_type: activeMatch.mode.replace('_accepted', ''), 
-             left_player_name: checkData.challenger_name, 
-             right_player_name: checkData.target_name, 
-             left_legend: checkData.legend, 
-             left_weapons: checkData.weapons, 
-             right_legend: checkData.t_legend, 
-             right_weapons: checkData.t_weapons, 
-             score_left: isC ? myWins : oppW, 
-             score_right: isC ? myLosses : oppL, 
-             winner_name: winnerName, 
-             winner_rank_num: winnerRankNum 
+             match_type: activeMatch.mode.replace('_accepted', ''), left_player_name: checkData.challenger_name, right_player_name: checkData.target_name, left_legend: checkData.legend, left_weapons: checkData.weapons, right_legend: checkData.t_legend, right_weapons: checkData.t_weapons, score_left: isC ? myWins : oppW, score_right: isC ? myLosses : oppL, winner_name: winnerName, winner_rank_num: winnerRankNum 
           }]);
 
           const challengerWon = (isC ? myWins : oppW) > (isC ? myLosses : oppL);
@@ -530,60 +442,33 @@ function App() {
           const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', checkData.target_name).single();
 
           if (cProfile && tProfile) {
-              let cUpdates: any = { 
-                wins: cProfile.wins + (challengerWon ? 1 : 0), 
-                losses: cProfile.losses + (challengerWon ? 0 : 1) 
-              };
-              let tUpdates: any = { 
-                wins: tProfile.wins + (challengerWon ? 0 : 1), 
-                losses: tProfile.losses + (challengerWon ? 1 : 0) 
-              };
+              let cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
+              let tUpdates: any = { wins: tProfile.wins + (challengerWon ? 0 : 1), losses: tProfile.losses + (challengerWon ? 1 : 0) };
 
               if (activeMatch.mode.includes('free')) {
                   const bet = checkData.bet_gc || 0;
                   if (challengerWon) {
-                      cUpdates.created_at = tProfile.created_at; 
-                      tUpdates.created_at = cProfile.created_at;
-                      cUpdates.defense_stack = 0; 
-                      tUpdates.defense_stack = 0;
-                      cUpdates.gc = (cProfile.gc || 0) + bet; 
-                      tUpdates.gc = (tProfile.gc || 0) - bet;
+                      cUpdates.created_at = tProfile.created_at; tUpdates.created_at = cProfile.created_at;
+                      cUpdates.defense_stack = 0; tUpdates.defense_stack = 0;
+                      cUpdates.gc = (cProfile.gc || 0) + bet; tUpdates.gc = (tProfile.gc || 0) - bet;
                   } else {
-                      tUpdates.defense_stack = (tProfile.defense_stack || 0) + 1; 
-                      cUpdates.defense_stack = 0;
-                      cUpdates.gc = (cProfile.gc || 0) - bet; 
-                      tUpdates.gc = (tProfile.gc || 0) + bet;
+                      tUpdates.defense_stack = (tProfile.defense_stack || 0) + 1; cUpdates.defense_stack = 0;
+                      cUpdates.gc = (cProfile.gc || 0) - bet; tUpdates.gc = (tProfile.gc || 0) + bet;
                   }
               } else {
                   const calcRP = (prof: any, won: boolean, oppProf: any) => {
                       let rpChg = won ? 50 : -20;
                       let nStreak = won ? (prof.win_streak || 0) + 1 : 0;
                       if (won) {
-                          if (nStreak === 2) rpChg = 60; 
-                          else if (nStreak === 3) rpChg = 75; 
-                          else if (nStreak >= 4) rpChg = 100;
-                          
-                          if ((oppProf.rp || 1000) - (prof.rp || 1000) > 300) {
-                            rpChg += 100;
-                          }
+                          if (nStreak === 2) rpChg = 60; else if (nStreak === 3) rpChg = 75; else if (nStreak >= 4) rpChg = 100;
+                          if ((oppProf.rp || 1000) - (prof.rp || 1000) > 300) rpChg += 100;
                       }
-                      return { 
-                        rp: (prof.rp || 1000) + rpChg, 
-                        streak: nStreak, 
-                        gc: (prof.gc || 0) + (won ? 100 : 30) 
-                      };
+                      return { rp: (prof.rp || 1000) + rpChg, streak: nStreak, gc: (prof.gc || 0) + (won ? 100 : 30) };
                   };
-                  
                   const cRes = calcRP(cProfile, challengerWon, tProfile);
                   const tRes = calcRP(tProfile, !challengerWon, cProfile);
-                  
-                  cUpdates.rp = cRes.rp; 
-                  cUpdates.win_streak = cRes.streak; 
-                  cUpdates.gc = cRes.gc;
-                  
-                  tUpdates.rp = tRes.rp; 
-                  tUpdates.win_streak = tRes.streak; 
-                  tUpdates.gc = tRes.gc;
+                  cUpdates.rp = cRes.rp; cUpdates.win_streak = cRes.streak; cUpdates.gc = cRes.gc;
+                  tUpdates.rp = tRes.rp; tUpdates.win_streak = tRes.streak; tUpdates.gc = tRes.gc;
               }
 
               await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
@@ -592,23 +477,14 @@ function App() {
           await supabase.from('challenges').delete().eq('id', activeMatch.id);
        } else {
           await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
-          playSFX('error'); 
-          alert(`스코어가 일치하지 않습니다!\n(상대방 입력 -> 승:${oppW} 패:${oppL})\n상대방과 확인 후 다시 입력해주세요.`);
-          setWaitingForScore(false); 
-          setMyWins(null); 
-          setMyLosses(null);
+          playSFX('error'); alert(`스코어가 일치하지 않습니다!\n(상대방 입력 -> 승:${oppW} 패:${oppL})\n상대방과 확인 후 다시 입력해주세요.`);
+          setWaitingForScore(false); setMyWins(null); setMyLosses(null);
        }
-    } else { 
-      setWaitingForScore(true); 
-    }
+    } else { setWaitingForScore(true); }
   };
 
   const copyPlayerName = (name: string) => {
-    if (!name) return; 
-    playSFX('click'); 
-    navigator.clipboard.writeText(name); 
-    setCopyStatus(true); 
-    setTimeout(() => setCopyStatus(false), 2000);
+    if (!name) return; playSFX('click'); navigator.clipboard.writeText(name); setCopyStatus(true); setTimeout(() => setCopyStatus(false), 2000);
   };
 
   const handleProfileClick = (name: string) => {
@@ -651,13 +527,8 @@ function App() {
       }
     });
 
-    legendStatsArray = Object.values(lStats)
-      .map((d: any) => ({ ...d, wr: d.matches > 0 ? d.wins / d.matches : 0 }))
-      .sort((a, b) => b.wr - a.wr || b.matches - a.matches);
-      
-    weaponStatsArray = Object.values(wStats)
-      .map((d: any) => ({ ...d, wr: d.matches > 0 ? d.wins / d.matches : 0 }))
-      .sort((a, b) => b.wr - a.wr || b.matches - a.matches);
+    legendStatsArray = Object.values(lStats).map((d: any) => ({ ...d, wr: d.matches > 0 ? d.wins / d.matches : 0 })).sort((a, b) => b.wr - a.wr || b.matches - a.matches);
+    weaponStatsArray = Object.values(wStats).map((d: any) => ({ ...d, wr: d.matches > 0 ? d.wins / d.matches : 0 })).sort((a, b) => b.wr - a.wr || b.matches - a.matches);
 
     if (legendStatsArray.length > 0) favLegend = legendStatsArray[0].name;
     if (weaponStatsArray.length > 0) favWeapon = weaponStatsArray[0].name;
@@ -826,11 +697,15 @@ function App() {
                </section>
             </div>
 
-            {/* 중앙 패널: 작전 통제소 */}
+            {/* 🌟 중앙 패널: 통합 작전 통제소 (블라인드 픽 시스템 적용) */}
             <div className="col-span-12 xl:col-span-5 flex flex-col gap-8 h-full relative">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-6 flex flex-col h-fit shrink-0 relative z-10">
                   <div className="flex flex-col relative z-10">
-                      <h3 onMouseEnter={() => playSFX('hover')} className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3">작전 통제소 (Operation Command)</h3>
+                      <h3 onMouseEnter={() => playSFX('hover')} className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3">
+                         {(matchPhase === 'idle' || matchPhase === 'setup_mode') && '대전 신청 (Match Entry)'}
+                         {(matchPhase === 'waiting_sync' || matchPhase === 'picking' || matchPhase === 'waiting_ready') && '대전 준비 (Match Prep)'}
+                         {matchPhase === 'scoring' && '결과 제출 (Submit Score)'}
+                      </h3>
                       
                       {matchPhase === 'idle' && (
                         <div className="flex flex-col pt-4 pb-4 animate-in fade-in gap-4">
@@ -847,7 +722,7 @@ function App() {
                         </div>
                       )}
 
-                      {matchPhase === 'setup' && (
+                      {matchPhase === 'setup_mode' && (
                         <div className="flex flex-col pt-2 pb-2 animate-in fade-in gap-4">
                            <div className="flex items-center justify-between bg-black/40 p-4 rounded-[2rem] border border-white/10 shadow-inner mb-2">
                               <div className="flex flex-col cursor-pointer group/target" onClick={() => handleProfileClick(entryOpponent)}>
@@ -862,37 +737,44 @@ function App() {
                               <button onMouseEnter={() => playSFX('hover')} onClick={() => handleModeChange('random')} className={`flex-1 py-4 rounded-xl text-sm font-black transition-all cursor-pointer ${entryMode === 'random' ? 'bg-cyan-600 text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}>랜덤대전 (RP)</button>
                            </div>
                            
+                           {entryMode === 'free' && (
+                              <div className="bg-black/60 p-4 rounded-2xl border border-white/5 mt-1 flex justify-between items-center">
+                                 <p className="text-sm text-pink-400 font-black">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">최소 100</span></p>
+                                 <input type="number" min={100} value={betAmount} onChange={(e) => setBetAmount(Number(e.target.value))} className="w-24 bg-white/5 border border-white/10 p-2 rounded-xl outline-none text-white font-black text-right select-text cursor-pointer" />
+                              </div>
+                           )}
+
+                           <button onMouseEnter={() => playSFX('hover')} onClick={handleStartMatch} className="w-full py-5 mt-4 rounded-[2rem] font-black text-xl text-white bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.6)] hover:bg-blue-500 transition-all border border-blue-400 cursor-pointer">매칭 생성 및 대기 (Create Match)</button>
+                        </div>
+                      )}
+
+                      {matchPhase === 'waiting_sync' && (
+                        <div className="flex flex-col items-center justify-center py-16 animate-in fade-in">
+                           <div className="w-20 h-20 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-8 shadow-lg"></div>
+                           <h4 className="text-3xl font-black text-cyan-400 tracking-widest">타겟 접속 대기중</h4>
+                           <p className="text-sm text-slate-300 mt-4 text-center">상대방(<span className="text-pink-400 cursor-pointer hover:text-cyan-400 transition-colors" onClick={() => handleProfileClick(entryOpponent)}>{entryOpponent}</span>)이 당신을 지목하여<br/>수락하면 픽창으로 이동합니다.</p>
+                           <button onMouseEnter={() => playSFX('hover')} onClick={handleCancelMatch} className="mt-10 px-10 py-3 rounded-full border-2 border-pink-500/50 text-pink-400 font-black hover:bg-pink-500 hover:text-white transition-all shadow-md cursor-pointer">매칭 취소 (Cancel)</button>
+                        </div>
+                      )}
+
+                      {matchPhase === 'picking' && (
+                        <div className="flex flex-col pt-2 pb-2 animate-in fade-in gap-4">
+                           <h4 className="text-center font-black text-pink-400 mb-2">매치 성사! 무기를 선택하세요</h4>
                            {entryMode === 'free' ? (
                               <div className="space-y-3 flex flex-col">
-                                 <select onMouseEnter={() => playSFX('hover')} value={entryLegend} onChange={(e) => { setEntryLegend(e.target.value); playSFX('click'); }} className="w-full bg-black/60 border border-white/10 p-4 rounded-2xl text-base font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors">
+                                 <select onMouseEnter={() => playSFX('hover')} value={entryLegend} onChange={(e) => { setEntryLegend(e.target.value); playSFX('click'); }} className="w-full min-w-0 bg-black/60 border border-white/10 py-4 pl-3 pr-8 rounded-2xl text-xs sm:text-sm font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
                                     <option value="" disabled hidden>👉 레전드 선택</option>
-                                    {Object.entries(LEGEND_CATEGORIES).map(([cat, list]) => (
-                                      <optgroup key={cat} label={`■ ${cat}`} style={{color: getLegendCategoryColorHex(cat), backgroundColor: '#000'}}>
-                                        {list.map(l => <option key={l} value={l} style={{color: '#fff'}}>{l}</option>)}
-                                      </optgroup>
-                                    ))}
+                                    {Object.entries(LEGEND_CATEGORIES).map(([cat, list]) => (<optgroup key={cat} label={`■ ${cat}`} style={{color: getLegendCategoryColorHex(cat), backgroundColor: '#000'}}>{list.map(l => <option key={l} value={l} style={{color: '#fff'}}>{l}</option>)}</optgroup>))}
                                  </select>
-                                 <div className="flex gap-3">
-                                   <select onMouseEnter={() => playSFX('hover')} value={entryWeapons[0]} onChange={(e) => {const w = [...entryWeapons]; w[0] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="flex-1 bg-black/60 border border-white/10 p-4 rounded-2xl text-sm font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors">
-                                      <option value="" disabled hidden>👉 1번 무기 선택</option>
-                                      {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (
-                                        <optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>
-                                          {list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}
-                                        </optgroup>
-                                      ))}
+                                 <div className="flex gap-2 w-full">
+                                   <select onMouseEnter={() => playSFX('hover')} value={entryWeapons[0]} onChange={(e) => {const w = [...entryWeapons]; w[0] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="flex-1 min-w-0 bg-black/60 border border-white/10 py-4 pl-3 pr-8 rounded-2xl text-xs sm:text-sm font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
+                                      <option value="" disabled hidden>👉 1번 무기</option>
+                                      {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (<optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>{list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}</optgroup>))}
                                    </select>
-                                   <select onMouseEnter={() => playSFX('hover')} value={entryWeapons[1]} onChange={(e) => {const w = [...entryWeapons]; w[1] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="flex-1 bg-black/60 border border-white/10 p-4 rounded-2xl text-sm font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors">
-                                      <option value="" disabled hidden>👉 2번 무기 선택</option>
-                                      {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (
-                                        <optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>
-                                          {list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}
-                                        </optgroup>
-                                      ))}
+                                   <select onMouseEnter={() => playSFX('hover')} value={entryWeapons[1]} onChange={(e) => {const w = [...entryWeapons]; w[1] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="flex-1 min-w-0 bg-black/60 border border-white/10 py-4 pl-3 pr-8 rounded-2xl text-xs sm:text-sm font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
+                                      <option value="" disabled hidden>👉 2번 무기</option>
+                                      {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (<optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>{list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}</optgroup>))}
                                    </select>
-                                 </div>
-                                 <div className="bg-black/60 p-4 rounded-2xl border border-white/5 mt-1 flex justify-between items-center">
-                                    <p className="text-sm text-pink-400 font-black">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">최소 100</span></p>
-                                    <input type="number" min={100} value={betAmount} onChange={(e) => setBetAmount(Number(e.target.value))} className="w-24 bg-white/5 border border-white/10 p-2 rounded-xl outline-none text-white font-black text-right select-text cursor-pointer" />
                                  </div>
                               </div>
                            ) : (
@@ -909,36 +791,37 @@ function App() {
                                  </div>
                               </div>
                            )}
-                           <button onMouseEnter={() => playSFX('hover')} onClick={handleStartMatch} className="w-full py-5 mt-4 rounded-[2rem] font-black text-xl text-white bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.6)] hover:bg-blue-500 transition-all border border-blue-400 cursor-pointer">도전장 발송 및 대기 (Confirm)</button>
+                           <button onMouseEnter={() => playSFX('hover')} onClick={handlePickReady} className="w-full py-5 mt-4 rounded-[2rem] font-black text-xl text-black bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)] hover:bg-yellow-300 transition-all cursor-pointer">준비 완료 (Ready)</button>
                         </div>
                       )}
 
-                      {matchPhase === 'waiting' && (
+                      {matchPhase === 'waiting_ready' && (
                         <div className="flex flex-col items-center justify-center py-16 animate-in fade-in">
-                           <div className="w-20 h-20 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-8 shadow-lg"></div>
-                           <h4 className="text-3xl font-black text-cyan-400 tracking-widest">교차 검증 중</h4>
-                           <p className="text-sm text-slate-300 mt-4 text-center">
-                             상대방(<span className="text-pink-400 cursor-pointer hover:text-cyan-400 transition-colors" onClick={() => handleProfileClick(entryOpponent)}>{entryOpponent}</span>)이 당신을 지목하여<br/>대전 생성을 누르는 순간 시작됩니다.
-                           </p>
-                           <button onMouseEnter={() => playSFX('hover')} onClick={handleCancelMatch} className="mt-10 px-10 py-3 rounded-full border-2 border-pink-500/50 text-pink-400 font-black hover:bg-pink-500 hover:text-white transition-all shadow-md cursor-pointer">매칭 취소 (Cancel)</button>
+                           <div className="w-20 h-20 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mb-8 shadow-lg"></div>
+                           <h4 className="text-3xl font-black text-yellow-400 tracking-widest">상대방 픽 대기중</h4>
+                           <p className="text-sm text-slate-300 mt-4 text-center">상대방이 무기를 고르고 준비 완료를 누르면<br/>전투 결과 창으로 이동합니다.</p>
                         </div>
                       )}
 
-                      {matchPhase === 'ready' && activeMatch && (
+                      {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-3">
-                           <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'} text-center flex flex-col justify-center`}>
-                             <h4 className="text-6xl font-black text-white mb-6 drop-shadow-xl">{activeMatch.legend}</h4>
-                             <div className="flex flex-col gap-3 items-center">
-                               {activeMatch.weapons.map((w:any, idx:number) => (
-                                 <span key={idx} className={`px-6 py-2 rounded-2xl text-base font-black border-2 w-full max-w-[350px] ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 text-cyan-400' : 'border-pink-400/50 text-pink-400'}`}>{w}</span>
-                               ))}
+                           <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
+                             <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                                <div className="flex flex-col flex-1 items-start">
+                                  <span className="text-xs font-black text-cyan-400 mb-1">MY PICK</span>
+                                  <span className="font-black text-white text-lg truncate w-full">{activeMatch.legend}</span>
+                                  <span className="text-[10px] text-slate-400 mt-1 truncate w-full">{activeMatch.weapons.join(' / ')}</span>
+                                </div>
+                                <span className="font-black text-2xl text-slate-600 mx-4">VS</span>
+                                <div className="flex flex-col flex-1 items-end text-right">
+                                  <span className="text-xs font-black text-pink-400 mb-1">OPPONENT PICK</span>
+                                  <span className="font-black text-white text-lg truncate w-full">{activeMatch.oppLegend || '?'}</span>
+                                  <span className="text-[10px] text-slate-400 mt-1 truncate w-full">{(activeMatch.oppWeapons || []).join(' / ')}</span>
+                                </div>
                              </div>
                            </div>
-                           <div onMouseEnter={() => playSFX('hover')} className="text-center bg-black/40 p-4 rounded-[1.5rem] border border-white/10 shadow-inner">
-                              <p className="text-[10px] text-slate-500 font-black mb-1">Target Opponent</p>
-                              <h4 className="text-5xl font-black text-white italic truncate cursor-pointer hover:text-cyan-400 transition-colors" onClick={() => handleProfileClick(activeMatch.opponent)}>{activeMatch.opponent}</h4>
-                           </div>
-                           <div className="flex flex-col gap-4 pt-3 border-t border-white/5">
+                           
+                           <div className="flex flex-col gap-4 pt-3 mt-2">
                               <div className="flex items-center justify-between px-2">
                                 <span className="text-cyan-400 font-black text-lg tracking-widest">나의 승리</span>
                                 <div className="flex gap-2">
@@ -1198,7 +1081,7 @@ function App() {
         )}
       </div>
 
-      {/* 🌟 V3 통합 프로필 팝업 (모든 사용자의 지갑과 상세 전적 표시) */}
+      {/* 🌟 V3 통합 프로필 팝업 */}
       {selectedPlayer && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[300] flex items-center justify-center p-6 animate-in fade-in duration-300 cursor-pointer" onClick={() => { setSelectedPlayer(null); playSFX('click'); }}>
           <div className="bg-[#0A0C14] border-2 border-cyan-400 w-full max-w-2xl rounded-[4rem] p-10 shadow-2xl relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
