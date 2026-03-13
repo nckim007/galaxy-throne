@@ -942,23 +942,31 @@ function App() {
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-3">
                            <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
                              <div className="flex items-center justify-between border-b border-white/10 pb-4 gap-4">
-                                <div className="flex flex-col flex-1 min-w-0 items-start">
+                                <div className="flex flex-col flex-1 min-w-0 items-start text-left">
                                   <span className={`mb-1 text-cyan-400 ${getResponsiveNameClass(currentUserName || '', 'medium')}`}>{currentUserName}</span>
                                   <span className="text-[10px] font-black text-slate-500 mb-2">나 (MY PICK)</span>
                                   <span className="font-black text-white text-2xl truncate w-full mb-3">{activeMatch.legend}</span>
-                                  <div className="flex flex-col gap-1.5 w-full">
-                                    <span className="text-sm font-bold text-slate-300 truncate w-full"><span className="text-cyan-500 mr-1">무기1:</span> {activeMatch.weapons[0]}</span>
-                                    <span className="text-sm font-bold text-slate-300 truncate w-full"><span className="text-cyan-500 mr-1">무기2:</span> {activeMatch.weapons[1]}</span>
+                                  <div className="flex flex-col gap-2 w-full">
+                                    <span className="text-base font-bold text-slate-200 truncate w-full flex justify-start items-center">
+                                      <span className="text-cyan-500 mr-2 font-black">무기1:</span> {activeMatch.weapons[0]}
+                                    </span>
+                                    <span className="text-base font-bold text-slate-200 truncate w-full flex justify-start items-center">
+                                      <span className="text-cyan-500 mr-2 font-black">무기2:</span> {activeMatch.weapons[1]}
+                                    </span>
                                   </div>
                                 </div>
-                                <span className="font-black text-2xl text-slate-600 shrink-0">VS</span>
+                                <span className="font-black text-2xl text-slate-600 shrink-0 mx-2 mt-10">VS</span>
                                 <div className="flex flex-col flex-1 min-w-0 items-end text-right">
                                   <span className={`mb-1 text-pink-400 ${getResponsiveNameClass(activeMatch.opponent, 'medium')}`}>{activeMatch.opponent}</span>
                                   <span className="text-[10px] font-black text-slate-500 mb-2">상대방 (OPPONENT PICK)</span>
                                   <span className="font-black text-white text-2xl truncate w-full mb-3">{activeMatch.oppLegend || '?'}</span>
-                                  <div className="flex flex-col gap-1.5 w-full items-end">
-                                    <span className="text-sm font-bold text-slate-300 truncate w-full"><span className="text-pink-500 mr-1">무기1:</span> {activeMatch.oppWeapons?.[0] || '?'}</span>
-                                    <span className="text-sm font-bold text-slate-300 truncate w-full"><span className="text-pink-500 mr-1">무기2:</span> {activeMatch.oppWeapons?.[1] || '?'}</span>
+                                  <div className="flex flex-col gap-2 w-full items-end">
+                                    <span className="text-base font-bold text-slate-200 truncate w-full flex justify-end items-center">
+                                      {activeMatch.oppWeapons?.[0] || '?'} <span className="text-pink-500 ml-2 font-black">:무기1</span>
+                                    </span>
+                                    <span className="text-base font-bold text-slate-200 truncate w-full flex justify-end items-center">
+                                      {activeMatch.oppWeapons?.[1] || '?'} <span className="text-pink-500 ml-2 font-black">:무기2</span>
+                                    </span>
                                   </div>
                                 </div>
                              </div>
