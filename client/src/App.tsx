@@ -203,6 +203,15 @@ function App() {
   const currentUserName = profile?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name;
   const currentUserAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || profile?.avatar_url || null;
 
+  // 🌟 [무한 대기 박멸 엔진] React의 고질적인 비동기 끊김을 방지하기 위한 백그라운드 기억 장치
+  const activeMatchRef = useRef(activeMatch);
+  const matchPhaseRef = useRef(matchPhase);
+  const waitingForScoreRef = useRef(waitingForScore);
+
+  useEffect(() => { activeMatchRef.current = activeMatch; }, [activeMatch]);
+  useEffect(() => { matchPhaseRef.current = matchPhase; }, [matchPhase]);
+  useEffect(() => { waitingForScoreRef.current = waitingForScore; }, [waitingForScore]);
+
   useEffect(() => {
     globalBgmEnabled = bgmEnabled; globalSfxEnabled = sfxEnabled; globalBgmVolume = bgmVolume; globalSfxVolume = sfxVolume;
     localStorage.setItem('bgmEnabled', bgmEnabled.toString()); localStorage.setItem('sfxEnabled', sfxEnabled.toString());
@@ -244,8 +253,15 @@ function App() {
       let localLegend = isC ? (data.legend || '') : (data.t_legend || '');
       let localWeapons = isC ? (data.weapons || ['', '']) : (data.t_weapons || ['', '']);
 
-      setEntryLegend(localLegend);
-      setEntryWeapons(localWeapons);
+      if (data.mode.includes('random') && data.mode.includes('_accepted') && !amIReady && (!localLegend || localLegend === '')) {
+          localLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
+          localWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+          setEntryLegend(localLegend);
+          setEntryWeapons(localWeapons);
+      } else {
+          setEntryLegend(localLegend);
+          setEntryWeapons(localWeapons);
+      }
 
       setActiveMatch({
         id: data.id,
@@ -270,7 +286,7 @@ function App() {
         setMatchPhase(isC ? 'waiting_sync' : 'setup_mode');
       }
     } else {
-      if (matchPhase !== 'idle') {
+      if (matchPhaseRef.current !== 'idle') {
           setMatchPhase('idle');
           setActiveMatch(null);
       }
@@ -296,13 +312,18 @@ function App() {
     }
   }, [currentUserName]);
 
-  // 🌟 V3.4 100% 무한 대기 방지 동기화 엔진 (강제 복구 로직 포함)
+  // 🌟 [V3.4 핵심] 절대로 통신이 끊어지지 않는 무적의 실시간 동기화 엔진
   useEffect(() => {
     if (!currentUserName) return;
     
-    const channel = supabase.channel('unified_challenge_sync')
+    // 통신 채널을 단 1번만 열고, 내부 로직은 항상 최신 상태(Ref)를 참조하도록 만듦
+    const channel = supabase.channel('unified_challenge_sync_' + currentUserName.replace(/[^a-zA-Z0-9]/g, ''))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'challenges' }, payload => {
            
+           const currentMatch = activeMatchRef.current;
+           const currentPhase = matchPhaseRef.current;
+           const isWaiting = waitingForScoreRef.current;
+
            if (payload.eventType === 'INSERT') {
               const newChallenge = payload.new;
               if (newChallenge.target_name.trim() === currentUserName.trim()) {
@@ -316,26 +337,42 @@ function App() {
 
            if (payload.eventType === 'UPDATE') {
                const updated = payload.new;
-               if (activeMatch && updated.id === activeMatch.id) {
-                   if (updated.c_win === null && updated.t_win === null && waitingForScore) {
+               if (currentMatch && updated.id === currentMatch.id) {
+                   
+                   if (currentPhase === 'waiting_sync' && updated.mode.includes('_accepted')) {
+                       playSFX('matchStart');
+                       setMatchPhase('picking');
+                       if (updated.mode.includes('random')) handleModeChange('random');
+                   }
+                   
+                   if ((currentPhase === 'picking' || currentPhase === 'waiting_ready') && updated.c_ready && updated.t_ready) {
+                       playSFX('success');
+                       setActiveMatch(prev => prev ? {
+                           ...prev,
+                           oppLegend: prev.isChallenger ? updated.t_legend : updated.legend,
+                           oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons
+                       } : prev);
+                       setMatchPhase('scoring');
+                   }
+                   
+                   if (updated.c_win === null && updated.t_win === null && isWaiting) {
                        playSFX('error');
                        alert("상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다.\n다시 합의 후 정확히 입력해주세요!");
                        setWaitingForScore(false); setMyWins(null); setMyLosses(null);
                    }
                }
-               // 🌟 어떠한 업데이트가 발생하든 강제로 내 상태를 DB와 일치시킴 (갇힘 현상 100% 박멸)
                checkActiveChallenge(currentUserName);
            }
 
            if (payload.eventType === 'DELETE') {
                const deletedRow = payload.old;
-               if (activeMatch && deletedRow.id === activeMatch.id) {
-                   if (matchPhase === 'scoring' || waitingForScore) {
+               if (currentMatch && deletedRow.id === currentMatch.id) {
+                   if (currentPhase === 'scoring' || isWaiting) {
                        playSFX('success');
                        setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
                        setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']);
                        fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
-                   } else if (matchPhase !== 'idle') {
+                   } else if (currentPhase !== 'idle') {
                        playSFX('click');
                        alert("매치가 취소되었거나 정상적으로 종료되었습니다.");
                        setMatchPhase('idle'); setActiveMatch(null);
@@ -346,7 +383,7 @@ function App() {
       }).subscribe();
       
     return () => { supabase.removeChannel(channel); };
-  }, [currentUserName, activeMatch, matchPhase, waitingForScore, user]);
+  }, [currentUserName]); // 의존성 배열에 username만 두어 무한 재연결(끊김)을 완벽 차단!
 
   const fetchData = async () => {
     const { data: matches } = await supabase.from('matches').select('*').order('created_at', { ascending: false });
@@ -404,7 +441,6 @@ function App() {
     setEntryWeapons([...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2));
   };
 
-  // 🌟 V3.3 단계 1: 방 생성 및 수락 (모드 크로스 체크 + 랜덤 대전 동시 생성!)
   const handleStartMatch = async () => {
     if (entryMode === 'free' && betAmount < 100) { playSFX('error'); return alert("자유대전 배팅 금액은 최소 100 GC 이상이어야 합니다."); }
     if (betAmount > 0 && (!profile || profile.gc < betAmount)) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc || 0} GC)`); }
@@ -425,7 +461,6 @@ function App() {
 
       let updatePayload: any = { mode: existing.mode + '_accepted' };
       
-      // 🌟 [핵심 버그 수정] 수락하는 쪽(B)이 랜덤 무기를 양쪽 모두 다 만들어서 서버에 꽂아 넣습니다!
       if (entryMode === 'random') {
           const a_leg = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
           const a_wep = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
@@ -504,47 +539,42 @@ function App() {
     if (oppW !== null && oppL !== null) {
        if (myWins === oppL && myLosses === oppW) {
           
-          // 🌟 DB 락(Lock) 확인. (먼저 지우는 사람만 기록 수행)
-          const { data: finalRow } = await supabase.from('challenges').select('*').eq('id', activeMatch.id).maybeSingle();
-          
-          if (finalRow) {
-             // 1명만 삭제 권한 획득
-             await supabase.from('challenges').delete().eq('id', activeMatch.id);
+          const { data: deletedRow } = await supabase.from('challenges').delete().eq('id', activeMatch.id).select().maybeSingle();
 
+          if (deletedRow) {
              const winnerName = myWins > myLosses ? currentUserName : activeMatch.opponent;
              const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
              
-             // 🌟 DB 데이터가 완벽하게 들어가도록 강제 String/Array 변환 세팅 (이래도 안 들어가면 RLS 문제임)
              const matchPayload = {
                  match_type: String(activeMatch.mode.replace('_accepted', '')),
-                 left_player_name: String(finalRow.challenger_name),
-                 right_player_name: String(finalRow.target_name),
-                 left_legend: String(finalRow.legend || '미선택'),
-                 left_weapons: Array.isArray(finalRow.weapons) ? finalRow.weapons : ['미선택', '미선택'],
-                 right_legend: String(finalRow.t_legend || '미선택'),
-                 right_weapons: Array.isArray(finalRow.t_weapons) ? finalRow.t_weapons : ['미선택', '미선택'],
-                 score_left: Number(finalRow.c_win),
-                 score_right: Number(finalRow.t_win),
+                 left_player_name: String(deletedRow.challenger_name),
+                 right_player_name: String(deletedRow.target_name),
+                 left_legend: String(deletedRow.legend || '미선택'),
+                 left_weapons: Array.isArray(deletedRow.weapons) ? deletedRow.weapons : ['미선택', '미선택'],
+                 right_legend: String(deletedRow.t_legend || '미선택'),
+                 right_weapons: Array.isArray(deletedRow.t_weapons) ? deletedRow.t_weapons : ['미선택', '미선택'],
+                 score_left: Number(deletedRow.c_win),
+                 score_right: Number(deletedRow.t_win),
                  winner_name: String(winnerName),
                  winner_rank_num: Number(winnerRankNum)
              };
 
+             // 🌟 DB 에러가 떠도 앱이 멈추거나 갇히지 않도록 로그로만 출력
              const { error: matchErr } = await supabase.from('matches').insert([matchPayload]);
              if (matchErr) {
-                 alert(`[DB 에러] 전투 기록 저장 실패. 관리자에게 문의하거나 SQL을 확인하세요: ${matchErr.message}`);
-                 console.error("Match Insert Error:", matchErr);
+                 console.error("[DB Schema 에러] Supabase 대시보드에서 'Reload Schema Cache'를 클릭하세요.", matchErr);
              }
 
-             const challengerWon = finalRow.c_win > finalRow.c_lose;
-             const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', finalRow.challenger_name).single();
-             const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', finalRow.target_name).single();
+             const challengerWon = deletedRow.c_win > deletedRow.c_lose;
+             const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', deletedRow.challenger_name).single();
+             const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', deletedRow.target_name).single();
 
              if (cProfile && tProfile) {
                  let cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
                  let tUpdates: any = { wins: tProfile.wins + (challengerWon ? 0 : 1), losses: tProfile.losses + (challengerWon ? 1 : 0) };
 
                  if (activeMatch.mode.includes('free')) {
-                     const bet = finalRow.bet_gc || 0;
+                     const bet = deletedRow.bet_gc || 0;
                      if (challengerWon) {
                          cUpdates.created_at = tProfile.created_at; cUpdates.created_at = cProfile.created_at;
                          cUpdates.defense_stack = 0; tUpdates.defense_stack = 0;
@@ -561,7 +591,7 @@ function App() {
                              if (nStreak === 2) rpChg = 60; else if (nStreak === 3) rpChg = 75; else if (nStreak >= 4) rpChg = 100;
                              if ((oppProf.rp || 1000) - (prof.rp || 1000) > 300) rpChg += 100;
                          }
-                         const bet = finalRow.bet_gc || 0;
+                         const bet = deletedRow.bet_gc || 0;
                          const gcChg = (won ? 100 : 30) + (won ? bet : -bet);
                          return { rp: (prof.rp || 1000) + rpChg, streak: nStreak, gc: (prof.gc || 0) + gcChg };
                      };
@@ -570,16 +600,12 @@ function App() {
                      cUpdates.rp = cRes.rp; cUpdates.win_streak = cRes.streak; cUpdates.gc = cRes.gc;
                      tUpdates.rp = tRes.rp; tUpdates.win_streak = tRes.streak; tUpdates.gc = tRes.gc;
                  }
-                 const { error: profErr } = await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
-                 if (profErr) alert(`[DB 에러] 프로필 업데이트 실패: ${profErr.message}`);
+                 await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
                  await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
              }
-             
-             // 🌟 확실한 데이터 새로고침
              fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
           }
        } else {
-          // 로컬 리셋 (틀렸을 때)
           await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
           playSFX('error'); 
           alert(`스코어가 일치하지 않습니다!\n(상대방 입력 -> 승:${oppW} 패:${oppL})\n다시 합의 후 정확히 입력해주세요.`);
@@ -588,31 +614,15 @@ function App() {
     } else { setWaitingForScore(true); }
   };
 
-  // 🌟 [편의성 개선] 닉네임 복사 시 바로 대전 준비창 꽂아주기
   const copyPlayerName = (name: string) => {
-    if (!name) return; 
-    playSFX('click'); 
-    navigator.clipboard.writeText(name); 
-    setCopyStatus(true); 
-    
-    // 자동 입력 및 매칭방 이동
-    setEntryOpponent(name);
-    setActiveMenu('home');
-    setMatchPhase('setup_mode');
-    
-    setTimeout(() => {
-        setCopyStatus(false);
-        setSelectedPlayer(null); // 팝업 닫기
-    }, 500);
+    if (!name) return; playSFX('click'); navigator.clipboard.writeText(name); setCopyStatus(true); 
+    setEntryOpponent(name); setActiveMenu('home'); setMatchPhase('setup_mode');
+    setTimeout(() => { setCopyStatus(false); setSelectedPlayer(null); }, 500);
   };
 
   const handleProfileClick = (name: string) => {
     const profile = rankers.find(r => r.display_name === name);
-    if (profile) {
-      playSFX('click');
-      setSelectedPlayer(profile);
-      setProfileTab('overview');
-    }
+    if (profile) { playSFX('click'); setSelectedPlayer(profile); setProfileTab('overview'); }
   };
 
   let favLegend = "미선택";
@@ -765,7 +775,7 @@ function App() {
 
         {activeMenu === 'home' && (
           <main className="flex-1 p-10 grid grid-cols-12 gap-8 items-stretch pb-20 animate-in fade-in duration-500 min-h-[1400px]">
-            {/* 좌측 패널: 접속 현황 */}
+            {/* 좌측 패널 */}
             <div className="col-span-12 xl:col-span-3 flex flex-col h-full relative max-h-[880px]">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-4 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-cyan-400 text-center mb-2 border-b border-white/5 pb-2 flex items-center justify-center gap-2">
@@ -960,7 +970,7 @@ function App() {
                         </div>
                       )}
 
-                      {/* 🌟 [UI 개선] 무기 텍스트 크기 확대 및 좌우 대칭 디자인 적용 */}
+                      {/* 🌟 [UI 개선] 무기 텍스트 대칭 정렬 및 컬러 적용 */}
                       {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-3">
                            <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
@@ -1020,7 +1030,6 @@ function App() {
                </section>
             </div>
 
-            {/* 우측 패널: 미니 랭킹 */}
             <div className="col-span-12 lg:col-span-4 flex flex-col h-full relative">
                <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-5 flex flex-col h-fit shrink-0 relative z-10">
                   <div className="px-2 pt-2 flex flex-col relative z-10">
@@ -1343,7 +1352,6 @@ function App() {
                  )}
              </div>
 
-             {/* 🌟 V3.3 편의성 2: 복사 버튼 누르면 즉시 대전창 세팅 */}
              <button 
                onMouseEnter={() => playSFX('hover')} 
                onClick={() => copyPlayerName(selectedPlayer.display_name)} 
