@@ -296,7 +296,7 @@ function App() {
     }
   }, [currentUserName]);
 
-  // 🌟 V3.3 무한 대기 박멸을 위한 완벽한 실시간 동기화 엔진
+  // 🌟 V3.4 100% 무한 대기 방지 동기화 엔진 (강제 복구 로직 포함)
   useEffect(() => {
     if (!currentUserName) return;
     
@@ -317,44 +317,21 @@ function App() {
            if (payload.eventType === 'UPDATE') {
                const updated = payload.new;
                if (activeMatch && updated.id === activeMatch.id) {
-                   
-                   // 🌟 방이 수락되어 픽창 진입 시: 상대방이 만들어준 무기를 덮어씌움
-                   if (matchPhase === 'waiting_sync' && updated.mode.includes('_accepted')) {
-                       playSFX('matchStart');
-                       setMatchPhase('picking');
-                       if (updated.mode.includes('random')) {
-                           setEntryLegend(updated.legend || '');
-                           setEntryWeapons(updated.weapons || ['', '']);
-                       }
-                   }
-                   
-                   // 양쪽 모두 레디 완료 시 스코어 보드로 이동
-                   if ((matchPhase === 'picking' || matchPhase === 'waiting_ready') && updated.c_ready && updated.t_ready) {
-                       playSFX('success');
-                       setActiveMatch(prev => prev ? {
-                           ...prev,
-                           oppLegend: prev.isChallenger ? updated.t_legend : updated.legend,
-                           oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons
-                       } : prev);
-                       setMatchPhase('scoring');
-                   }
-                   
-                   // 스코어 엇갈림 시 경고 띄우고 다시 입력 대기
                    if (updated.c_win === null && updated.t_win === null && waitingForScore) {
                        playSFX('error');
                        alert("상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다.\n다시 합의 후 정확히 입력해주세요!");
                        setWaitingForScore(false); setMyWins(null); setMyLosses(null);
                    }
                }
+               // 🌟 어떠한 업데이트가 발생하든 강제로 내 상태를 DB와 일치시킴 (갇힘 현상 100% 박멸)
+               checkActiveChallenge(currentUserName);
            }
 
-           // 🌟 가장 핵심적인 DELETE 락 해제 (1명만 갇히는 현상 완벽 방지)
            if (payload.eventType === 'DELETE') {
                const deletedRow = payload.old;
                if (activeMatch && deletedRow.id === activeMatch.id) {
                    if (matchPhase === 'scoring' || waitingForScore) {
                        playSFX('success');
-                       alert("쌍방 스코어 일치! 전투 결과 및 랭크가 성공적으로 업데이트 되었습니다.");
                        setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
                        setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']);
                        fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
@@ -992,27 +969,19 @@ function App() {
                                   <span className={`mb-1 text-cyan-400 ${getResponsiveNameClass(currentUserName || '', 'medium')}`}>{currentUserName}</span>
                                   <span className="text-[10px] font-black text-slate-500 mb-2">나 (MY PICK)</span>
                                   <span className="font-black text-white text-2xl truncate w-full mb-3">{activeMatch.legend}</span>
-                                  <div className="flex flex-col gap-2 w-full">
-                                    <span className="text-base font-bold text-slate-200 truncate w-full flex justify-start items-center">
-                                      <span className="text-cyan-500 mr-2 font-black">무기 1</span> {activeMatch.weapons[0]}
-                                    </span>
-                                    <span className="text-base font-bold text-slate-200 truncate w-full flex justify-start items-center">
-                                      <span className="text-cyan-500 mr-2 font-black">무기 2</span> {activeMatch.weapons[1]}
-                                    </span>
+                                  <div className="flex flex-col gap-1 w-full">
+                                    <span className="text-lg font-black text-cyan-400 truncate w-full text-left">{activeMatch.weapons[0]}</span>
+                                    <span className="text-lg font-black text-cyan-400 truncate w-full text-left">{activeMatch.weapons[1]}</span>
                                   </div>
                                 </div>
-                                <span className="font-black text-2xl text-slate-600 shrink-0 mx-2 mt-10">VS</span>
+                                <span className="font-black text-2xl text-slate-600 shrink-0 mx-4 mt-10">VS</span>
                                 <div className="flex flex-col flex-1 min-w-0 items-end text-right">
                                   <span className={`mb-1 text-pink-400 ${getResponsiveNameClass(activeMatch.opponent, 'medium')}`}>{activeMatch.opponent}</span>
                                   <span className="text-[10px] font-black text-slate-500 mb-2">상대방 (OPPONENT PICK)</span>
-                                  <span className="font-black text-white text-2xl truncate w-full mb-3">{activeMatch.oppLegend || '?'}</span>
-                                  <div className="flex flex-col gap-2 w-full items-end">
-                                    <span className="text-base font-bold text-slate-200 truncate w-full flex justify-end items-center">
-                                      {activeMatch.oppWeapons?.[0] || '?'} <span className="text-pink-500 ml-2 font-black">무기 1</span>
-                                    </span>
-                                    <span className="text-base font-bold text-slate-200 truncate w-full flex justify-end items-center">
-                                      {activeMatch.oppWeapons?.[1] || '?'} <span className="text-pink-500 ml-2 font-black">무기 2</span>
-                                    </span>
+                                  <span className="font-black text-white text-2xl truncate w-full mb-3 text-right">{activeMatch.oppLegend || '?'}</span>
+                                  <div className="flex flex-col gap-1 w-full items-end">
+                                    <span className="text-lg font-black text-pink-400 truncate w-full text-right">{activeMatch.oppWeapons?.[0] || '?'}</span>
+                                    <span className="text-lg font-black text-pink-400 truncate w-full text-right">{activeMatch.oppWeapons?.[1] || '?'}</span>
                                   </div>
                                 </div>
                              </div>
