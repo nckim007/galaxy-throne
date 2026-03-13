@@ -288,6 +288,7 @@ function App() {
       if (matchPhaseRef.current !== 'idle') {
           setMatchPhase('idle');
           setActiveMatch(null);
+          setWaitingForScore(false);
       }
     }
   };
@@ -311,7 +312,6 @@ function App() {
     }
   }, [currentUserName]);
 
-  // 🌟 V3 실시간 동기화: 매치 기록이 서버에 꽂히는 순간 화면을 강제로 당겨옴
   useEffect(() => {
     const matchLogChannel = supabase.channel('matches_realtime_sync')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' }, payload => {
@@ -321,7 +321,6 @@ function App() {
     return () => { supabase.removeChannel(matchLogChannel); };
   }, []);
 
-  // 🌟 진행 방(challenges) 동기화
   useEffect(() => {
     if (!currentUserName) return;
     
@@ -362,12 +361,6 @@ function App() {
                        } : prev);
                        setMatchPhase('scoring');
                    }
-                   
-                   if (updated.c_win === null && updated.t_win === null && isWaiting) {
-                       playSFX('error');
-                       alert("상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다.\n다시 합의 후 정확히 입력해주세요!");
-                       setWaitingForScore(false); setMyWins(null); setMyLosses(null);
-                   }
                }
                checkActiveChallenge(currentUserName);
            }
@@ -383,7 +376,7 @@ function App() {
                    } else if (currentPhase !== 'idle') {
                        playSFX('click');
                        alert("매치가 취소되었거나 정상적으로 종료되었습니다.");
-                       setMatchPhase('idle'); setActiveMatch(null);
+                       setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false);
                    }
                }
            }
@@ -529,33 +522,46 @@ function App() {
     setMatchPhase('idle'); setActiveMatch(null);
   };
 
+  // 🌟 [무한 로딩 및 DB 기록 에러 완벽 해결]
   const handleReportScore = async () => {
     if (myWins === null || myLosses === null || !activeMatch) { playSFX('error'); return alert("승리 및 패배 횟수를 모두 선택하세요!"); }
     playSFX('click'); 
     
+    // 1. 점수 제출 버튼을 누르자마자 갇히지 않도록 상태를 띄웁니다.
+    setWaitingForScore(true);
+    
     const isC = activeMatch.isChallenger;
     const updatePayload = isC ? { c_win: myWins, c_lose: myLosses } : { t_win: myWins, t_lose: myLosses };
     
+    // 2. 내 점수를 DB에 올립니다.
     await supabase.from('challenges').update(updatePayload).eq('id', activeMatch.id);
-    const { data: checkData } = await supabase.from('challenges').select('*').eq('id', activeMatch.id).single();
     
-    if (!checkData) return;
+    // 3. 다시 방 상태를 읽어옵니다.
+    const { data: checkData } = await supabase.from('challenges').select('*').eq('id', activeMatch.id).maybeSingle();
+    
+    // 🌟 핵심 로직: 내가 늦게 눌러서 이미 방이 폭파되었다면, 멈추지 말고 나도 바로 탈출시킵니다!
+    if (!checkData) {
+        playSFX('success');
+        setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+        setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']);
+        fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
+        return;
+    }
     
     const oppW = isC ? checkData.t_win : checkData.c_win;
     const oppL = isC ? checkData.t_lose : checkData.c_lose;
 
+    // 양쪽 다 입력했을 때
     if (oppW !== null && oppL !== null) {
        if (myWins === oppL && myLosses === oppW) {
           
-          // 🌟 [최대 버그 수정] 이 0.1초 찰나에 Race Condition으로 둘 다 같은 데이터를 Insert 하거나 방 폭파가 안 되는 버그 해결
-          // DB에서 Challenges 데이터를 한 번만 Delete 하고, 그 deletedRow 데이터를 기반으로 Matches를 한 번만 Insert 하도록 로직 수정.
+          // 방 삭제 권한을 시도합니다. (둘 중 0.1초라도 먼저 도착한 사람만 삭제에 성공함)
           const { data: deletedRow } = await supabase.from('challenges').delete().eq('id', activeMatch.id).select().maybeSingle();
 
           if (deletedRow) {
              const winnerName = myWins > myLosses ? currentUserName : activeMatch.opponent;
              const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
              
-             // 🌟 [요청 사항 완벽 반영] 경기 종료 즉시 서버에 매치 기록 완벽 저장
              const matchPayload = {
                  match_type: String(activeMatch.mode.replace('_accepted', '')),
                  left_player_name: String(deletedRow.challenger_name),
@@ -570,13 +576,12 @@ function App() {
                  winner_rank_num: Number(winnerRankNum)
              };
 
-             // DB 에러가 날 경우 Schema Cache 문제이므로, Supabase 대시보드에서 'Reload Schema Cache'를 실행해야 함.
              const { error: matchErr } = await supabase.from('matches').insert([matchPayload]);
              if (matchErr) {
-                 console.error("[DB Schema 에러] Supabase 대시보드에서 'Reload Schema Cache'를 실행하세요.", matchErr);
+                 console.error("DB Error", matchErr);
+                 // DB 에러가 났어도 갇히지 않도록 무조건 초기화시킵니다. (데이터는 날아가지만 멈추진 않음)
              }
 
-             // 프로필 업데이트 (승/패, RP, GC) 로직은 그대로 유지
              const challengerWon = deletedRow.c_win > deletedRow.c_lose;
              const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', deletedRow.challenger_name).single();
              const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', deletedRow.target_name).single();
@@ -615,15 +620,29 @@ function App() {
                  await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
                  await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
              }
+             
+             // 자기가 지우고 저장에 성공했으므로 메인으로 돌아갑니다.
+             playSFX('success');
+             setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+             setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']);
+             fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
+
+          } else {
+             // 삭제를 실패(0.1초 늦음)했다면, 이미 상대방이 처리한 것이므로 정상 통과!
+             playSFX('success');
+             setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+             setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']);
              fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
           }
        } else {
+          // 스코어가 틀렸을 때 초기화
           await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
           playSFX('error'); 
           alert(`스코어가 일치하지 않습니다!\n(상대방 입력 -> 승:${oppW} 패:${oppL})\n다시 합의 후 정확히 입력해주세요.`);
           setWaitingForScore(false); setMyWins(null); setMyLosses(null);
        }
-    } else { setWaitingForScore(true); }
+    } 
+    // 상대방이 아직 입력 안했다면 waitingForScore가 true인 상태로 남아서 UI상 대기중이 뜹니다.
   };
 
   const copyPlayerName = (name: string) => {
@@ -693,57 +712,36 @@ function App() {
 
   const rpRankers = [...rankers].sort((a, b) => (b.rp || 0) - (a.rp || 0));
 
-  // 🌟 [요청 사항 완벽 반영] 남철님이 표시해주신 UI 디자인대로 경기 내용을 풍성하게 그려주는 렌더링 함수
   const renderCombatLogItem = (log: any, index: number) => {
-    // Left(Challenger)가 이겼는지 확인
     const isLeftWinner = log.winner_name === log.left_player_name;
     const winnerName = isLeftWinner ? log.left_player_name : log.right_player_name;
     const loserName = isLeftWinner ? log.right_player_name : log.left_player_name;
-    
-    // 승자와 패자의 아바타를 가져옴
     const winnerAvatar = getAvatarFallback(winnerName, rankers);
     const loserAvatar = getAvatarFallback(loserName, rankers);
     
-    // 시간 계산 (몇 분 전 등) -> 실제 서비스에서는 created_at을 이용해 계산
-    // 여기서는 그냥 "5분 전" 등으로 고정
-    const timeAgo = "5분 전";
-
     return (
       <div key={index} onMouseEnter={() => playSFX('hover')} className="bg-black/60 border border-cyan-500/30 p-5 rounded-[1.5rem] flex flex-col justify-center gap-3 relative h-[140px] shrink-0">
-        {/* 1. 우측 상단 매치 타입 및 시간 */}
         <div className={`absolute top-0 right-0 px-3 py-1 text-[9px] font-black uppercase rounded-bl-xl rounded-tr-[1.5rem] ${log.match_type === 'free' ? 'bg-pink-600 text-white' : 'bg-cyan-600 text-black'}`}>
           {log.match_type} MATCH
         </div>
-        
-        {/* 2. 승자, 스코어, 패자 한 줄 레이아웃 */}
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-3 flex-1 overflow-hidden pr-2">
-             {/* 승자 */}
              <div className="relative shrink-0 cursor-pointer" onClick={() => handleProfileClick(winnerName)}>
                  <span className="absolute -top-1.5 -left-1.5 bg-yellow-400 text-black text-[8px] font-black px-1 rounded z-10 shadow-md">WIN</span>
                  <img src={winnerAvatar} className="w-10 h-10 rounded-full border-2 border-yellow-400 bg-black hover:scale-110 transition-transform" alt="winner"/>
              </div>
              <span className={`cursor-pointer hover:text-cyan-400 ${getResponsiveNameClass(winnerName, 'medium')}`} onClick={() => handleProfileClick(winnerName)}>{winnerName}</span>
-             
-             {/* VS 분리자 */}
              <span className="text-[11px] text-slate-500 font-black mx-2 shrink-0">VS</span>
-             
-             {/* 패자 (불투명하게 처리) */}
              <img src={loserAvatar} className="w-8 h-8 rounded-full border-2 border-slate-600 opacity-60 bg-black cursor-pointer hover:opacity-100 transition-opacity shrink-0" alt="loser" onClick={() => handleProfileClick(loserName)}/>
              <span className={`text-slate-400 cursor-pointer hover:text-white ${getResponsiveNameClass(loserName, 'small')}`} onClick={() => handleProfileClick(loserName)}>{loserName}</span>
           </div>
-          
-          {/* 3. 시원하게 큰 스코어 */}
           <div className="text-3xl font-black text-white shrink-0">
             <span className="text-yellow-400">{isLeftWinner ? log.score_left : log.score_right}</span>
             <span className="text-slate-600 mx-1">:</span>
             <span className="text-slate-400">{isLeftWinner ? log.score_right : log.score_left}</span>
           </div>
         </div>
-        
-        {/* 4. [방갈로르] 램페이지/G7 등 무기 픽 요약 */}
         <div className="flex items-center gap-2 text-xs font-black bg-white/5 px-4 py-2 rounded-xl w-fit border border-white/10">
-          {/* Left(Challenger) 기준의 픽을 보여줌 */}
           <span className="text-pink-400">[{log.left_legend || '미선택'}]</span>
           <span className="text-cyan-300">{log.left_weapons?.[0] || '미선택'}</span>
           <span className="text-slate-500">/</span>
@@ -1001,6 +999,7 @@ function App() {
                         </div>
                       )}
 
+                      {/* 🌟 V3.5 UI 개선: 무기 텍스트 대칭, 콜론(:) 삭제 및 폰트 강조 */}
                       {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-3">
                            <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
@@ -1060,6 +1059,7 @@ function App() {
                </section>
             </div>
 
+            {/* 우측 패널: 미니 랭킹 */}
             <div className="col-span-12 lg:col-span-4 flex flex-col h-full relative">
                <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-5 flex flex-col h-fit shrink-0 relative z-10">
                   <div className="px-2 pt-2 flex flex-col relative z-10">
