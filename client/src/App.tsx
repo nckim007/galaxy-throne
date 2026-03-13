@@ -244,15 +244,8 @@ function App() {
       let localLegend = isC ? (data.legend || '') : (data.t_legend || '');
       let localWeapons = isC ? (data.weapons || ['', '']) : (data.t_weapons || ['', '']);
 
-      if (data.mode.includes('random') && data.mode.includes('_accepted') && !amIReady && (!localLegend || localLegend === '')) {
-          localLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
-          localWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
-          setEntryLegend(localLegend);
-          setEntryWeapons(localWeapons);
-      } else {
-          setEntryLegend(localLegend);
-          setEntryWeapons(localWeapons);
-      }
+      setEntryLegend(localLegend);
+      setEntryWeapons(localWeapons);
 
       setActiveMatch({
         id: data.id,
@@ -303,7 +296,7 @@ function App() {
     }
   }, [currentUserName]);
 
-  // 🌟 [버그 수정 1] 완벽한 실시간 동기화 엔진 (무한 대기 방지)
+  // 🌟 V3.3 무한 대기 박멸을 위한 완벽한 실시간 동기화 엔진
   useEffect(() => {
     if (!currentUserName) return;
     
@@ -324,11 +317,18 @@ function App() {
            if (payload.eventType === 'UPDATE') {
                const updated = payload.new;
                if (activeMatch && updated.id === activeMatch.id) {
+                   
+                   // 🌟 방이 수락되어 픽창 진입 시: 상대방이 만들어준 무기를 덮어씌움
                    if (matchPhase === 'waiting_sync' && updated.mode.includes('_accepted')) {
                        playSFX('matchStart');
                        setMatchPhase('picking');
-                       if (updated.mode.includes('random')) handleModeChange('random');
+                       if (updated.mode.includes('random')) {
+                           setEntryLegend(updated.legend || '');
+                           setEntryWeapons(updated.weapons || ['', '']);
+                       }
                    }
+                   
+                   // 양쪽 모두 레디 완료 시 스코어 보드로 이동
                    if ((matchPhase === 'picking' || matchPhase === 'waiting_ready') && updated.c_ready && updated.t_ready) {
                        playSFX('success');
                        setActiveMatch(prev => prev ? {
@@ -338,6 +338,8 @@ function App() {
                        } : prev);
                        setMatchPhase('scoring');
                    }
+                   
+                   // 스코어 엇갈림 시 경고 띄우고 다시 입력 대기
                    if (updated.c_win === null && updated.t_win === null && waitingForScore) {
                        playSFX('error');
                        alert("상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다.\n다시 합의 후 정확히 입력해주세요!");
@@ -346,7 +348,7 @@ function App() {
                }
            }
 
-           // 🌟 가장 중요한 DELETE 동기화! (이름이 아닌 방 ID로 캐치)
+           // 🌟 가장 핵심적인 DELETE 락 해제 (1명만 갇히는 현상 완벽 방지)
            if (payload.eventType === 'DELETE') {
                const deletedRow = payload.old;
                if (activeMatch && deletedRow.id === activeMatch.id) {
@@ -425,6 +427,7 @@ function App() {
     setEntryWeapons([...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2));
   };
 
+  // 🌟 V3.3 단계 1: 방 생성 및 수락 (모드 크로스 체크 + 랜덤 대전 동시 생성!)
   const handleStartMatch = async () => {
     if (entryMode === 'free' && betAmount < 100) { playSFX('error'); return alert("자유대전 배팅 금액은 최소 100 GC 이상이어야 합니다."); }
     if (betAmount > 0 && (!profile || profile.gc < betAmount)) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc || 0} GC)`); }
@@ -443,19 +446,35 @@ function App() {
           playSFX('error'); return alert(`상대방이 배팅금 [${existing.bet_gc} GC]를 걸었습니다. 배팅금을 맞춰주세요!`);
       }
 
-      let initL = ''; let initW = ['', ''];
+      let updatePayload: any = { mode: existing.mode + '_accepted' };
+      
+      // 🌟 [핵심 버그 수정] 수락하는 쪽(B)이 랜덤 무기를 양쪽 모두 다 만들어서 서버에 꽂아 넣습니다!
       if (entryMode === 'random') {
-          initL = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
-          initW = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
-          setEntryLegend(initL); setEntryWeapons(initW);
+          const a_leg = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
+          const a_wep = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+          const b_leg = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
+          const b_wep = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+
+          updatePayload.legend = a_leg;
+          updatePayload.weapons = a_wep;
+          updatePayload.t_legend = b_leg;
+          updatePayload.t_weapons = b_wep;
+
+          setEntryLegend(b_leg);
+          setEntryWeapons(b_wep);
+          
+          setActiveMatch({
+            id: existing.id, mode: entryMode, opponent: entryOpponent.trim(),
+            legend: b_leg, weapons: b_wep, isChallenger: false
+          });
+      } else {
+          setActiveMatch({
+            id: existing.id, mode: entryMode, opponent: entryOpponent.trim(),
+            legend: '', weapons: ['', ''], isChallenger: false
+          });
       }
 
-      setActiveMatch({
-        id: existing.id, mode: entryMode, opponent: entryOpponent.trim(),
-        legend: initL, weapons: initW, isChallenger: false
-      });
-
-      await supabase.from('challenges').update({ mode: existing.mode + '_accepted' }).eq('id', existing.id);
+      await supabase.from('challenges').update(updatePayload).eq('id', existing.id);
       setMatchPhase('picking');
 
     } else {
@@ -508,39 +527,47 @@ function App() {
     if (oppW !== null && oppL !== null) {
        if (myWins === oppL && myLosses === oppW) {
           
-          const { data: deletedRow } = await supabase.from('challenges').delete().eq('id', activeMatch.id).select().maybeSingle();
+          // 🌟 DB 락(Lock) 확인. (먼저 지우는 사람만 기록 수행)
+          const { data: finalRow } = await supabase.from('challenges').select('*').eq('id', activeMatch.id).maybeSingle();
+          
+          if (finalRow) {
+             // 1명만 삭제 권한 획득
+             await supabase.from('challenges').delete().eq('id', activeMatch.id);
 
-          if (deletedRow) {
              const winnerName = myWins > myLosses ? currentUserName : activeMatch.opponent;
              const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
              
+             // 🌟 DB 데이터가 완벽하게 들어가도록 강제 String/Array 변환 세팅 (이래도 안 들어가면 RLS 문제임)
              const matchPayload = {
                  match_type: String(activeMatch.mode.replace('_accepted', '')),
-                 left_player_name: String(deletedRow.challenger_name),
-                 right_player_name: String(deletedRow.target_name),
-                 left_legend: deletedRow.legend || '미선택',
-                 left_weapons: Array.isArray(deletedRow.weapons) ? deletedRow.weapons : ['미선택', '미선택'],
-                 right_legend: deletedRow.t_legend || '미선택',
-                 right_weapons: Array.isArray(deletedRow.t_weapons) ? deletedRow.t_weapons : ['미선택', '미선택'],
-                 score_left: Number(deletedRow.c_win),
-                 score_right: Number(deletedRow.t_win),
+                 left_player_name: String(finalRow.challenger_name),
+                 right_player_name: String(finalRow.target_name),
+                 left_legend: String(finalRow.legend || '미선택'),
+                 left_weapons: Array.isArray(finalRow.weapons) ? finalRow.weapons : ['미선택', '미선택'],
+                 right_legend: String(finalRow.t_legend || '미선택'),
+                 right_weapons: Array.isArray(finalRow.t_weapons) ? finalRow.t_weapons : ['미선택', '미선택'],
+                 score_left: Number(finalRow.c_win),
+                 score_right: Number(finalRow.t_win),
                  winner_name: String(winnerName),
                  winner_rank_num: Number(winnerRankNum)
              };
 
              const { error: matchErr } = await supabase.from('matches').insert([matchPayload]);
-             if (matchErr) console.error("Match Insert Error:", matchErr);
+             if (matchErr) {
+                 alert(`[DB 에러] 전투 기록 저장 실패. 관리자에게 문의하거나 SQL을 확인하세요: ${matchErr.message}`);
+                 console.error("Match Insert Error:", matchErr);
+             }
 
-             const challengerWon = deletedRow.c_win > deletedRow.c_lose;
-             const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', deletedRow.challenger_name).single();
-             const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', deletedRow.target_name).single();
+             const challengerWon = finalRow.c_win > finalRow.c_lose;
+             const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', finalRow.challenger_name).single();
+             const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', finalRow.target_name).single();
 
              if (cProfile && tProfile) {
                  let cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
                  let tUpdates: any = { wins: tProfile.wins + (challengerWon ? 0 : 1), losses: tProfile.losses + (challengerWon ? 1 : 0) };
 
                  if (activeMatch.mode.includes('free')) {
-                     const bet = deletedRow.bet_gc || 0;
+                     const bet = finalRow.bet_gc || 0;
                      if (challengerWon) {
                          cUpdates.created_at = tProfile.created_at; cUpdates.created_at = cProfile.created_at;
                          cUpdates.defense_stack = 0; tUpdates.defense_stack = 0;
@@ -557,7 +584,7 @@ function App() {
                              if (nStreak === 2) rpChg = 60; else if (nStreak === 3) rpChg = 75; else if (nStreak >= 4) rpChg = 100;
                              if ((oppProf.rp || 1000) - (prof.rp || 1000) > 300) rpChg += 100;
                          }
-                         const bet = deletedRow.bet_gc || 0;
+                         const bet = finalRow.bet_gc || 0;
                          const gcChg = (won ? 100 : 30) + (won ? bet : -bet);
                          return { rp: (prof.rp || 1000) + rpChg, streak: nStreak, gc: (prof.gc || 0) + gcChg };
                      };
@@ -566,21 +593,40 @@ function App() {
                      cUpdates.rp = cRes.rp; cUpdates.win_streak = cRes.streak; cUpdates.gc = cRes.gc;
                      tUpdates.rp = tRes.rp; tUpdates.win_streak = tRes.streak; tUpdates.gc = tRes.gc;
                  }
-                 await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
+                 const { error: profErr } = await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
+                 if (profErr) alert(`[DB 에러] 프로필 업데이트 실패: ${profErr.message}`);
                  await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
              }
-             // 🌟 [버그 수정 3] 기록 업데이트 후 즉시 Fetch 호출하여 데이터 새로고침
+             
+             // 🌟 확실한 데이터 새로고침
              fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
           }
        } else {
+          // 로컬 리셋 (틀렸을 때)
           await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
-          setWaitingForScore(true); 
+          playSFX('error'); 
+          alert(`스코어가 일치하지 않습니다!\n(상대방 입력 -> 승:${oppW} 패:${oppL})\n다시 합의 후 정확히 입력해주세요.`);
+          setWaitingForScore(false); setMyWins(null); setMyLosses(null);
        }
     } else { setWaitingForScore(true); }
   };
 
+  // 🌟 [편의성 개선] 닉네임 복사 시 바로 대전 준비창 꽂아주기
   const copyPlayerName = (name: string) => {
-    if (!name) return; playSFX('click'); navigator.clipboard.writeText(name); setCopyStatus(true); setTimeout(() => setCopyStatus(false), 2000);
+    if (!name) return; 
+    playSFX('click'); 
+    navigator.clipboard.writeText(name); 
+    setCopyStatus(true); 
+    
+    // 자동 입력 및 매칭방 이동
+    setEntryOpponent(name);
+    setActiveMenu('home');
+    setMatchPhase('setup_mode');
+    
+    setTimeout(() => {
+        setCopyStatus(false);
+        setSelectedPlayer(null); // 팝업 닫기
+    }, 500);
   };
 
   const handleProfileClick = (name: string) => {
@@ -937,7 +983,7 @@ function App() {
                         </div>
                       )}
 
-                      {/* 🌟 [UI 개선] 무기 텍스트 크기 확대 및 세로 정렬 적용 */}
+                      {/* 🌟 [UI 개선] 무기 텍스트 크기 확대 및 좌우 대칭 디자인 적용 */}
                       {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-3">
                            <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
@@ -948,10 +994,10 @@ function App() {
                                   <span className="font-black text-white text-2xl truncate w-full mb-3">{activeMatch.legend}</span>
                                   <div className="flex flex-col gap-2 w-full">
                                     <span className="text-base font-bold text-slate-200 truncate w-full flex justify-start items-center">
-                                      <span className="text-cyan-500 mr-2 font-black">무기1:</span> {activeMatch.weapons[0]}
+                                      <span className="text-cyan-500 mr-2 font-black">무기 1</span> {activeMatch.weapons[0]}
                                     </span>
                                     <span className="text-base font-bold text-slate-200 truncate w-full flex justify-start items-center">
-                                      <span className="text-cyan-500 mr-2 font-black">무기2:</span> {activeMatch.weapons[1]}
+                                      <span className="text-cyan-500 mr-2 font-black">무기 2</span> {activeMatch.weapons[1]}
                                     </span>
                                   </div>
                                 </div>
@@ -962,10 +1008,10 @@ function App() {
                                   <span className="font-black text-white text-2xl truncate w-full mb-3">{activeMatch.oppLegend || '?'}</span>
                                   <div className="flex flex-col gap-2 w-full items-end">
                                     <span className="text-base font-bold text-slate-200 truncate w-full flex justify-end items-center">
-                                      {activeMatch.oppWeapons?.[0] || '?'} <span className="text-pink-500 ml-2 font-black">:무기1</span>
+                                      {activeMatch.oppWeapons?.[0] || '?'} <span className="text-pink-500 ml-2 font-black">무기 1</span>
                                     </span>
                                     <span className="text-base font-bold text-slate-200 truncate w-full flex justify-end items-center">
-                                      {activeMatch.oppWeapons?.[1] || '?'} <span className="text-pink-500 ml-2 font-black">:무기2</span>
+                                      {activeMatch.oppWeapons?.[1] || '?'} <span className="text-pink-500 ml-2 font-black">무기 2</span>
                                     </span>
                                   </div>
                                 </div>
@@ -1328,13 +1374,14 @@ function App() {
                  )}
              </div>
 
+             {/* 🌟 V3.3 편의성 2: 복사 버튼 누르면 즉시 대전창 세팅 */}
              <button 
                onMouseEnter={() => playSFX('hover')} 
                onClick={() => copyPlayerName(selectedPlayer.display_name)} 
                className="w-full bg-cyan-600/20 hover:bg-cyan-600/40 border-2 border-cyan-400/50 text-cyan-400 py-5 rounded-[2rem] font-black text-lg flex items-center justify-center gap-4 active:scale-95 shadow-lg cursor-pointer transition-all"
              >
                {copyStatus ? <Check size={24}/> : <Copy size={24}/>}
-               {copyStatus ? 'NICKNAME COPIED!' : `COPY NICKNAME`}
+               {copyStatus ? 'NICKNAME COPIED & READY!' : `COPY NICKNAME & BATTLE`}
              </button>
              
              {profileTab === 'details' && (
