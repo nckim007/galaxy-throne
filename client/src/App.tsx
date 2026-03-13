@@ -530,8 +530,7 @@ function App() {
     setMatchPhase('idle'); setActiveMatch(null);
   };
 
-  // 🌟 [최대 에러 원인 완벽 수술 완료]
-  // 업데이트 결과에서 누락된 정보를 찾지 않고, 100% 확실한 리액트 내 상태(currentUserName)를 강제로 꽂아넣음
+  // 🌟 [핵심 에러 해결] 서버의 column 이름(left_player)에 완벽하게 맞추어 데이터 전송
   const handleReportScore = async () => {
     if (myWins === null || myLosses === null || !activeMatch) { playSFX('error'); return alert("승리 및 패배 횟수를 모두 선택하세요!"); }
     playSFX('click'); 
@@ -561,15 +560,17 @@ function App() {
         if (hasC && hasT) {
             if (updatedData.c_win === updatedData.t_lose && updatedData.c_lose === updatedData.t_win) {
                 
-                // 🌟 [핵심 해결] updatedData의 불확실성을 버리고 무조건 확실한 로컬 데이터를 직접 사용
                 const challengerName = isC ? currentUserName : activeMatch.opponent;
                 const targetName = isC ? activeMatch.opponent : currentUserName;
                 const winnerName = updatedData.c_win > updatedData.c_lose ? challengerName : targetName;
                 const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
                 
+                // 🌟 DB 컬럼 이름 오류 해결: left_player, right_player도 같이 전송하여 null constraint 회피!
                 const matchPayload = {
                     match_type: String(updatedData.mode.replace('_accepted', '')),
-                    left_player_name: challengerName,
+                    left_player: challengerName, // DB 에러 해결 핵심!
+                    right_player: targetName,    // DB 에러 해결 핵심!
+                    left_player_name: challengerName, 
                     right_player_name: targetName,
                     left_legend: String(updatedData.legend || '미선택'),
                     left_weapons: Array.isArray(updatedData.weapons) ? updatedData.weapons : ['미선택', '미선택'],
@@ -658,13 +659,15 @@ function App() {
   let weaponStatsArray: any[] = [];
 
   if (selectedPlayer) {
-    const pMatches = logs.filter(m => m.left_player_name === selectedPlayer.display_name || m.right_player_name === selectedPlayer.display_name);
+    const pMatches = logs.filter(m => m.left_player_name === selectedPlayer.display_name || m.right_player_name === selectedPlayer.display_name || m.left_player === selectedPlayer.display_name || m.right_player === selectedPlayer.display_name);
     const lStats: any = {};
     const wStats: any = {};
 
     pMatches.forEach(m => {
+      const leftP = m.left_player_name || m.left_player;
+      const rightP = m.right_player_name || m.right_player;
       const isWin = m.winner_name === selectedPlayer.display_name;
-      const isLeft = m.left_player_name === selectedPlayer.display_name;
+      const isLeft = leftP === selectedPlayer.display_name;
       const myLeg = isLeft ? m.left_legend : m.right_legend;
       const myWep = isLeft ? m.left_weapons : m.right_weapons;
 
@@ -709,9 +712,12 @@ function App() {
   const rpRankers = [...rankers].sort((a, b) => (b.rp || 0) - (a.rp || 0));
 
   const renderCombatLogItem = (log: any, index: number) => {
-    const isLeftWinner = log.winner_name === log.left_player_name;
-    const winnerName = isLeftWinner ? log.left_player_name : log.right_player_name;
-    const loserName = isLeftWinner ? log.right_player_name : log.left_player_name;
+    const leftP = log.left_player_name || log.left_player;
+    const rightP = log.right_player_name || log.right_player;
+    const isLeftWinner = log.winner_name === leftP;
+    const winnerName = isLeftWinner ? leftP : rightP;
+    const loserName = isLeftWinner ? rightP : leftP;
+    
     const winnerAvatar = getAvatarFallback(winnerName, rankers);
     const loserAvatar = getAvatarFallback(loserName, rankers);
     
@@ -995,7 +1001,7 @@ function App() {
                         </div>
                       )}
 
-                      {/* 🌟 V3.8 UI 개선: "무기1:", "무기2:" 텍스트 완전 삭제 및 폰트 대칭 */}
+                      {/* 🌟 [UI 완벽 복구본] "무기1:" 글자 완전 삭제! 좌측 파란색, 우측 분홍색 대칭 유지 */}
                       {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-3">
                            <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
@@ -1005,7 +1011,7 @@ function App() {
                                   <span className="text-[10px] font-black text-slate-500 mb-2">나 (MY PICK)</span>
                                   <span className="font-black text-white text-2xl truncate w-full mb-3">{activeMatch.legend}</span>
                                   
-                                  {/* 좌측 나의 무기 (오직 파란색 텍스트) */}
+                                  {/* 좌측 나의 무기 (글자 없이 파란색 텍스트만) */}
                                   <div className="flex flex-col gap-1.5 w-full">
                                     <span className="text-[17px] font-black text-cyan-400 truncate w-full text-left tracking-wide">{activeMatch.weapons[0]}</span>
                                     <span className="text-[17px] font-black text-cyan-400 truncate w-full text-left tracking-wide">{activeMatch.weapons[1]}</span>
@@ -1018,7 +1024,7 @@ function App() {
                                   <span className="text-[10px] font-black text-slate-500 mb-2">상대방 (OPPONENT PICK)</span>
                                   <span className="font-black text-white text-2xl truncate w-full mb-3 text-right">{activeMatch.oppLegend || '?'}</span>
                                   
-                                  {/* 우측 상대방 무기 (오직 분홍색 텍스트) */}
+                                  {/* 우측 상대방 무기 (글자 없이 분홍색 텍스트만 대칭) */}
                                   <div className="flex flex-col gap-1.5 w-full items-end">
                                     <span className="text-[17px] font-black text-pink-400 truncate w-full text-right tracking-wide">{activeMatch.oppWeapons?.[0] || '?'}</span>
                                     <span className="text-[17px] font-black text-pink-400 truncate w-full text-right tracking-wide">{activeMatch.oppWeapons?.[1] || '?'}</span>
