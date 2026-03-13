@@ -165,7 +165,7 @@ function App() {
   const [betAmount, setBetAmount] = useState<number>(100); 
   const [rerollCount, setRerollCount] = useState<number>(0); 
 
-  // 🌟 V3 세분화된 상태 머신 (5단계 블라인드 픽 시스템)
+  // 🌟 V3.1 세분화된 상태 머신
   const [matchPhase, setMatchPhase] = useState<'idle' | 'setup_mode' | 'waiting_sync' | 'picking' | 'waiting_ready' | 'scoring'>('idle');
   const [activeMatch, setActiveMatch] = useState<{ 
     id: string, mode: string, opponent: string, 
@@ -221,81 +221,86 @@ function App() {
     }
   }, [matchPhase]);
 
+  // 🌟 V3.1 새로고침 (F5) 및 창 꺼짐 완벽 복구 엔진
+  const checkActiveChallenge = async (username: string) => {
+    if (!username) return;
+    const { data } = await supabase
+      .from('challenges')
+      .select('*')
+      .or(`challenger_name.eq.${username},target_name.eq.${username}`)
+      .maybeSingle();
+
+    if (data) {
+      const isC = data.challenger_name === username;
+      const opp = isC ? data.target_name : data.challenger_name;
+      const amIReady = isC ? data.c_ready : data.t_ready;
+      
+      setEntryOpponent(opp);
+      setEntryMode(data.mode.replace('_accepted', ''));
+      setBetAmount(data.bet_gc || 0);
+
+      setActiveMatch({
+        id: data.id,
+        mode: data.mode,
+        opponent: opp,
+        legend: isC ? (data.legend || '') : (data.t_legend || ''),
+        weapons: isC ? (data.weapons || ['', '']) : (data.t_weapons || ['', '']),
+        oppLegend: isC ? data.t_legend : data.legend,
+        oppWeapons: isC ? data.t_weapons : data.weapons,
+        isChallenger: isC
+      });
+
+      if (data.c_ready && data.t_ready) {
+        setMatchPhase('scoring');
+      } else if (data.mode.includes('_accepted')) {
+        setMatchPhase(amIReady ? 'waiting_ready' : 'picking');
+      } else {
+        setMatchPhase(isC ? 'waiting_sync' : 'setup_mode');
+      }
+    }
+  };
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => { setUser(session?.user ?? null); if (session?.user) fetchProfile(session.user.id); });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { setUser(session?.user ?? null); if (session?.user) fetchProfile(session.user.id); });
+    supabase.auth.getSession().then(({ data: { session } }) => { 
+      setUser(session?.user ?? null); 
+      if (session?.user) fetchProfile(session.user.id); 
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { 
+      setUser(session?.user ?? null); 
+      if (session?.user) fetchProfile(session.user.id); 
+    });
     fetchData(); fetchRankers(); 
     return () => subscription.unsubscribe();
   }, []);
 
-  // 🌟 V3 대전 매칭 및 레디 동기화 엔진
+  useEffect(() => {
+    if (currentUserName) {
+      checkActiveChallenge(currentUserName);
+    }
+  }, [currentUserName]);
+
+  // 🌟 V3.1 강력한 실시간 동기화 (모든 변화를 감지하여 상태 복구 함수 실행)
   useEffect(() => {
     if (!currentUserName) return;
-    
     const channel = supabase.channel('challenges_realtime')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'challenges', filter: activeMatch ? `id=eq.${activeMatch.id}` : '' }, payload => {
-        const updated = payload.new;
-        
-        // 1. 방 수락 확인 -> 픽창으로 이동
-        if (matchPhase === 'waiting_sync' && updated.mode.includes('_accepted')) { 
-          playSFX('matchStart'); 
-          setMatchPhase('picking'); 
-          if(updated.mode.includes('random')) handleModeChange('random'); // 자동 뽑기
-        }
-        
-        // 2. 양쪽 모두 레디 완료 -> 스코어 보드로 이동 (상대방 무기 공개)
-        if ((matchPhase === 'picking' || matchPhase === 'waiting_ready') && updated.c_ready && updated.t_ready) {
-          playSFX('success');
-          setActiveMatch(prev => prev ? { 
-            ...prev, 
-            oppLegend: prev.isChallenger ? updated.t_legend : updated.legend, 
-            oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons 
-          } : prev);
-          setMatchPhase('scoring');
-        }
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'challenges' }, payload => {
-        const newChallenge = payload.new;
-        if (newChallenge.target_name.trim() === currentUserName.trim()) {
-          playSFX('matchStart'); 
-          
-          setActiveMatch({ 
-            id: newChallenge.id,
-            mode: newChallenge.mode,
-            opponent: newChallenge.challenger_name, 
-            legend: '',
-            weapons: ['', ''],
-            isChallenger: false 
-          }); 
-          
-          setEntryMode(newChallenge.mode.includes('random') ? 'random' : 'free');
-          setMatchPhase('picking'); // 수락자는 바로 픽창 진입
-          supabase.from('challenges').update({ mode: newChallenge.mode + '_accepted' }).eq('id', newChallenge.id);
-        }
-      }).subscribe();
-      
-    return () => { supabase.removeChannel(channel); };
-  }, [matchPhase, currentUserName, activeMatch]);
-
-  useEffect(() => {
-    if (matchPhase !== 'scoring' || !activeMatch) return;
-    
-    const channel = supabase.channel('score_sync')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'challenges', filter: `id=eq.${activeMatch.id}` }, payload => {
-         const updated = payload.new;
-         if (updated.c_win === null && updated.t_win === null && waitingForScore) {
-             playSFX('error'); alert("상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다.\n다시 합의 후 정확히 입력해주세요!");
-             setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'challenges' }, payload => {
+         if (payload.eventType === 'DELETE') {
+             const deletedRow = payload.old;
+             if (deletedRow.challenger_name === currentUserName || deletedRow.target_name === currentUserName) {
+                 if (matchPhase !== 'idle') {
+                     playSFX('success'); 
+                     alert("전투 결과 및 랭크가 성공적으로 업데이트 되었습니다.");
+                     setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+                     setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']); 
+                     fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
+                 }
+             }
+         } else {
+             checkActiveChallenge(currentUserName);
          }
-      })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'challenges', filter: `id=eq.${activeMatch.id}` }, payload => {
-         playSFX('success'); alert("쌍방 스코어 일치! 전투 결과 및 랭크가 성공적으로 업데이트 되었습니다.");
-         setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
-         setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']); fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
       }).subscribe();
-      
     return () => { supabase.removeChannel(channel); };
-  }, [matchPhase, activeMatch, waitingForScore]);
+  }, [currentUserName, matchPhase]);
 
   const fetchData = async () => {
     const { data: matches } = await supabase.from('matches').select('*').order('created_at', { ascending: false });
@@ -336,14 +341,8 @@ function App() {
   const handleModeChange = (mode: 'free' | 'random') => {
     playSFX('click');
     setEntryMode(mode);
-    if (mode === 'random') {
-       setRerollCount(0);
-       setEntryLegend(ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)]);
-       setEntryWeapons([...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2));
-    } else {
-       setEntryLegend(''); 
-       setEntryWeapons(['', '']);
-    }
+    setEntryLegend(''); 
+    setEntryWeapons(['', '']);
   };
 
   const handleReroll = async () => {
@@ -358,42 +357,41 @@ function App() {
     setEntryWeapons([...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2));
   };
 
-  // 🌟 V3 단계 1: 방 생성 및 대기 (모드와 금액만 확정)
+  // 🌟 V3.1 블라인드 픽 단계 1: 방 생성 및 수락 (모드/배팅 검증 추가)
   const handleStartMatch = async () => {
-    if (entryMode === 'free') {
-       if (betAmount < 100) { playSFX('error'); return alert("자유대전 배팅 금액은 최소 100 GC 이상이어야 합니다."); }
-       if (!profile || profile.gc < betAmount) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc || 0} GC)`); }
-    }
+    if (entryMode === 'free' && betAmount < 100) { playSFX('error'); return alert("자유대전 배팅 금액은 최소 100 GC 이상이어야 합니다."); }
+    if (betAmount > 0 && (!profile || profile.gc < betAmount)) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc || 0} GC)`); }
 
     playSFX('click');
     const { data: existing } = await supabase.from('challenges').select('*').eq('challenger_name', entryOpponent.trim()).eq('target_name', currentUserName.trim()).limit(1).maybeSingle();
     
     if (existing) {
-      if (existing.mode === 'free' && (!profile || profile.gc < existing.bet_gc)) {
+      // 모드 검증
+      if (existing.mode.replace('_accepted', '') !== entryMode) {
+          playSFX('error'); return alert(`상대방이 [${existing.mode.includes('free') ? '자유' : '랜덤'}대전]을 신청했습니다. 모드를 맞춰주세요!`);
+      }
+      // 배팅금 검증
+      if (existing.bet_gc !== betAmount) {
+          playSFX('error'); return alert(`상대방이 배팅금 [${existing.bet_gc} GC]를 걸었습니다. 배팅금을 맞춰주세요!`);
+      }
+      if (!profile || profile.gc < existing.bet_gc) {
           playSFX('error'); return alert(`상대방의 배팅 금액(${existing.bet_gc} GC)을 감당할 수 없습니다!`);
       }
-      setActiveMatch({ id: existing.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: false });
+
       await supabase.from('challenges').update({ mode: existing.mode + '_accepted' }).eq('id', existing.id);
-      
-      setMatchPhase('picking');
-      if (entryMode === 'random') handleModeChange('random');
+      // 업데이트 되면 실시간 동기화가 감지해서 picking 상태로 넘겨줍니다.
     } else {
-      const { data: newChall } = await supabase.from('challenges').insert([{ 
-          challenger_name: currentUserName.trim(), target_name: entryOpponent.trim(), mode: entryMode, bet_gc: entryMode === 'free' ? betAmount : 0
-      }]).select().single();
-      
-      if (newChall) { 
-        setActiveMatch({ id: newChall.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: true }); 
-        setMatchPhase('waiting_sync'); 
-      }
+      await supabase.from('challenges').insert([{ 
+          challenger_name: currentUserName.trim(), target_name: entryOpponent.trim(), mode: entryMode, bet_gc: betAmount
+      }]);
+      // 인서트 되면 실시간 동기화가 감지해서 waiting_sync 상태로 넘겨줍니다.
     }
   };
 
-  // 🌟 V3 단계 2: 픽 완료 및 레디 (무기 확정)
+  // 🌟 V3.1 블라인드 픽 단계 2: 무기 선택 완료 및 레디 처리
   const handlePickReady = async () => {
     if (!entryLegend || !entryWeapons[0] || !entryWeapons[1]) { 
-      playSFX('error'); 
-      return alert("레전드와 무기를 모두 선택해주세요!"); 
+      playSFX('error'); return alert("레전드와 무기를 모두 선택해주세요!"); 
     }
     playSFX('click');
     if (!activeMatch) return;
@@ -402,9 +400,8 @@ function App() {
         ? { legend: entryLegend, weapons: entryWeapons, c_ready: true } 
         : { t_legend: entryLegend, t_weapons: entryWeapons, t_ready: true };
 
-    setActiveMatch({ ...activeMatch, legend: entryLegend, weapons: entryWeapons });
     await supabase.from('challenges').update(updatePayload).eq('id', activeMatch.id);
-    setMatchPhase('waiting_ready');
+    // 실시간 동기화가 양쪽 레디를 확인하면 scoring 보드로 자동 이동시킵니다.
   };
 
   const handleCancelMatch = async () => {
@@ -463,7 +460,9 @@ function App() {
                           if (nStreak === 2) rpChg = 60; else if (nStreak === 3) rpChg = 75; else if (nStreak >= 4) rpChg = 100;
                           if ((oppProf.rp || 1000) - (prof.rp || 1000) > 300) rpChg += 100;
                       }
-                      return { rp: (prof.rp || 1000) + rpChg, streak: nStreak, gc: (prof.gc || 0) + (won ? 100 : 30) };
+                      const bet = checkData.bet_gc || 0;
+                      const gcChg = (won ? 100 : 30) + (won ? bet : -bet);
+                      return { rp: (prof.rp || 1000) + rpChg, streak: nStreak, gc: (prof.gc || 0) + gcChg };
                   };
                   const cRes = calcRP(cProfile, challengerWon, tProfile);
                   const tRes = calcRP(tProfile, !challengerWon, cProfile);
@@ -697,10 +696,11 @@ function App() {
                </section>
             </div>
 
-            {/* 🌟 중앙 패널: 통합 작전 통제소 (블라인드 픽 시스템 적용) */}
+            {/* 중앙 패널: 통합 작전 통제소 */}
             <div className="col-span-12 xl:col-span-5 flex flex-col gap-8 h-full relative">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-6 flex flex-col h-fit shrink-0 relative z-10">
                   <div className="flex flex-col relative z-10">
+                      {/* 🌟 V3.1 동적 타이틀 적용 */}
                       <h3 onMouseEnter={() => playSFX('hover')} className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3">
                          {(matchPhase === 'idle' || matchPhase === 'setup_mode') && '대전 신청 (Match Entry)'}
                          {(matchPhase === 'waiting_sync' || matchPhase === 'picking' || matchPhase === 'waiting_ready') && '대전 준비 (Match Prep)'}
@@ -737,14 +737,12 @@ function App() {
                               <button onMouseEnter={() => playSFX('hover')} onClick={() => handleModeChange('random')} className={`flex-1 py-4 rounded-xl text-sm font-black transition-all cursor-pointer ${entryMode === 'random' ? 'bg-cyan-600 text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}>랜덤대전 (RP)</button>
                            </div>
                            
-                           {entryMode === 'free' && (
-                              <div className="bg-black/60 p-4 rounded-2xl border border-white/5 mt-1 flex justify-between items-center">
-                                 <p className="text-sm text-pink-400 font-black">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">최소 100</span></p>
-                                 <input type="number" min={100} value={betAmount} onChange={(e) => setBetAmount(Number(e.target.value))} className="w-24 bg-white/5 border border-white/10 p-2 rounded-xl outline-none text-white font-black text-right select-text cursor-pointer" />
-                              </div>
-                           )}
+                           <div className="bg-black/60 p-4 rounded-2xl border border-white/5 mt-1 flex justify-between items-center">
+                              <p className="text-sm text-pink-400 font-black">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">{entryMode === 'free' ? '최소 100' : '0 가능'}</span></p>
+                              <input type="number" min={entryMode === 'free' ? 100 : 0} value={betAmount} onChange={(e) => setBetAmount(Number(e.target.value))} className="w-24 bg-white/5 border border-white/10 p-2 rounded-xl outline-none text-white font-black text-right select-text cursor-pointer" />
+                           </div>
 
-                           <button onMouseEnter={() => playSFX('hover')} onClick={handleStartMatch} className="w-full py-5 mt-4 rounded-[2rem] font-black text-xl text-white bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.6)] hover:bg-blue-500 transition-all border border-blue-400 cursor-pointer">매칭 생성 및 대기 (Create Match)</button>
+                           <button onMouseEnter={() => playSFX('hover')} onClick={handleStartMatch} className="w-full py-5 mt-4 rounded-[2rem] font-black text-xl text-white bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.6)] hover:bg-blue-500 transition-all border border-blue-400 cursor-pointer">매칭 신청 및 대기 (Create Match)</button>
                         </div>
                       )}
 
@@ -762,17 +760,18 @@ function App() {
                            <h4 className="text-center font-black text-pink-400 mb-2">매치 성사! 무기를 선택하세요</h4>
                            {entryMode === 'free' ? (
                               <div className="space-y-3 flex flex-col">
+                                 {/* 🌟 V3.1 Select 화살표 겹침 방지 (min-w-0 pr-8 truncate) */}
                                  <select onMouseEnter={() => playSFX('hover')} value={entryLegend} onChange={(e) => { setEntryLegend(e.target.value); playSFX('click'); }} className="w-full min-w-0 bg-black/60 border border-white/10 py-4 pl-3 pr-8 rounded-2xl text-xs sm:text-sm font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
                                     <option value="" disabled hidden>👉 레전드 선택</option>
                                     {Object.entries(LEGEND_CATEGORIES).map(([cat, list]) => (<optgroup key={cat} label={`■ ${cat}`} style={{color: getLegendCategoryColorHex(cat), backgroundColor: '#000'}}>{list.map(l => <option key={l} value={l} style={{color: '#fff'}}>{l}</option>)}</optgroup>))}
                                  </select>
                                  <div className="flex gap-2 w-full">
                                    <select onMouseEnter={() => playSFX('hover')} value={entryWeapons[0]} onChange={(e) => {const w = [...entryWeapons]; w[0] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="flex-1 min-w-0 bg-black/60 border border-white/10 py-4 pl-3 pr-8 rounded-2xl text-xs sm:text-sm font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
-                                      <option value="" disabled hidden>👉 1번 무기</option>
+                                      <option value="" disabled hidden>👉 1번 무기 선택</option>
                                       {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (<optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>{list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}</optgroup>))}
                                    </select>
                                    <select onMouseEnter={() => playSFX('hover')} value={entryWeapons[1]} onChange={(e) => {const w = [...entryWeapons]; w[1] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="flex-1 min-w-0 bg-black/60 border border-white/10 py-4 pl-3 pr-8 rounded-2xl text-xs sm:text-sm font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
-                                      <option value="" disabled hidden>👉 2번 무기</option>
+                                      <option value="" disabled hidden>👉 2번 무기 선택</option>
                                       {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (<optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>{list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}</optgroup>))}
                                    </select>
                                  </div>
