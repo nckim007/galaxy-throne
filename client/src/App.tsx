@@ -311,7 +311,6 @@ function App() {
     }
   }, [currentUserName]);
 
-  // 🌟 V3.5 완벽 동기화: 매치 기록이 서버에 꽂히는 순간 화면을 강제로 당겨옴 (로그 누락 완벽 해결)
   useEffect(() => {
     const matchLogChannel = supabase.channel('matches_realtime_sync')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' }, payload => {
@@ -321,7 +320,6 @@ function App() {
     return () => { supabase.removeChannel(matchLogChannel); };
   }, []);
 
-  // 🌟 진행 방(challenges) 동기화
   useEffect(() => {
     if (!currentUserName) return;
     
@@ -537,9 +535,18 @@ function App() {
     const updatePayload = isC ? { c_win: myWins, c_lose: myLosses } : { t_win: myWins, t_lose: myLosses };
     
     await supabase.from('challenges').update(updatePayload).eq('id', activeMatch.id);
-    const { data: checkData } = await supabase.from('challenges').select('*').eq('id', activeMatch.id).single();
     
-    if (!checkData) return;
+    // 🌟 [버그 수정 2] 무한 대기를 원천 차단하는 레이스 컨디션 해제 로직
+    const { data: checkData } = await supabase.from('challenges').select('*').eq('id', activeMatch.id).maybeSingle();
+    
+    if (!checkData) {
+        // 상대방이 0.1초 먼저 제출해서 방 폭파된 경우! 에러 내뿜지 않고 그냥 쿨하게 통과시킴
+        playSFX('success');
+        setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+        setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']);
+        fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
+        return;
+    }
     
     const oppW = isC ? checkData.t_win : checkData.c_win;
     const oppL = isC ? checkData.t_lose : checkData.c_lose;
@@ -611,6 +618,12 @@ function App() {
                  await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
              }
              fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
+          } else {
+             // 삭제를 실패(또는 0.1초 늦어서) 했다면 이미 남이 처리한 것이므로 정상 통과시킴
+             playSFX('success');
+             setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+             setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']);
+             fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
           }
        } else {
           await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
@@ -632,7 +645,6 @@ function App() {
     if (profile) { playSFX('click'); setSelectedPlayer(profile); setProfileTab('overview'); }
   };
 
-  // 🌟 프로필 통계 최적화 알고리즘
   let favLegend = "미선택";
   let favWeapon = "미선택";
   let legendStatsArray: any[] = [];
@@ -933,7 +945,7 @@ function App() {
                                  </select>
                                  <div className="flex gap-2 w-full">
                                    <select onMouseEnter={() => playSFX('hover')} value={entryWeapons[0]} onChange={(e) => {const w = [...entryWeapons]; w[0] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="flex-1 min-w-0 bg-black/60 border border-white/10 py-4 pl-3 pr-8 rounded-2xl text-xs sm:text-sm font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
-                                      <option value="" disabled hidden>👉 1번 무기</option>
+                                      <option value="" disabled hidden>👉 무기 1</option>
                                       {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (
                                         <optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>
                                           {list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}
@@ -941,7 +953,7 @@ function App() {
                                       ))}
                                    </select>
                                    <select onMouseEnter={() => playSFX('hover')} value={entryWeapons[1]} onChange={(e) => {const w = [...entryWeapons]; w[1] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="flex-1 min-w-0 bg-black/60 border border-white/10 py-4 pl-3 pr-8 rounded-2xl text-xs sm:text-sm font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
-                                      <option value="" disabled hidden>👉 2번 무기</option>
+                                      <option value="" disabled hidden>👉 무기 2</option>
                                       {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (
                                         <optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>
                                           {list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}
@@ -976,7 +988,6 @@ function App() {
                         </div>
                       )}
 
-                      {/* 🌟 V3.4 무기 UI 시원하게 키우고 좌우 대칭 (":" 삭제) */}
                       {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-3">
                            <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
