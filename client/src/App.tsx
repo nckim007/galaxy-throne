@@ -361,6 +361,12 @@ function App() {
                        } : prev);
                        setMatchPhase('scoring');
                    }
+
+                   if (updated.c_win === null && updated.t_win === null && isWaiting) {
+                       playSFX('error');
+                       alert("상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다.\n다시 합의 후 정확히 입력해주세요!");
+                       setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+                   }
                }
                checkActiveChallenge(currentUserName);
            }
@@ -454,7 +460,8 @@ function App() {
         .limit(1).maybeSingle();
     
     if (existing) {
-      if (existing.mode.replace('_accepted', '') !== entryMode) {
+      const dbMode = existing.mode.replace('_accepted', '').trim();
+      if (dbMode !== entryMode.trim()) {
           playSFX('error'); return alert(`상대방이 [${existing.mode.includes('free') ? '자유' : '랜덤'}대전]을 신청했습니다. 모드를 맞춰주세요!`);
       }
       if (existing.bet_gc !== betAmount) {
@@ -523,9 +530,6 @@ function App() {
     setMatchPhase('idle'); setActiveMatch(null);
   };
 
-  // 🌟 [최대 버그 완벽 수술] 
-  // 방을 지우다가 씹히는 현상(delete().select() 버그)을 완벽히 해결하기 위해,
-  // 무조건 100% 보장된 최신 데이터(checkData)를 이용해 '먼저' 저장을 마친 후, 가장 마지막에 방을 지우도록 논리 변경.
   const handleReportScore = async () => {
     if (myWins === null || myLosses === null || !activeMatch) { playSFX('error'); return alert("승리 및 패배 횟수를 모두 선택하세요!"); }
     playSFX('click'); 
@@ -535,102 +539,96 @@ function App() {
     const isC = activeMatch.isChallenger;
     const updatePayload = isC ? { c_win: myWins, c_lose: myLosses } : { t_win: myWins, t_lose: myLosses };
     
-    await supabase.from('challenges').update(updatePayload).eq('id', activeMatch.id);
-    const { data: checkData } = await supabase.from('challenges').select('*').eq('id', activeMatch.id).maybeSingle();
+    const { data: updatedData, error } = await supabase
+        .from('challenges')
+        .update(updatePayload)
+        .eq('id', activeMatch.id)
+        .select()
+        .maybeSingle();
     
-    if (!checkData) {
-        playSFX('success');
-        setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
-        setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']);
-        fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
+    if (error) {
+        alert("점수 제출 중 오류: " + error.message);
+        setWaitingForScore(false);
         return;
     }
-    
-    const oppW = isC ? checkData.t_win : checkData.c_win;
-    const oppL = isC ? checkData.t_lose : checkData.c_lose;
 
-    if (oppW !== null && oppL !== null) {
-       if (myWins === oppL && myLosses === oppW) {
-          
-          const winnerName = myWins > myLosses ? currentUserName : activeMatch.opponent;
-          const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
-          
-          const matchPayload = {
-              match_type: String(activeMatch.mode.replace('_accepted', '')),
-              left_player_name: String(checkData.challenger_name),
-              right_player_name: String(checkData.target_name),
-              left_legend: String(checkData.legend || '미선택'),
-              left_weapons: Array.isArray(checkData.weapons) ? checkData.weapons : ['미선택', '미선택'],
-              right_legend: String(checkData.t_legend || '미선택'),
-              right_weapons: Array.isArray(checkData.t_weapons) ? checkData.t_weapons : ['미선택', '미선택'],
-              score_left: Number(checkData.c_win),
-              score_right: Number(checkData.t_win),
-              winner_name: String(winnerName),
-              winner_rank_num: Number(winnerRankNum)
-          };
+    if (updatedData) {
+        const hasC = updatedData.c_win !== null && updatedData.c_lose !== null;
+        const hasT = updatedData.t_win !== null && updatedData.t_lose !== null;
 
-          // 1. 확실하게 저장부터 먼저 실행
-          const { error: matchErr } = await supabase.from('matches').insert([matchPayload]);
-          if (matchErr) {
-              console.error("[DB Schema 에러] 캐시 문제 발생. 저장 생략하고 진행합니다.", matchErr);
-          }
+        if (hasC && hasT) {
+            if (updatedData.c_win === updatedData.t_lose && updatedData.c_lose === updatedData.t_win) {
+                const winnerName = updatedData.c_win > updatedData.c_lose ? updatedData.challenger_name : updatedData.target_name;
+                const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
+                
+                const matchPayload = {
+                    match_type: String(updatedData.mode.replace('_accepted', '')),
+                    left_player_name: String(updatedData.challenger_name),
+                    right_player_name: String(updatedData.target_name),
+                    left_legend: String(updatedData.legend || '미선택'),
+                    left_weapons: Array.isArray(updatedData.weapons) ? updatedData.weapons : ['미선택', '미선택'],
+                    right_legend: String(updatedData.t_legend || '미선택'),
+                    right_weapons: Array.isArray(updatedData.t_weapons) ? updatedData.t_weapons : ['미선택', '미선택'],
+                    score_left: Number(updatedData.c_win),
+                    score_right: Number(updatedData.t_win),
+                    winner_name: String(winnerName),
+                    winner_rank_num: Number(winnerRankNum)
+                };
 
-          // 2. 프로필 점수 갱신
-          const challengerWon = checkData.c_win > checkData.c_lose;
-          const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', checkData.challenger_name).single();
-          const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', checkData.target_name).single();
+                const { error: matchErr } = await supabase.from('matches').insert([matchPayload]);
+                if (matchErr) console.error("Match Insert Error", matchErr);
 
-          if (cProfile && tProfile) {
-              let cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
-              let tUpdates: any = { wins: tProfile.wins + (challengerWon ? 0 : 1), losses: tProfile.losses + (challengerWon ? 1 : 0) };
+                const challengerWon = updatedData.c_win > updatedData.c_lose;
+                const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', updatedData.challenger_name).single();
+                const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', updatedData.target_name).single();
 
-              if (activeMatch.mode.includes('free')) {
-                  const bet = checkData.bet_gc || 0;
-                  if (challengerWon) {
-                      cUpdates.created_at = tProfile.created_at; cUpdates.created_at = cProfile.created_at;
-                      cUpdates.defense_stack = 0; tUpdates.defense_stack = 0;
-                      cUpdates.gc = (cProfile.gc || 0) + bet; tUpdates.gc = (tProfile.gc || 0) - bet;
-                  } else {
-                      tUpdates.defense_stack = (tProfile.defense_stack || 0) + 1; cUpdates.defense_stack = 0;
-                      cUpdates.gc = (cProfile.gc || 0) - bet; tUpdates.gc = (tProfile.gc || 0) + bet;
-                  }
-              } else {
-                  const calcRP = (prof: any, won: boolean, oppProf: any) => {
-                      let rpChg = won ? 50 : -20;
-                      let nStreak = won ? (prof.win_streak || 0) + 1 : 0;
-                      if (won) {
-                          if (nStreak === 2) rpChg = 60; else if (nStreak === 3) rpChg = 75; else if (nStreak >= 4) rpChg = 100;
-                          if ((oppProf.rp || 1000) - (prof.rp || 1000) > 300) rpChg += 100;
-                      }
-                      const bet = checkData.bet_gc || 0;
-                      const gcChg = (won ? 100 : 30) + (won ? bet : -bet);
-                      return { rp: (prof.rp || 1000) + rpChg, streak: nStreak, gc: (prof.gc || 0) + gcChg };
-                  };
-                  const cRes = calcRP(cProfile, challengerWon, tProfile);
-                  const tRes = calcRP(tProfile, !challengerWon, cProfile);
-                  cUpdates.rp = cRes.rp; cUpdates.win_streak = cRes.streak; cUpdates.gc = cRes.gc;
-                  tUpdates.rp = tRes.rp; tUpdates.win_streak = tRes.streak; tUpdates.gc = tRes.gc;
-              }
-              await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
-              await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
-          }
-          
-          // 3. 저장이 모두 끝났으므로 가장 마지막에 방을 폭파!
-          await supabase.from('challenges').delete().eq('id', activeMatch.id);
-          
-          playSFX('success');
-          setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
-          setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']);
-          fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
-          
-       } else {
-          // 스코어 불일치
-          await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
-          playSFX('error'); 
-          alert(`스코어가 일치하지 않습니다!\n(상대방 입력 -> 승:${oppW} 패:${oppL})\n다시 합의 후 정확히 입력해주세요.`);
-          setWaitingForScore(false); setMyWins(null); setMyLosses(null);
-       }
-    } 
+                if (cProfile && tProfile) {
+                    let cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
+                    let tUpdates: any = { wins: tProfile.wins + (challengerWon ? 0 : 1), losses: tProfile.losses + (challengerWon ? 1 : 0) };
+
+                    if (updatedData.mode.includes('free')) {
+                        const bet = updatedData.bet_gc || 0;
+                        if (challengerWon) {
+                            cUpdates.defense_stack = 0; tUpdates.defense_stack = 0;
+                            cUpdates.gc = (cProfile.gc || 0) + bet; tUpdates.gc = (tProfile.gc || 0) - bet;
+                        } else {
+                            tUpdates.defense_stack = (tProfile.defense_stack || 0) + 1; cUpdates.defense_stack = 0;
+                            cUpdates.gc = (cProfile.gc || 0) - bet; tUpdates.gc = (tProfile.gc || 0) + bet;
+                        }
+                    } else {
+                        const calcRP = (prof: any, won: boolean, oppProf: any) => {
+                            let rpChg = won ? 50 : -20;
+                            let nStreak = won ? (prof.win_streak || 0) + 1 : 0;
+                            if (won) {
+                                if (nStreak === 2) rpChg = 60; else if (nStreak === 3) rpChg = 75; else if (nStreak >= 4) rpChg = 100;
+                                if ((oppProf.rp || 1000) - (prof.rp || 1000) > 300) rpChg += 100;
+                            }
+                            const bet = updatedData.bet_gc || 0;
+                            const gcChg = (won ? 100 : 30) + (won ? bet : -bet);
+                            return { rp: (prof.rp || 1000) + rpChg, streak: nStreak, gc: (prof.gc || 0) + gcChg };
+                        };
+                        const cRes = calcRP(cProfile, challengerWon, tProfile);
+                        const tRes = calcRP(tProfile, !challengerWon, cProfile);
+                        cUpdates.rp = cRes.rp; cUpdates.win_streak = cRes.streak; cUpdates.gc = cRes.gc;
+                        tUpdates.rp = tRes.rp; tUpdates.win_streak = tRes.streak; tUpdates.gc = tRes.gc;
+                    }
+                    await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
+                    await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
+                }
+                
+                await supabase.from('challenges').delete().eq('id', activeMatch.id);
+
+            } else {
+                playSFX('error'); 
+                alert(`스코어가 일치하지 않습니다!\n(도전자: ${updatedData.c_win}승 ${updatedData.c_lose}패 / 타겟: ${updatedData.t_win}승 ${updatedData.t_lose}패)\n초기화됩니다.`);
+                setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+                await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
+            }
+        }
+    } else {
+        playSFX('success');
+        setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+    }
   };
 
   const copyPlayerName = (name: string) => {
@@ -944,7 +942,7 @@ function App() {
                                  </select>
                                  <div className="flex gap-2 w-full">
                                    <select onMouseEnter={() => playSFX('hover')} value={entryWeapons[0]} onChange={(e) => {const w = [...entryWeapons]; w[0] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="flex-1 min-w-0 bg-black/60 border border-white/10 py-4 pl-3 pr-8 rounded-2xl text-xs sm:text-sm font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
-                                      <option value="" disabled hidden>👉 1번 무기</option>
+                                      <option value="" disabled hidden>👉 무기 선택</option>
                                       {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (
                                         <optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>
                                           {list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}
@@ -952,7 +950,7 @@ function App() {
                                       ))}
                                    </select>
                                    <select onMouseEnter={() => playSFX('hover')} value={entryWeapons[1]} onChange={(e) => {const w = [...entryWeapons]; w[1] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="flex-1 min-w-0 bg-black/60 border border-white/10 py-4 pl-3 pr-8 rounded-2xl text-xs sm:text-sm font-black outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
-                                      <option value="" disabled hidden>👉 2번 무기</option>
+                                      <option value="" disabled hidden>👉 무기 선택</option>
                                       {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (
                                         <optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>
                                           {list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}
@@ -969,8 +967,8 @@ function App() {
                                  <div className="flex flex-col gap-3 mt-2">
                                     <div className="bg-black/60 p-4 rounded-2xl text-center text-lg font-black text-cyan-400 border border-white/10 shadow-inner">{entryLegend || '랜덤 레전드 대기중...'}</div>
                                     <div className="flex gap-3">
-                                       <span className="flex-1 bg-black/60 p-4 rounded-2xl text-center text-sm font-black text-pink-400 border border-white/10 truncate shadow-inner">{entryWeapons[0] || '랜덤 무기 1'}</span>
-                                       <span className="flex-1 bg-black/60 p-4 rounded-2xl text-center text-sm font-black text-pink-400 border border-white/10 truncate shadow-inner">{entryWeapons[1] || '랜덤 무기 2'}</span>
+                                       <span className="flex-1 bg-black/60 p-4 rounded-2xl text-center text-sm font-black text-pink-400 border border-white/10 truncate shadow-inner">{entryWeapons[0] || '랜덤 무기 대기중...'}</span>
+                                       <span className="flex-1 bg-black/60 p-4 rounded-2xl text-center text-sm font-black text-pink-400 border border-white/10 truncate shadow-inner">{entryWeapons[1] || '랜덤 무기 대기중...'}</span>
                                     </div>
                                  </div>
                               </div>
@@ -987,6 +985,7 @@ function App() {
                         </div>
                       )}
 
+                      {/* 🌟 [UI 완벽 복구본] "무기1:" 글자 삭제 및 파란색/분홍색 텍스트 대칭 정렬 */}
                       {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-3">
                            <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
@@ -995,20 +994,26 @@ function App() {
                                   <span className={`mb-1 text-cyan-400 ${getResponsiveNameClass(currentUserName || '', 'medium')}`}>{currentUserName}</span>
                                   <span className="text-[10px] font-black text-slate-500 mb-2">나 (MY PICK)</span>
                                   <span className="font-black text-white text-2xl truncate w-full mb-3">{activeMatch.legend}</span>
-                                  <div className="flex flex-col gap-1 w-full">
-                                    <span className="text-lg font-black text-cyan-400 truncate w-full text-left">{activeMatch.weapons[0]}</span>
-                                    <span className="text-lg font-black text-cyan-400 truncate w-full text-left">{activeMatch.weapons[1]}</span>
+                                  
+                                  {/* 🌟 좌측 나의 무기 (파란색) */}
+                                  <div className="flex flex-col gap-1.5 w-full">
+                                    <span className="text-[17px] font-black text-cyan-400 truncate w-full text-left tracking-wide">{activeMatch.weapons[0]}</span>
+                                    <span className="text-[17px] font-black text-cyan-400 truncate w-full text-left tracking-wide">{activeMatch.weapons[1]}</span>
                                   </div>
+
                                 </div>
                                 <span className="font-black text-2xl text-slate-600 shrink-0 mx-4 mt-10">VS</span>
                                 <div className="flex flex-col flex-1 min-w-0 items-end text-right">
                                   <span className={`mb-1 text-pink-400 ${getResponsiveNameClass(activeMatch.opponent, 'medium')}`}>{activeMatch.opponent}</span>
                                   <span className="text-[10px] font-black text-slate-500 mb-2">상대방 (OPPONENT PICK)</span>
                                   <span className="font-black text-white text-2xl truncate w-full mb-3 text-right">{activeMatch.oppLegend || '?'}</span>
-                                  <div className="flex flex-col gap-1 w-full items-end">
-                                    <span className="text-lg font-black text-pink-400 truncate w-full text-right">{activeMatch.oppWeapons?.[0] || '?'}</span>
-                                    <span className="text-lg font-black text-pink-400 truncate w-full text-right">{activeMatch.oppWeapons?.[1] || '?'}</span>
+                                  
+                                  {/* 🌟 우측 상대방 무기 (분홍색) */}
+                                  <div className="flex flex-col gap-1.5 w-full items-end">
+                                    <span className="text-[17px] font-black text-pink-400 truncate w-full text-right tracking-wide">{activeMatch.oppWeapons?.[0] || '?'}</span>
+                                    <span className="text-[17px] font-black text-pink-400 truncate w-full text-right tracking-wide">{activeMatch.oppWeapons?.[1] || '?'}</span>
                                   </div>
+
                                 </div>
                              </div>
                            </div>
@@ -1261,7 +1266,7 @@ function App() {
                     <div onMouseEnter={() => playSFX('hover')} onClick={() => { setSfxEnabled(!sfxEnabled); playSFX('click'); }} className={`w-14 h-7 rounded-full relative cursor-pointer transition-all ${sfxEnabled ? 'bg-cyan-500 shadow-[0_0_15px_cyan]' : 'bg-white/20'}`}><div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${sfxEnabled ? 'right-1' : 'left-1'}`}></div></div>
                   </div>
                   <p className="text-sm text-slate-400 font-bold mb-4">버튼 클릭 및 매칭 시 효과음을 재생합니다.</p>
-                  <div className="flex-center gap-4">
+                  <div className="flex items-center gap-4">
                     <span className="text-xs font-black text-slate-500">0</span>
                     <input onMouseEnter={() => playSFX('hover')} type="range" min="0" max="1" step="0.01" value={sfxVolume} onChange={(e) => setSfxVolume(parseFloat(e.target.value))} className="w-full bg-white/10 h-2 rounded-lg cursor-pointer volume-slider" disabled={!sfxEnabled}/>
                     <span className="text-xs font-black text-cyan-400 w-8 text-right">{Math.round(sfxVolume * 100)}</span>
