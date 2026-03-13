@@ -203,7 +203,6 @@ function App() {
   const currentUserName = profile?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name;
   const currentUserAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || profile?.avatar_url || null;
 
-  // 🌟 [무한 대기 박멸 엔진] React의 고질적인 비동기 끊김을 방지하기 위한 백그라운드 기억 장치
   const activeMatchRef = useRef(activeMatch);
   const matchPhaseRef = useRef(matchPhase);
   const waitingForScoreRef = useRef(waitingForScore);
@@ -312,11 +311,20 @@ function App() {
     }
   }, [currentUserName]);
 
-  // 🌟 [V3.4 핵심] 절대로 통신이 끊어지지 않는 무적의 실시간 동기화 엔진
+  // 🌟 V3.5 완벽 동기화: 매치 기록이 서버에 꽂히는 순간 화면을 강제로 당겨옴 (로그 누락 완벽 해결)
+  useEffect(() => {
+    const matchLogChannel = supabase.channel('matches_realtime_sync')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' }, payload => {
+          fetchData();
+          fetchRankers();
+      }).subscribe();
+    return () => { supabase.removeChannel(matchLogChannel); };
+  }, []);
+
+  // 🌟 진행 방(challenges) 동기화
   useEffect(() => {
     if (!currentUserName) return;
     
-    // 통신 채널을 단 1번만 열고, 내부 로직은 항상 최신 상태(Ref)를 참조하도록 만듦
     const channel = supabase.channel('unified_challenge_sync_' + currentUserName.replace(/[^a-zA-Z0-9]/g, ''))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'challenges' }, payload => {
            
@@ -383,7 +391,7 @@ function App() {
       }).subscribe();
       
     return () => { supabase.removeChannel(channel); };
-  }, [currentUserName]); // 의존성 배열에 username만 두어 무한 재연결(끊김)을 완벽 차단!
+  }, [currentUserName]); 
 
   const fetchData = async () => {
     const { data: matches } = await supabase.from('matches').select('*').order('created_at', { ascending: false });
@@ -559,10 +567,9 @@ function App() {
                  winner_rank_num: Number(winnerRankNum)
              };
 
-             // 🌟 DB 에러가 떠도 앱이 멈추거나 갇히지 않도록 로그로만 출력
              const { error: matchErr } = await supabase.from('matches').insert([matchPayload]);
              if (matchErr) {
-                 console.error("[DB Schema 에러] Supabase 대시보드에서 'Reload Schema Cache'를 클릭하세요.", matchErr);
+                 console.error("[DB Schema 에러] Supabase 대시보드에서 'Reload Schema Cache'를 실행하세요.", matchErr);
              }
 
              const challengerWon = deletedRow.c_win > deletedRow.c_lose;
@@ -625,6 +632,7 @@ function App() {
     if (profile) { playSFX('click'); setSelectedPlayer(profile); setProfileTab('overview'); }
   };
 
+  // 🌟 프로필 통계 최적화 알고리즘
   let favLegend = "미선택";
   let favWeapon = "미선택";
   let legendStatsArray: any[] = [];
@@ -775,7 +783,6 @@ function App() {
 
         {activeMenu === 'home' && (
           <main className="flex-1 p-10 grid grid-cols-12 gap-8 items-stretch pb-20 animate-in fade-in duration-500 min-h-[1400px]">
-            {/* 좌측 패널 */}
             <div className="col-span-12 xl:col-span-3 flex flex-col h-full relative max-h-[880px]">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-4 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-cyan-400 text-center mb-2 border-b border-white/5 pb-2 flex items-center justify-center gap-2">
@@ -826,7 +833,6 @@ function App() {
                </section>
             </div>
 
-            {/* 중앙 패널: 통합 작전 통제소 */}
             <div className="col-span-12 xl:col-span-5 flex flex-col gap-8 h-full relative">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-6 flex flex-col h-fit shrink-0 relative z-10">
                   <div className="flex flex-col relative z-10">
@@ -970,7 +976,7 @@ function App() {
                         </div>
                       )}
 
-                      {/* 🌟 [UI 개선] 무기 텍스트 대칭 정렬 및 컬러 적용 */}
+                      {/* 🌟 V3.4 무기 UI 시원하게 키우고 좌우 대칭 (":" 삭제) */}
                       {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-3">
                            <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
