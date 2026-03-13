@@ -486,10 +486,10 @@ function App() {
   };
 
   const getRandomRankInfo = (idx: number) => {
-    if (idx === 0) return { name: "왕좌", num: 1, color: "text-yellow-400", glow: "shadow-[0_0_20px_rgba(250,204,21,0.6)]", bg: "", icon: <Crown size={20} className="text-yellow-400 animate-pulse"/> };
-    if (idx < 6) return { name: "성좌", num: idx + 1, color: "text-purple-400", glow: "shadow-[0_0_15px_rgba(192,132,252,0.5)]", bg: "", icon: <Star size={16} className="text-purple-400"/> };
-    if (idx < 12) return { name: "항성", num: idx - 5, color: "text-cyan-400", glow: "shadow-[0_0_10px_rgba(34,211,238,0.4)]", bg: "", icon: <Zap size={16} className="text-cyan-400"/> };
-    return { name: "정예", num: idx - 11, color: "text-slate-500", glow: "", bg: "", icon: <Shield size={16} className="text-slate-500"/> };
+    if (idx === 0) return { name: "왕좌", num: 1, color: "text-yellow-400", glow: "shadow-[0_0_20px_rgba(250,204,21,0.6)]", bg: "bg-yellow-400/20", icon: <Crown size={20} className="text-yellow-400 animate-pulse"/> };
+    if (idx < 6) return { name: "성좌", num: idx + 1, color: "text-purple-400", glow: "shadow-[0_0_15px_rgba(192,132,252,0.5)]", bg: "bg-purple-400/20", icon: <Star size={16} className="text-purple-400"/> };
+    if (idx < 12) return { name: "항성", num: idx - 5, color: "text-cyan-400", glow: "shadow-[0_0_10px_rgba(34,211,238,0.4)]", bg: "bg-cyan-400/20", icon: <Zap size={16} className="text-cyan-400"/> };
+    return { name: "정예", num: idx - 11, color: "text-slate-500", glow: "", bg: "bg-slate-500/20", icon: <Shield size={16} className="text-slate-500"/> };
   };
 
   const rpRankers = [...rankers].sort((a, b) => (b.rp || 0) - (a.rp || 0));
