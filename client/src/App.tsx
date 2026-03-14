@@ -496,7 +496,7 @@ function App() {
       <img
         src={`${import.meta.env.BASE_URL}ranks/${name}.png`}
         alt={alt}
-        className="w-9 h-9 object-contain shrink-0"
+        className="w-10 h-10 object-contain shrink-0"
         loading="lazy"
         onError={(e) => {
           const target = e.currentTarget as HTMLImageElement;
@@ -555,8 +555,19 @@ function App() {
     return info ? info.name : '미집계';
   };
 
+  const getSeasonTierBaseName = (tierName?: string | null) => {
+    if (!tierName) return '미집계';
+    return tierName.split(' ')[0] || tierName;
+  };
+
+  const getRegularRankIndexByName = (name?: string | null) => {
+    const found = regularRankMap.get(normalizeName(name));
+    if (!found || typeof found.rankIndex !== 'number') return null;
+    return found.rankIndex;
+  };
+
   const currentUserRegularInfo = getRegularRankInfoByName(currentUserName);
-  const currentUserRegularLabel = getRegularRankLabelByName(currentUserName);
+  const currentUserRegularIndex = getRegularRankIndexByName(currentUserName);
   const currentUserSeasonInfo = getSeasonRankInfoByName(currentUserName);
 
   const onlineRankers = rankers.filter((r) => {
@@ -616,7 +627,7 @@ function App() {
               <span title={`정규 ${leftRegularLabel}`} className="w-8 h-8 rounded-full bg-black/70 flex items-center justify-center shrink-0">
                 {leftRegularInfo?.icon || <Shield size={11} className="text-slate-300" />}
               </span>
-              <span title={`시즌 ${leftSeasonInfo?.name || '미집계'}`} className={`w-8 h-8 rounded-full bg-black/70 flex items-center justify-center text-[12px] font-black shrink-0 ${leftSeasonInfo?.color || 'text-slate-300'}`}>
+              <span title={`시즌 ${leftSeasonInfo?.name || '미집계'}`} className={`w-8 h-8 rounded-full bg-black/70 flex items-center justify-center text-[18px] leading-none font-black shrink-0 ${leftSeasonInfo?.color || 'text-slate-300'}`}>
                 {leftSeasonInfo?.icon || '🪐'}
               </span>
             </div>
@@ -640,7 +651,7 @@ function App() {
 
           <button onClick={() => handleProfileClick(rightP)} className={`text-right min-w-0 cursor-pointer ${!isLeftWinner ? 'opacity-100' : 'opacity-55'}`}>
             <div className="flex items-center justify-end gap-2 mb-0.5 min-w-0">
-              <span title={`시즌 ${rightSeasonInfo?.name || '미집계'}`} className={`w-8 h-8 rounded-full bg-black/70 flex items-center justify-center text-[12px] font-black shrink-0 ${rightSeasonInfo?.color || 'text-slate-300'}`}>
+              <span title={`시즌 ${rightSeasonInfo?.name || '미집계'}`} className={`w-8 h-8 rounded-full bg-black/70 flex items-center justify-center text-[18px] leading-none font-black shrink-0 ${rightSeasonInfo?.color || 'text-slate-300'}`}>
                 {rightSeasonInfo?.icon || '🪐'}
               </span>
               <span title={`정규 ${rightRegularLabel}`} className="w-8 h-8 rounded-full bg-black/70 flex items-center justify-center shrink-0">
@@ -713,20 +724,24 @@ function App() {
             <h1 className="text-6xl font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple]">은하단</h1>
             <div className="h-12 w-[3px] bg-gradient-to-b from-cyan-400 to-purple-400 mx-3 shadow-lg"></div>
             <div className="flex flex-col justify-center">
-              <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 uppercase tracking-widest">별의 전쟁 : 시즌 1</p>
+              <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 uppercase tracking-widest">별들의 전쟁 : 시즌 1</p>
               <p className="text-[12px] font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-purple-300 tracking-[0.4em] mt-1.5 uppercase italic">SEASON 01 BATTLE FOR THE STAR THRONE</p>
             </div>
           </div>
           {user ? (
             <div className="flex items-center gap-6">
-                <div className="flex flex-col items-start min-w-[300px] pr-2">
+                <div className="flex flex-col items-start min-w-[360px] pr-2">
                     <div className="flex items-center gap-3 w-full">
-                      <span className="w-11 h-11 rounded-lg bg-black/50 flex items-center justify-center shrink-0">{currentUserRegularInfo?.icon || <Shield size={20} className="text-slate-300" />}</span>
-                      <span className="text-2xl font-black text-yellow-300 leading-tight truncate drop-shadow-[0_0_10px_rgba(250,204,21,0.4)]">정규 {currentUserRegularLabel}</span>
+                      <span className="w-14 h-14 flex items-center justify-center shrink-0">{currentUserRegularInfo?.icon || <Shield size={30} className="text-slate-300" />}</span>
+                      <span className={`text-[2.15rem] font-black leading-tight truncate drop-shadow-[0_0_10px_rgba(250,204,21,0.4)] ${currentUserRegularInfo?.color || 'text-yellow-300'}`}>
+                        {currentUserRegularIndex !== null ? `${currentUserRegularIndex + 1}위 ${currentUserRegularInfo?.title || '미집계'}` : '미집계'}
+                      </span>
                     </div>
                     <div className="flex items-center gap-3 w-full mt-1.5">
-                      <span className="w-10 h-10 rounded-lg bg-black/50 flex items-center justify-center text-xl shrink-0">{currentUserSeasonInfo?.icon || '🪐'}</span>
-                      <span className={`text-2xl font-black leading-tight truncate drop-shadow-[0_0_10px_rgba(34,211,238,0.35)] ${currentUserSeasonInfo?.color || 'text-slate-300'}`}>시즌 {currentUserSeasonInfo?.name || '미집계'}</span>
+                      <span className="w-14 h-14 flex items-center justify-center text-[2rem] leading-none shrink-0">{currentUserSeasonInfo?.icon || '🪐'}</span>
+                      <span className={`text-[2.15rem] font-black leading-tight truncate drop-shadow-[0_0_10px_rgba(34,211,238,0.35)] ${currentUserSeasonInfo?.color || 'text-slate-300'}`}>
+                        {currentUserSeasonInfo ? `${currentUserSeasonInfo.index + 1}위 ${getSeasonTierBaseName(currentUserSeasonInfo.name)}` : '미집계'}
+                      </span>
                     </div>
                 </div>
                 <div className="flex flex-col items-end bg-black/40 px-4 py-2 rounded-xl border border-white/10 shadow-inner">
@@ -1045,11 +1060,16 @@ function App() {
                               const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
                               return (
                                 <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className="rank-card-stable w-full h-[156px] p-4 rounded-[1.45rem] border border-cyan-400/50 bg-black/65 cursor-pointer transition-all hover:border-cyan-300 shadow-[0_0_18px_rgba(34,211,238,0.22)] hover:shadow-[0_0_28px_rgba(34,211,238,0.3)] relative overflow-hidden">
-                                  <div className="w-full flex justify-center mb-2">
+                                  <div className="w-full flex justify-center -mt-2 mb-1">
                                     <div className={`${grandRank.bg} px-5 py-1 rounded-full flex items-center justify-center gap-2 shadow-[0_0_14px_rgba(0,0,0,0.35)] bg-black/88`}>
                                       {grandRank.icon}
-                                      <span className={`text-sm font-bold uppercase tracking-widest ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span>
+                                      <span className={`text-sm font-bold uppercase tracking-widest ${grandRank.color}`}>{grandRank.title}</span>
                                     </div>
+                                  </div>
+                                  <div className="w-full flex justify-center mb-1">
+                                    <span className="px-3 py-1 rounded-full bg-black/70 text-cyan-200 text-xs font-black tracking-wider border border-cyan-500/35">
+                                      {r.rankIndex + 1}위
+                                    </span>
                                   </div>
 
                                   <div className="flex items-center justify-between w-full px-1 gap-3">
@@ -1070,16 +1090,20 @@ function App() {
                               const tier = getRPTierInfo(i);
                               return (
                                 <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className="rank-card-stable w-full h-[156px] p-4 rounded-[1.45rem] border border-cyan-500/35 bg-black/65 cursor-pointer transition-all hover:border-cyan-300 shadow-[0_0_18px_rgba(34,211,238,0.2)] hover:shadow-[0_0_28px_rgba(34,211,238,0.3)] relative overflow-hidden">
-                                  <div className="w-full flex justify-center mb-2">
+                                  <div className="w-full flex justify-center -mt-2 mb-1">
                                     <div className={`${tier.bg} px-5 py-1 rounded-full flex items-center justify-center gap-2 shadow-[0_0_14px_rgba(0,0,0,0.35)] bg-black/88`}>
                                       <span className="text-lg">{tier.icon}</span>
-                                      <span className={`text-sm font-bold uppercase tracking-widest ${tier.color}`}>{tier.name}</span>
+                                      <span className={`text-sm font-bold uppercase tracking-widest ${tier.color}`}>{getSeasonTierBaseName(tier.name)}</span>
                                     </div>
+                                  </div>
+                                  <div className="w-full flex justify-center mb-1">
+                                    <span className="px-3 py-1 rounded-full bg-black/70 text-cyan-200 text-xs font-black tracking-wider border border-cyan-500/35">
+                                      {i + 1}위
+                                    </span>
                                   </div>
 
                                   <div className="flex items-center justify-between w-full px-1 gap-3">
                                     <div className="flex items-center gap-4 flex-1 min-w-0">
-                                      <span className={`text-2xl font-black ${tier.color} w-6 text-center shrink-0`}>{i + 1}</span>
                                       <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${i < 3 ? 'border-red-500 shadow-[0_0_10px_red]' : 'border-cyan-200/40'} shrink-0`} alt="p"/>
                                       <span className="font-bold text-white text-xl leading-tight truncate">{r.display_name}</span>
                                     </div>
@@ -1183,14 +1207,19 @@ function App() {
                                    
                                    <div className="absolute w-full flex justify-center z-20" style={{top: 0}}>
                                      <div className={`${badgeClass} absolute rounded-full ${grandRank.bg} flex items-center justify-center gap-3 shadow-2xl bg-black`}>
-                                        {grandRank.icon} <span className={`font-bold uppercase tracking-widest ${grandRank.color} text-center`}>{grandRank.title} {grandRank.num}</span>
+                                        {grandRank.icon} <span className={`font-bold uppercase tracking-widest ${grandRank.color} text-center`}>{grandRank.title}</span>
                                       </div>
-                                   </div>
-                                   
-                                   <div className="flex items-center justify-between w-full mt-4 px-2 relative z-10 gap-4">
-                                     <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
-                                       <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_20px_gold]' : 'border-white/20'} shrink-0`} alt="p"/>
-                                       <span className={`group-hover:text-cyan-400 font-bold text-white truncate ${nameSize}`}>{r.display_name}</span>
+                                    </div>
+                                    
+                                    <div className="mt-2 mb-1 flex justify-center">
+                                      <span className="px-4 py-1 rounded-full bg-black/70 text-cyan-200 text-sm font-black tracking-wider border border-cyan-500/35">
+                                        {r.rankIndex + 1}위
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between w-full mt-2 px-2 relative z-10 gap-4">
+                                      <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
+                                        <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_20px_gold]' : 'border-white/20'} shrink-0`} alt="p"/>
+                                        <span className={`group-hover:text-cyan-400 font-bold text-white truncate ${nameSize}`}>{r.display_name}</span>
                                      </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
                                        <span className={`font-bold text-slate-300 tracking-tight ${statSize}`}>{r.wins}승 {r.losses}패</span>
@@ -1239,16 +1268,20 @@ function App() {
                                    <div className="absolute w-full flex justify-center z-20" style={{top: 0}}>
                                      <div className={`${badgeClass} absolute rounded-full ${tier.bg} flex items-center justify-center gap-3 shadow-2xl bg-black`}>
                                         <span className="text-2xl">{tier.icon}</span> 
-                                        <span className={`font-bold uppercase tracking-widest ${tier.color} text-center`}>{tier.name}</span>
+                                        <span className={`font-bold uppercase tracking-widest ${tier.color} text-center`}>{getSeasonTierBaseName(tier.name)}</span>
                                       </div>
-                                   </div>
-                                   
-                                   <div className="flex items-center justify-between w-full mt-4 px-2 relative z-10 gap-4">
-                                     <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
-                                       <span className={`text-4xl font-black ${tier.color} drop-shadow-md shrink-0`}>{i + 1}</span>
-                                       <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${i < 3 ? 'border-red-500 shadow-[0_0_20px_red]' : 'border-white/20'} shrink-0`} alt="p"/>
-                                       <span className={`group-hover:text-cyan-400 font-bold text-white truncate ${nameSize}`}>{r.display_name}</span>
-                                     </div>
+                                    </div>
+                                    
+                                    <div className="mt-2 mb-1 flex justify-center">
+                                      <span className="px-4 py-1 rounded-full bg-black/70 text-cyan-200 text-sm font-black tracking-wider border border-cyan-500/35">
+                                        {i + 1}위
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between w-full mt-2 px-2 relative z-10 gap-4">
+                                      <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
+                                        <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${i < 3 ? 'border-red-500 shadow-[0_0_20px_red]' : 'border-white/20'} shrink-0`} alt="p"/>
+                                        <span className={`group-hover:text-cyan-400 font-bold text-white truncate ${nameSize}`}>{r.display_name}</span>
+                                      </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
                                        <span className={`font-black text-fuchsia-400 tracking-tight ${statSize}`}>{r.rp || 1000} RP</span>
                                        {(r.win_streak || 0) >= 2 && (<span className="font-bold text-base px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 mt-2 shadow-[0_0_10px_emerald]">🔥 {r.win_streak} 연승</span>)}
