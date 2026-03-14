@@ -494,10 +494,16 @@ function App() {
   const getGrandRankInfo = (idx: number) => {
     const badgeImage = (name: string, alt: string) => (
       <img
-        src={`${import.meta.env.BASE_URL}ranks/${name}.webp`}
+        src={`${import.meta.env.BASE_URL}ranks/${name}.png`}
         alt={alt}
         className="w-6 h-6 rounded-sm object-contain shrink-0"
         loading="lazy"
+        onError={(e) => {
+          const target = e.currentTarget as HTMLImageElement;
+          if (!target.src.includes('.webp')) {
+            target.src = `${import.meta.env.BASE_URL}ranks/${name}.webp`;
+          }
+        }}
       />
     );
 
@@ -549,6 +555,7 @@ function App() {
     return info ? info.name : '미집계';
   };
 
+  const currentUserRegularInfo = getRegularRankInfoByName(currentUserName);
   const currentUserRegularLabel = getRegularRankLabelByName(currentUserName);
   const currentUserSeasonInfo = getSeasonRankInfoByName(currentUserName);
 
@@ -573,6 +580,7 @@ function App() {
     ? '디스코드 접속 중인 클랜원이 없습니다.'
     : '현재 접속 중인 클랜원이 없습니다.';
 
+  const selectedPlayerRegularInfo = selectedPlayer ? getRegularRankInfoByName(selectedPlayer.display_name) : null;
   const selectedPlayerRegularLabel = selectedPlayer ? getRegularRankLabelByName(selectedPlayer.display_name) : '미집계';
   const selectedPlayerSeasonInfo = selectedPlayer ? getSeasonRankInfoByName(selectedPlayer.display_name) : null;
 
@@ -600,12 +608,12 @@ function App() {
       >
         <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-start">
           <button onClick={() => handleProfileClick(leftP)} className={`text-left min-w-0 cursor-pointer ${isLeftWinner ? 'opacity-100' : 'opacity-55'}`}>
-            <div className="flex items-center gap-2 mb-0.5">
+            <div className="flex items-center gap-2 mb-0.5 min-w-0">
               <img src={getAvatarFallback(leftP, rankers)} className="w-8 h-8 rounded-full border border-white/30 shrink-0" alt="left-player" />
               <span className="font-bold text-xl text-white truncate">{leftP}</span>
+              <span className="px-2 py-0.5 rounded-full border border-yellow-400/40 bg-yellow-400/15 text-[10px] font-black text-yellow-300 leading-none shrink-0">정규 {leftRegularLabel}</span>
+              <span className={`px-2 py-0.5 rounded-full border border-cyan-400/35 bg-cyan-400/10 text-[10px] font-black leading-none shrink-0 ${leftSeasonInfo?.color || 'text-slate-300'}`}>시즌 {leftSeasonInfo?.name || '미집계'}</span>
             </div>
-            <p className="text-[11px] font-bold text-yellow-300/90 leading-tight truncate">정규 {leftRegularLabel}</p>
-            <p className={`text-[11px] font-bold leading-tight truncate ${leftSeasonInfo?.color || 'text-slate-400'}`}>시즌 {leftSeasonInfo?.name || '미집계'}</p>
             <p className="text-sm font-bold text-pink-400 truncate">{log.left_legend || '미선택'}</p>
             <p className="text-sm font-bold text-cyan-300 leading-tight">{log.left_weapons?.[0] || '미선택'}</p>
             <p className="text-sm font-bold text-cyan-300 leading-tight">{log.left_weapons?.[1] || '미선택'}</p>
@@ -625,12 +633,12 @@ function App() {
           </div>
 
           <button onClick={() => handleProfileClick(rightP)} className={`text-right min-w-0 cursor-pointer ${!isLeftWinner ? 'opacity-100' : 'opacity-55'}`}>
-            <div className="flex items-center justify-end gap-2 mb-0.5">
+            <div className="flex items-center justify-end gap-2 mb-0.5 min-w-0">
+              <span className={`px-2 py-0.5 rounded-full border border-cyan-400/35 bg-cyan-400/10 text-[10px] font-black leading-none shrink-0 ${rightSeasonInfo?.color || 'text-slate-300'}`}>시즌 {rightSeasonInfo?.name || '미집계'}</span>
+              <span className="px-2 py-0.5 rounded-full border border-yellow-400/40 bg-yellow-400/15 text-[10px] font-black text-yellow-300 leading-none shrink-0">정규 {rightRegularLabel}</span>
               <span className="font-bold text-xl text-white truncate">{rightP}</span>
               <img src={getAvatarFallback(rightP, rankers)} className="w-8 h-8 rounded-full border border-white/30 shrink-0" alt="right-player" />
             </div>
-            <p className="text-[11px] font-bold text-yellow-300/90 leading-tight truncate">정규 {rightRegularLabel}</p>
-            <p className={`text-[11px] font-bold leading-tight truncate ${rightSeasonInfo?.color || 'text-slate-400'}`}>시즌 {rightSeasonInfo?.name || '미집계'}</p>
             <p className="text-sm font-bold text-pink-400 truncate">{log.right_legend || '미선택'}</p>
             <p className="text-sm font-bold text-cyan-300 leading-tight">{log.right_weapons?.[0] || '미선택'}</p>
             <p className="text-sm font-bold text-cyan-300 leading-tight">{log.right_weapons?.[1] || '미선택'}</p>
@@ -662,8 +670,8 @@ function App() {
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       .rank-glow-buffer { padding: 8px 8px 14px; }
-      .rank-scroll-surface { background: linear-gradient(180deg, rgba(2, 8, 20, 0.55), rgba(2, 8, 20, 0.35)); border-radius: 1.35rem; contain: paint; }
-      .rank-card-stable { transform: translateZ(0); backface-visibility: hidden; }
+      .rank-scroll-surface { background: transparent; border-radius: 1.35rem; isolation: isolate; }
+      .rank-card-stable { transform: none; backface-visibility: visible; }
     `}</style>
   );
 
@@ -706,9 +714,15 @@ function App() {
                     <span className="text-xs font-bold text-emerald-400 tracking-widest">{profile?.gc || 0} GC</span>
                     <span className="text-sm font-bold text-fuchsia-400 tracking-widest">{profile?.rp || 1000} RP</span>
                 </div>
-                <div className="flex flex-col items-start bg-black/40 px-4 py-2 rounded-xl border border-white/10 shadow-inner min-w-[210px]">
-                    <span className="text-[11px] font-bold text-yellow-300 tracking-tight truncate max-w-[180px]">정규: {currentUserRegularLabel}</span>
-                    <span className={`text-[11px] font-bold tracking-tight truncate max-w-[180px] ${currentUserSeasonInfo?.color || 'text-slate-300'}`}>시즌: {currentUserSeasonInfo?.name || '미집계'}</span>
+                <div className="flex flex-col items-start bg-black/55 px-5 py-3 rounded-2xl border border-cyan-400/30 shadow-[0_0_12px_rgba(34,211,238,0.2)] min-w-[260px]">
+                    <div className="flex items-center gap-2 w-full">
+                      <span className="w-7 h-7 rounded-md bg-black/50 border border-white/15 flex items-center justify-center shrink-0">{currentUserRegularInfo?.icon || <Shield size={16} className="text-slate-300" />}</span>
+                      <span className="text-base font-black text-yellow-300 leading-tight truncate">정규 {currentUserRegularLabel}</span>
+                    </div>
+                    <div className="flex items-center gap-2 w-full mt-1.5">
+                      <span className="w-7 h-7 rounded-md bg-black/50 border border-white/15 flex items-center justify-center text-sm shrink-0">{currentUserSeasonInfo?.icon || '🪐'}</span>
+                      <span className={`text-base font-black leading-tight truncate ${currentUserSeasonInfo?.color || 'text-slate-300'}`}>시즌 {currentUserSeasonInfo?.name || '미집계'}</span>
+                    </div>
                 </div>
                 <div onMouseEnter={() => playSFX('hover')} onClick={handleLogout} className="flex items-center gap-4 bg-black/60 p-2 rounded-full border border-white/10 pr-8 border-l-cyan-500 border-l-4 cursor-pointer hover:border-l-pink-500 transition-all">
                   <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest"} className="w-10 h-10 rounded-full" alt="profile"/>
@@ -1001,7 +1015,7 @@ function App() {
               className="col-span-12 xl:col-span-4 flex flex-col h-[85vh] xl:h-auto relative order-2 xl:order-2"
               style={homeRankingHeight ? { height: `${homeRankingHeight}px` } : undefined}
             >
-               <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-visible">
+               <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-hidden">
                   <div className="px-2 pt-2 flex flex-col relative z-10 h-full">
                       
                       <div onMouseEnter={() => playSFX('hover')} className="flex items-center justify-center gap-5 mb-6 mt-1">
@@ -1016,7 +1030,7 @@ function App() {
                         <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setMiniRankMode('random'); }} className={`flex-1 py-3 rounded-xl text-base font-bold transition-all border cursor-pointer ${miniRankMode === 'random' ? 'bg-cyan-600/20 text-cyan-400 border-cyan-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>🎲 시즌 랭킹</button>
                       </div>
                       
-                      <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 custom-scrollbar rank-glow-buffer rank-scroll-surface">
+                      <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 custom-scrollbar rank-glow-buffer">
                          {miniRankMode === 'free' ? (
                              rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).map((r) => {
                                   const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
@@ -1297,15 +1311,15 @@ function App() {
              <div className="flex items-center gap-10 mb-8 mt-2">
                 <img src={selectedPlayer.avatar_url} className={`w-36 h-36 rounded-[3rem] border-4 ${selectedPlayer.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_20px_gold]' : 'border-cyan-400 shadow-[0_0_20px_cyan]'} shrink-0`} alt="p" />
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                   <h2 className={`italic pb-2 font-black text-5xl text-white truncate`}>
-                     {selectedPlayer.display_name}
-                   </h2>
-                   <div className="flex gap-4 mt-2">
-                     <span className={`text-lg font-bold px-6 py-2 rounded-full border border-white/20 ${getRegularRankInfoByName(selectedPlayer.display_name)?.color || 'text-slate-300'} bg-white/10`}>
-                       정규: {selectedPlayerRegularLabel}
+                   <div className="flex items-center gap-3 pb-2 min-w-0">
+                     <h2 className={`italic font-black text-5xl text-white truncate`}>{selectedPlayer.display_name}</h2>
+                     <span className={`inline-flex items-center gap-2 text-base font-bold px-4 py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 shrink-0`}>
+                       {selectedPlayerRegularInfo?.icon}
+                       {selectedPlayerRegularLabel}
                      </span>
-                     <span className={`text-lg font-bold px-6 py-2 rounded-full border border-white/20 ${selectedPlayerSeasonInfo?.color || 'text-slate-300'} bg-white/10`}>
-                       시즌: {selectedPlayerSeasonInfo?.name || '미집계'}
+                     <span className={`inline-flex items-center gap-2 text-base font-bold px-4 py-2 rounded-full border border-white/20 ${selectedPlayerSeasonInfo?.color || 'text-slate-300'} bg-white/10 shrink-0`}>
+                       <span>{selectedPlayerSeasonInfo?.icon || '🪐'}</span>
+                       {selectedPlayerSeasonInfo?.name || '미집계'}
                      </span>
                    </div>
                 </div>
