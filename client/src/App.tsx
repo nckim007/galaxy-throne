@@ -41,6 +41,7 @@ function App() {
   const [logs, setLogs] = useState<any[]>([]); 
   const [rankers, setRankers] = useState<any[]>([]); 
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [discordOnlineUsers, setDiscordOnlineUsers] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
@@ -58,6 +59,7 @@ function App() {
 
   const currentUserName = profile?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name;
   const currentUserAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || profile?.avatar_url || null;
+  const DISCORD_GUILD_ID = (import.meta.env.VITE_DISCORD_GUILD_ID as string | undefined)?.trim();
 
   const activeMatchRef = useRef(activeMatch);
   const matchPhaseRef = useRef(matchPhase);
@@ -120,6 +122,50 @@ function App() {
   }, []);
 
   useEffect(() => { if (currentUserName) { checkActiveChallenge(currentUserName); } }, [currentUserName]);
+
+  useEffect(() => {
+    if (!DISCORD_GUILD_ID) {
+      setDiscordOnlineUsers(new Set());
+      return;
+    }
+
+    let isMounted = true;
+
+    const fetchDiscordPresence = async () => {
+      try {
+        const res = await fetch(`https://discord.com/api/guilds/${DISCORD_GUILD_ID}/widget.json`, {
+          method: 'GET',
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error(`Discord widget fetch failed: ${res.status}`);
+
+        const data = await res.json();
+        const members = Array.isArray(data?.members) ? data.members : [];
+        const nextUsers = new Set<string>();
+
+        members.forEach((member: any) => {
+          [member?.username, member?.global_name, member?.nick, member?.display_name].forEach((candidate) => {
+            if (typeof candidate === 'string' && candidate.trim()) {
+              nextUsers.add(candidate.trim().toLowerCase());
+            }
+          });
+        });
+
+        if (isMounted) setDiscordOnlineUsers(nextUsers);
+      } catch {
+        if (isMounted) setDiscordOnlineUsers(new Set());
+      }
+    };
+
+    fetchDiscordPresence();
+    const timer = window.setInterval(fetchDiscordPresence, 30000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(timer);
+      setDiscordOnlineUsers(new Set());
+    };
+  }, [DISCORD_GUILD_ID]);
 
   useEffect(() => {
     if (!currentUserName?.trim()) {
@@ -416,7 +462,27 @@ function App() {
   };
 
   const rpRankers = [...rankers].sort((a, b) => (b.rp || 0) - (a.rp || 0));
-  const onlineRankers = rankers.filter((r) => onlineUsers.has((r.display_name || '').trim()));
+  const normalizeName = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+  const onlineRankers = rankers.filter((r) => {
+    if (DISCORD_GUILD_ID) {
+      const candidates = [
+        r.display_name,
+        r.discord_name,
+        r.discord_username,
+        r.discord_nick,
+        r.discord_global_name,
+        r.discord_display_name,
+      ];
+      return candidates.some((candidate) => {
+        const normalized = normalizeName(candidate);
+        return normalized && discordOnlineUsers.has(normalized);
+      });
+    }
+    return onlineUsers.has((r.display_name || '').trim());
+  });
+  const onlineBoardEmptyText = DISCORD_GUILD_ID
+    ? '디스코드 접속 중인 클랜원이 없습니다.'
+    : '현재 접속 중인 클랜원이 없습니다.';
 
   // 🌟 V4.6: 전투기록 UI 완벽 분리 구현 (WIN/LOSE 직관적 스티커 형태 도입)
   const renderCombatLogItem = (log: any, index: number) => {
@@ -551,8 +617,10 @@ function App() {
         </header>
 
         {activeMenu === 'home' && (
-          <main className="flex-1 p-10 grid grid-cols-12 xl:grid-rows-[auto_auto] gap-8 items-start pb-20 animate-in fade-in duration-500 h-full">
-            <div className="col-span-12 xl:col-span-4 xl:row-start-1 flex flex-col h-auto relative order-1 xl:order-1">
+          <main className="flex-1 p-10 grid grid-cols-12 gap-8 items-start pb-20 animate-in fade-in duration-500 h-full">
+            <div className="col-span-12 xl:col-span-8 flex flex-col gap-8 h-auto relative order-1 xl:order-1">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+                <div className="flex flex-col h-auto relative">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
                     접속 현황 (Online Board)
@@ -587,12 +655,12 @@ function App() {
                                )}
                             </div>
                           )
-                       }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">현재 접속 중인 클랜원이 없습니다.</div>)}
+                       }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">{onlineBoardEmptyText}</div>)}
                     </div>
                </section>
-            </div>
+                </div>
 
-            <div className="col-span-12 xl:col-span-4 xl:row-start-1 flex flex-col h-auto relative order-2 xl:order-2">
+                <div className="flex flex-col h-auto relative">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-5 flex flex-col h-auto shrink-0 relative z-10 overflow-visible">
                   <div className="flex flex-col relative z-10">
                       <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3">
@@ -798,9 +866,10 @@ function App() {
                       )}
                   </div>
                </section>
-            </div>
+                </div>
+              </div>
 
-            <div className="col-span-12 xl:col-span-8 xl:row-start-2 flex flex-col h-[82vh] xl:h-full relative order-4 xl:order-4">
+            <div className="flex flex-col h-[82vh] xl:h-full relative">
                <section className="bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2.5rem] p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
                     최근 기록 (Battle Logs)
@@ -810,9 +879,10 @@ function App() {
                   </div>
                </section>
             </div>
+            </div>
 
-            <div className="col-span-12 xl:col-span-4 xl:row-span-2 flex flex-col h-[85vh] xl:h-full relative order-3 xl:order-3">
-               <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-hidden">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-[85vh] xl:h-[85vh] relative order-2 xl:order-2">
+               <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-visible">
                   <div className="px-2 pt-2 flex flex-col relative z-10 h-full">
                       
                       <div onMouseEnter={() => playSFX('hover')} className="flex items-center justify-center gap-4 mb-6 mt-2">
@@ -835,12 +905,12 @@ function App() {
                         </div>
                       )}
 
-                      <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-3 custom-scrollbar pr-3 px-2 py-4 grid-glow-fix">
+                      <div className="flex-1 overflow-y-auto overflow-x-visible space-y-4 custom-scrollbar pr-2 pl-2 py-4 grid-glow-fix">
                          {miniRankMode === 'free' ? (
                              rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).filter(r => { if (rankTab === 0) return r.rankIndex < 6; if (rankTab === 1) return r.rankIndex >= 6 && r.rankIndex < 12; return r.rankIndex >= 12; }).map((r) => {
                                   const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
                                   return (
-                                    <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`p-4 pt-10 pb-5 rounded-[1.5rem] border transition-all cursor-pointer group bg-black/60 flex flex-col items-center hover:scale-[1.02] ${grandRank.glow} border-cyan-400/30 hover:border-cyan-400 mt-6 relative`}>
+                                    <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`p-5 pt-11 pb-6 rounded-[1.75rem] border transition-all cursor-pointer group bg-black/55 flex flex-col items-center hover:scale-[1.02] ${grandRank.glow} border-cyan-400/40 hover:border-cyan-300/80 mt-6 relative`}>
                                        
                                        <div className="absolute -top-5 w-full flex justify-center z-20">
                                          <div className={`px-5 py-1.5 rounded-full border-2 border-cyan-400/30 ${grandRank.bg} flex items-center justify-center gap-2 shadow-xl bg-black`}>
@@ -850,12 +920,12 @@ function App() {
                                        </div>
 
                                        <div className="flex items-center justify-between w-full px-2 relative z-10 gap-3 mt-1">
-                                          <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
-                                             <img src={r.avatar_url} className={`w-11 h-11 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_15px_gold]' : 'border-white/20'} shrink-0`} alt="p"/>
-                                             <span className={`group-hover:text-cyan-400 font-bold text-white text-lg truncate`}>{r.display_name}</span>
+                                          <div className="flex items-center gap-4 flex-1 min-w-0 pr-2">
+                                             <img src={r.avatar_url} className={`w-14 h-14 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_18px_gold]' : 'border-cyan-200/40'} shrink-0`} alt="p"/>
+                                             <span className={`group-hover:text-cyan-300 font-bold text-white text-xl truncate`}>{r.display_name}</span>
                                           </div>
                                           <div className="flex flex-col items-end shrink-0">
-                                            <span className="font-bold text-slate-300 text-lg tracking-tight">{r.wins}승 {r.losses}패</span>
+                                            <span className="font-bold text-slate-200 text-xl tracking-tight">{r.wins}승 {r.losses}패</span>
                                             {r.rankIndex === 0 && (<span className="font-bold text-[9px] px-2 py-1 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50 mt-1">방어전: {r.defense_stack || 0}</span>)}
                                           </div>
                                        </div>
@@ -866,7 +936,7 @@ function App() {
                              rpRankers.length > 0 ? rpRankers.filter(r => r.display_name?.includes(searchQuery)).slice(0, 10).map((r, i) => {
                                  const tier = getRPTierInfo(i);
                                  return (
-                                     <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className={`p-4 pt-9 pb-4 rounded-[1.5rem] border flex flex-col items-center bg-black/60 hover:border-cyan-400 transition-all cursor-pointer border-white/10 group hover:scale-[1.02] ${tier.glow} mt-6 relative`}>
+                                     <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className={`p-5 pt-10 pb-5 rounded-[1.6rem] border flex flex-col items-center bg-black/55 hover:border-cyan-300/80 transition-all cursor-pointer border-cyan-500/25 group hover:scale-[1.02] ${tier.glow} mt-6 relative`}>
                                          
                                          <div className="absolute -top-4 w-full flex justify-center z-20">
                                            <div className={`px-4 py-1 rounded-full border border-white/20 ${tier.bg} flex items-center justify-center gap-2 shadow-xl bg-black`}>
@@ -876,13 +946,13 @@ function App() {
                                          </div>
 
                                          <div className="flex items-center justify-between w-full px-1 relative z-10 gap-3 mt-1">
-                                             <div className="flex items-center gap-3 flex-1 min-w-0">
+                                             <div className="flex items-center gap-4 flex-1 min-w-0">
                                                  <span className={`text-2xl font-black ${tier.color} w-6 text-center drop-shadow-md shrink-0`}>{i + 1}</span>
-                                                 <img src={r.avatar_url} className={`w-10 h-10 rounded-full border-2 ${i < 3 ? 'border-red-500 shadow-[0_0_10px_red]' : 'border-white/20'} shrink-0`} alt="p"/>
-                                                 <span className={`group-hover:text-cyan-400 font-bold text-white text-lg truncate`}>{r.display_name}</span>
+                                                 <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${i < 3 ? 'border-red-500 shadow-[0_0_12px_red]' : 'border-cyan-200/40'} shrink-0`} alt="p"/>
+                                                 <span className={`group-hover:text-cyan-300 font-bold text-white text-xl truncate`}>{r.display_name}</span>
                                              </div>
                                              <div className="flex flex-col items-end shrink-0">
-                                                 <span className="font-black text-fuchsia-400 text-lg">{r.rp || 1000} RP</span>
+                                                 <span className="font-black text-fuchsia-400 text-xl">{r.rp || 1000} RP</span>
                                                  {(r.win_streak || 0) >= 2 && <span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 mt-1 shadow-[0_0_10px_emerald]">🔥 {r.win_streak} 연승</span>}
                                              </div>
                                          </div>
