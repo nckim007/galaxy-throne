@@ -372,7 +372,8 @@ function App() {
     
     const isLeftWinner = log.winner_name === leftP;
     const modeLabel = log.match_type === 'free' ? '자유 대전' : '랜덤 대전';
-    const winnerName = isLeftWinner ? leftP : rightP;
+    const leftResult = isLeftWinner ? 'WIN' : 'LOSE';
+    const rightResult = isLeftWinner ? 'LOSE' : 'WIN';
 
     return (
       <div
@@ -380,55 +381,48 @@ function App() {
         onMouseEnter={() => playSFX('hover')}
         className="bg-black/55 border border-white/10 rounded-2xl p-3 hover:border-cyan-500/50 transition-colors shadow-md"
       >
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black tracking-widest ${log.match_type === 'free' ? 'bg-pink-600 text-white' : 'bg-cyan-600 text-black'}`}>
+        <div className="flex items-center justify-center mb-2">
+          <span className={`px-3 py-1 rounded-lg text-[11px] font-black tracking-widest ${log.match_type === 'free' ? 'bg-pink-600 text-white' : 'bg-cyan-600 text-black'}`}>
             {modeLabel}
           </span>
-          <span className="text-[11px] font-bold text-emerald-400 tracking-wide truncate">{winnerName} 승리</span>
-          <span className="text-sm font-black text-slate-200 shrink-0">{log.score_left ?? 0} : {log.score_right ?? 0}</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {[{
-            name: leftP,
-            legend: log.left_legend,
-            weapons: log.left_weapons,
-            score: log.score_left,
-            isWinner: isLeftWinner,
-          }, {
-            name: rightP,
-            legend: log.right_legend,
-            weapons: log.right_weapons,
-            score: log.score_right,
-            isWinner: !isLeftWinner,
-          }].map((player, playerIndex) => (
-            <button
-              key={`${index}-${playerIndex}`}
-              onClick={() => handleProfileClick(player.name)}
-              className={`w-full text-left rounded-xl border p-2.5 transition-colors cursor-pointer ${
-                player.isWinner
-                  ? 'border-cyan-400/50 bg-cyan-500/10'
-                  : 'border-white/10 bg-black/45 hover:border-cyan-400/40'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <img
-                  src={getAvatarFallback(player.name, rankers)}
-                  className={`w-8 h-8 rounded-full border shrink-0 ${player.isWinner ? 'border-cyan-300' : 'border-slate-500'}`}
-                  alt="player"
-                />
-                <span className="font-bold text-sm text-white truncate">{player.name}</span>
-                <span className={`ml-auto text-[10px] font-black px-2 py-0.5 rounded ${player.isWinner ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>
-                  {player.isWinner ? 'WIN' : 'LOSE'}
-                </span>
-                <span className="text-sm font-black text-yellow-400 shrink-0">{player.score ?? 0}</span>
-              </div>
-              <div className="mt-1.5 text-xs font-bold text-pink-400 truncate">레전드: {player.legend || '미선택'}</div>
-              <div className="text-xs font-bold text-cyan-300 truncate">
-                무기: {player.weapons?.[0] || '미선택'} / {player.weapons?.[1] || '미선택'}
-              </div>
-            </button>
-          ))}
+        <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-stretch">
+          <button
+            onClick={() => handleProfileClick(leftP)}
+            className={`text-left rounded-xl border p-2.5 transition-colors cursor-pointer ${isLeftWinner ? 'border-cyan-400/50 bg-cyan-500/10' : 'border-white/10 bg-black/45 hover:border-cyan-400/40'}`}
+          >
+            <div className="flex items-center gap-2">
+              <img src={getAvatarFallback(leftP, rankers)} className={`w-7 h-7 rounded-full border shrink-0 ${isLeftWinner ? 'border-cyan-300' : 'border-slate-500'}`} alt="left-player" />
+              <span className="font-bold text-sm text-white truncate">{leftP}</span>
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded ${leftResult === 'WIN' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>{leftResult}</span>
+              <span className="text-base font-black text-yellow-400">{log.score_left ?? 0}</span>
+            </div>
+            <div className="mt-1 text-[11px] font-bold text-pink-400 truncate">레전드: {log.left_legend || '미선택'}</div>
+            <div className="text-[11px] font-bold text-cyan-300 truncate">무기: {log.left_weapons?.[0] || '미선택'} / {log.left_weapons?.[1] || '미선택'}</div>
+          </button>
+
+          <div className="flex items-center justify-center px-1">
+            <span className="text-3xl font-black text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)]">VS</span>
+          </div>
+
+          <button
+            onClick={() => handleProfileClick(rightP)}
+            className={`text-right rounded-xl border p-2.5 transition-colors cursor-pointer ${!isLeftWinner ? 'border-cyan-400/50 bg-cyan-500/10' : 'border-white/10 bg-black/45 hover:border-cyan-400/40'}`}
+          >
+            <div className="flex items-center justify-end gap-2">
+              <span className="font-bold text-sm text-white truncate">{rightP}</span>
+              <img src={getAvatarFallback(rightP, rankers)} className={`w-7 h-7 rounded-full border shrink-0 ${!isLeftWinner ? 'border-cyan-300' : 'border-slate-500'}`} alt="right-player" />
+            </div>
+            <div className="mt-1.5 flex items-center justify-end gap-2">
+              <span className="text-base font-black text-yellow-400">{log.score_right ?? 0}</span>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded ${rightResult === 'WIN' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>{rightResult}</span>
+            </div>
+            <div className="mt-1 text-[11px] font-bold text-pink-400 truncate">레전드: {log.right_legend || '미선택'}</div>
+            <div className="text-[11px] font-bold text-cyan-300 truncate">무기: {log.right_weapons?.[0] || '미선택'} / {log.right_weapons?.[1] || '미선택'}</div>
+          </button>
         </div>
       </div>
     );
@@ -511,8 +505,8 @@ function App() {
         </header>
 
         {activeMenu === 'home' && (
-          <main className="flex-1 p-10 grid grid-cols-12 xl:grid-rows-[52vh_31vh] gap-8 items-stretch pb-20 animate-in fade-in duration-500 h-full">
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[52vh] xl:h-full relative order-1 xl:order-1">
+          <main className="flex-1 p-10 grid grid-cols-12 xl:grid-rows-[44vh_40vh] gap-8 items-stretch pb-20 animate-in fade-in duration-500 h-full">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-[44vh] xl:h-full relative order-1 xl:order-1">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <div className="flex gap-2 p-1.5 bg-black/50 rounded-2xl border border-white/5 mb-4 shrink-0">
                     <div className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-lg font-bold bg-cyan-600 text-black shadow-lg">
@@ -562,7 +556,7 @@ function App() {
                </section>
             </div>
 
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[52vh] xl:h-full relative order-2 xl:order-2">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-[44vh] xl:h-full relative order-2 xl:order-2">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-y-auto custom-scrollbar pr-3">
                   <div className="flex flex-col relative z-10">
                       <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
@@ -762,7 +756,7 @@ function App() {
                </section>
             </div>
 
-            <div className="col-span-12 xl:col-span-8 flex flex-col h-[31vh] xl:h-full relative order-4 xl:order-4">
+            <div className="col-span-12 xl:col-span-8 flex flex-col h-[40vh] xl:h-full relative order-4 xl:order-4">
                <section className="bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2.5rem] p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
                   <div className="flex items-center justify-between gap-3 mb-4 px-1 shrink-0">
                     <div className="flex items-center gap-2">
