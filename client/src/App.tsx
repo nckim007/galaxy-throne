@@ -933,6 +933,7 @@ function App() {
                         const cRegular = typeof cProfile.regular_rp === 'number' ? cProfile.regular_rp : calculateRegularPoints(cProfile.wins || 0, cProfile.losses || 0);
                         const tRegular = typeof tProfile.regular_rp === 'number' ? tProfile.regular_rp : calculateRegularPoints(tProfile.wins || 0, tProfile.losses || 0);
                         const targetIsTopRegular = tRankNow === 0;
+                        const topRegularDefenseSucceeded = !challengerWon && targetIsTopRegular;
 
                         if (challengerWon) {
                           cUpdates.defense_stack = 0;
@@ -940,10 +941,14 @@ function App() {
                           cUpdates.gc = (cProfile.gc || 0) + bet;
                           tUpdates.gc = (tProfile.gc || 0) - bet;
                         } else {
-                          tUpdates.defense_stack = targetIsTopRegular ? (tProfile.defense_stack || 0) + 1 : 0;
+                          tUpdates.defense_stack = topRegularDefenseSucceeded ? (tProfile.defense_stack || 0) + 1 : 0;
                           cUpdates.defense_stack = 0;
                           cUpdates.gc = (cProfile.gc || 0) - bet;
                           tUpdates.gc = (tProfile.gc || 0) + bet;
+                        }
+                        if (topRegularDefenseSucceeded) {
+                          // 1위 방어전 성공 시 연승은 더 이상 증가하지 않고 유지됩니다.
+                          tUpdates.win_streak = tProfile.win_streak || 0;
                         }
 
                         const winnerRank = challengerWon ? cRankNow : tRankNow;
@@ -969,6 +974,7 @@ function App() {
                     } else {
                         const targetSeasonRankNow = rpRankers.findIndex((r) => normalizeName(r.display_name) === normalizeName(targetName));
                         const targetIsTopSeason = targetSeasonRankNow === 0;
+                        const topSeasonDefenseSucceeded = !challengerWon && targetIsTopSeason;
                         const calcRP = (prof: any, won: boolean, oppProf: any) => {
                             let rpChg = won ? 50 : -20; let nStreak = won ? (prof.win_streak || 0) + 1 : 0;
                             if (won) { if (nStreak === 2) rpChg = 60; else if (nStreak === 3) rpChg = 75; else if (nStreak >= 4) rpChg = 100; if ((oppProf.rp || 1000) - (prof.rp || 1000) > 300) rpChg += 100; }
@@ -978,8 +984,11 @@ function App() {
                         const cRes = calcRP(cProfile, challengerWon, tProfile); const tRes = calcRP(tProfile, !challengerWon, cProfile);
                         cUpdates.rp = cRes.rp; cUpdates.win_streak = cRes.streak; cUpdates.gc = cRes.gc;
                         tUpdates.rp = tRes.rp; tUpdates.win_streak = tRes.streak; tUpdates.gc = tRes.gc;
+                        if (topSeasonDefenseSucceeded) {
+                          tUpdates.win_streak = tProfile.win_streak || 0;
+                        }
                         cUpdates.defense_stack = 0;
-                        tUpdates.defense_stack = !challengerWon && targetIsTopSeason ? (tProfile.defense_stack || 0) + 1 : 0;
+                        tUpdates.defense_stack = topSeasonDefenseSucceeded ? (tProfile.defense_stack || 0) + 1 : 0;
                     }
                     await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id); await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
                 }
