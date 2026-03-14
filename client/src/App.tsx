@@ -40,6 +40,7 @@ function App() {
   
   const [logs, setLogs] = useState<any[]>([]); 
   const [rankers, setRankers] = useState<any[]>([]); 
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
@@ -119,6 +120,57 @@ function App() {
   }, []);
 
   useEffect(() => { if (currentUserName) { checkActiveChallenge(currentUserName); } }, [currentUserName]);
+
+  useEffect(() => {
+    if (!currentUserName?.trim()) {
+      setOnlineUsers(new Set());
+      return;
+    }
+
+    const normalizedSelf = currentUserName.trim();
+    const onlineChannel = supabase.channel('online_presence_board', {
+      config: { presence: { key: normalizedSelf } },
+    });
+
+    const syncOnlineUsers = () => {
+      const state = onlineChannel.presenceState() as Record<string, any[]>;
+      const nextOnlineUsers = new Set<string>();
+
+      Object.values(state).forEach((entries) => {
+        entries?.forEach((entry: any) => {
+          const trackedName =
+            (typeof entry?.name === 'string' && entry.name.trim()) ||
+            (typeof entry?.display_name === 'string' && entry.display_name.trim()) ||
+            '';
+
+          if (trackedName) nextOnlineUsers.add(trackedName);
+        });
+      });
+
+      nextOnlineUsers.add(normalizedSelf);
+      setOnlineUsers(nextOnlineUsers);
+    };
+
+    onlineChannel
+      .on('presence', { event: 'sync' }, syncOnlineUsers)
+      .on('presence', { event: 'join' }, syncOnlineUsers)
+      .on('presence', { event: 'leave' }, syncOnlineUsers)
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await onlineChannel.track({
+            name: normalizedSelf,
+            joined_at: new Date().toISOString(),
+          });
+          syncOnlineUsers();
+        }
+      });
+
+    return () => {
+      onlineChannel.untrack();
+      supabase.removeChannel(onlineChannel);
+      setOnlineUsers(new Set());
+    };
+  }, [currentUserName]);
 
   useEffect(() => {
     const matchLogChannel = supabase.channel('matches_realtime_sync').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' }, payload => { fetchData(); fetchRankers(); }).subscribe();
@@ -364,6 +416,7 @@ function App() {
   };
 
   const rpRankers = [...rankers].sort((a, b) => (b.rp || 0) - (a.rp || 0));
+  const onlineRankers = rankers.filter((r) => onlineUsers.has((r.display_name || '').trim()));
 
   // 🌟 V4.6: 전투기록 UI 완벽 분리 구현 (WIN/LOSE 직관적 스티커 형태 도입)
   const renderCombatLogItem = (log: any, index: number) => {
@@ -498,7 +551,7 @@ function App() {
         </header>
 
         {activeMenu === 'home' && (
-          <main className="flex-1 p-10 grid grid-cols-12 xl:grid-rows-[auto_auto] gap-8 items-stretch pb-20 animate-in fade-in duration-500 h-full">
+          <main className="flex-1 p-10 grid grid-cols-12 xl:grid-rows-[auto_auto] gap-8 items-start pb-20 animate-in fade-in duration-500 h-full">
             <div className="col-span-12 xl:col-span-4 xl:row-start-1 flex flex-col h-auto relative order-1 xl:order-1">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
@@ -506,16 +559,8 @@ function App() {
                   </h3>
 
                     <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2 pt-2 animate-in fade-in">
-                       {rankers.length > 0 ? rankers.map((ou, i) => {
+                       {onlineRankers.length > 0 ? onlineRankers.map((ou, i) => {
                           const rankInfo = getGrandRankInfo(ou.rankIndex);
-                          const currentUserRankNum = currentUserName ? rankers.findIndex(r => r.display_name === currentUserName) + 1 : 999;
-                          const myIdx = currentUserRankNum - 1; const targetIdx = ou.rankIndex; 
-                          let isChallengeableByRank = false;
-                          if (myIdx > targetIdx) { 
-                            if (targetIdx >= 12) isChallengeableByRank = true; 
-                            else if (targetIdx >= 6) { if (myIdx <= 12 && (myIdx - targetIdx) <= 2) isChallengeableByRank = true; } 
-                            else { if ((myIdx - targetIdx) === 1) isChallengeableByRank = true; } 
-                          }
                           return (
                             <div key={i} onMouseEnter={() => playSFX('hover')} className="bg-black/60 border border-white/10 p-4 rounded-[1.5rem] flex items-center justify-between hover:border-cyan-400/50 transition-all group">
                                <div className="flex items-center gap-4 cursor-pointer group/profile flex-1 min-w-0 mr-2" onClick={() => handleProfileClick(ou.display_name)}>
@@ -534,21 +579,21 @@ function App() {
                                   <button 
                                     onMouseEnter={() => playSFX('hover')} 
                                     onClick={() => { playSFX('click'); handleTargetLock(ou.display_name); }} 
-                                    disabled={!isChallengeableByRank || matchPhase !== 'idle'} 
-                                    className={`px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all shrink-0 cursor-pointer ${(isChallengeableByRank && matchPhase === 'idle') ? 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-500 hover:text-black' : 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'}`}
+                                    disabled={matchPhase !== 'idle'} 
+                                    className={`px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all shrink-0 cursor-pointer ${matchPhase === 'idle' ? 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-500 hover:text-black' : 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'}`}
                                   >
-                                    {(isChallengeableByRank && matchPhase === 'idle') ? '도전 가능' : '도전 불가'}
+                                    {matchPhase === 'idle' ? '도전' : '대전 중'}
                                   </button>
                                )}
                             </div>
                           )
-                       }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">로그인 후 도전하세요!</div>)}
+                       }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">현재 접속 중인 클랜원이 없습니다.</div>)}
                     </div>
                </section>
             </div>
 
             <div className="col-span-12 xl:col-span-4 xl:row-start-1 flex flex-col h-auto relative order-2 xl:order-2">
-               <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-5 flex flex-col h-full shrink-0 relative z-10 overflow-hidden">
+               <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-5 flex flex-col h-auto shrink-0 relative z-10 overflow-visible">
                   <div className="flex flex-col relative z-10">
                       <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3">
                          {(matchPhase === 'idle' || matchPhase === 'setup_mode') && '대전 신청 (Match Entry)'}
