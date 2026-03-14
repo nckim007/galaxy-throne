@@ -20,7 +20,7 @@ const MENU_ITEMS = [
   { id: 'settings', icon: Settings, label: '환경 설정' }
 ];
 
-type CosmeticCategory = 'nameColor' | 'borderFx';
+type CosmeticCategory = 'nameColor' | 'nameStyle' | 'borderFx';
 type ShopItem = {
   id: string;
   category: CosmeticCategory;
@@ -33,13 +33,25 @@ type ShopItem = {
 
 const SHOP_ITEMS: ShopItem[] = [
   { id: 'name_default', category: 'nameColor', name: '기본 화이트', description: '클래식 화이트 닉네임', cost: 0, preview: 'A', accentClass: 'text-white' },
-  { id: 'name_cyan', category: 'nameColor', name: '네온 시안', description: '시원한 시안 계열 닉네임', cost: 450, preview: 'A', accentClass: 'text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.6)]' },
-  { id: 'name_magenta', category: 'nameColor', name: '마젠타 펄스', description: '강렬한 마젠타 계열 닉네임', cost: 550, preview: 'A', accentClass: 'text-fuchsia-300 drop-shadow-[0_0_10px_rgba(232,121,249,0.65)]' },
-  { id: 'name_gold', category: 'nameColor', name: '솔라 골드', description: '왕좌 느낌 골드 닉네임', cost: 700, preview: 'A', accentClass: 'text-yellow-300 drop-shadow-[0_0_12px_rgba(250,204,21,0.65)]' },
+  { id: 'name_cyan', category: 'nameColor', name: '네온 시안', description: '시원한 시안 계열 닉네임', cost: 1500, preview: 'A', accentClass: 'text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.6)]' },
+  { id: 'name_magenta', category: 'nameColor', name: '마젠타 펄스', description: '강렬한 마젠타 계열 닉네임', cost: 1500, preview: 'A', accentClass: 'text-fuchsia-300 drop-shadow-[0_0_10px_rgba(232,121,249,0.65)]' },
+  { id: 'name_gold', category: 'nameColor', name: '솔라 골드', description: '왕좌 느낌 골드 닉네임', cost: 1500, preview: 'A', accentClass: 'text-yellow-300 drop-shadow-[0_0_12px_rgba(250,204,21,0.65)]' },
+  { id: 'name_emerald', category: 'nameColor', name: '에메랄드 노바', description: '선명한 에메랄드 닉네임', cost: 1500, preview: 'A', accentClass: 'text-emerald-300 drop-shadow-[0_0_10px_rgba(52,211,153,0.65)]' },
+  { id: 'name_royal', category: 'nameColor', name: '로열 바이올렛', description: '보랏빛 고급 닉네임', cost: 1500, preview: 'A', accentClass: 'text-violet-300 drop-shadow-[0_0_10px_rgba(167,139,250,0.65)]' },
+
+  { id: 'style_default', category: 'nameStyle', name: '기본 폰트', description: '기본 전투 UI 폰트', cost: 0, preview: 'Aa', accentClass: 'text-white' },
+  { id: 'style_orbit', category: 'nameStyle', name: '오비트 폰트', description: 'SF 느낌의 하이테크 폰트', cost: 3500, preview: 'Aa', accentClass: 'text-cyan-300' },
+  { id: 'style_rajdhani', category: 'nameStyle', name: '블레이드 폰트', description: '날렵한 전투형 폰트', cost: 3500, preview: 'Aa', accentClass: 'text-fuchsia-300' },
+  { id: 'style_exo', category: 'nameStyle', name: '엑소 코어 폰트', description: '미래형 커맨드 폰트', cost: 3500, preview: 'Aa', accentClass: 'text-yellow-300' },
+
   { id: 'border_default', category: 'borderFx', name: '기본 링', description: '기본 아바타 테두리', cost: 0, preview: '◎', accentClass: 'text-slate-300' },
-  { id: 'border_cyan', category: 'borderFx', name: '시안 플럭스', description: '네온 시안 테두리 효과', cost: 650, preview: '◎', accentClass: 'text-cyan-300 drop-shadow-[0_0_12px_rgba(34,211,238,0.7)]' },
-  { id: 'border_violet', category: 'borderFx', name: '바이올렛 코어', description: '우주풍 바이올렛 글로우', cost: 750, preview: '◎', accentClass: 'text-violet-300 drop-shadow-[0_0_12px_rgba(167,139,250,0.7)]' },
-  { id: 'border_solar', category: 'borderFx', name: '솔라 크라운', description: '황금빛 왕좌 테두리', cost: 900, preview: '◎', accentClass: 'text-yellow-300 drop-shadow-[0_0_14px_rgba(250,204,21,0.75)]' },
+  { id: 'border_cyan', category: 'borderFx', name: '시안 플럭스', description: '네온 시안 테두리 효과', cost: 2200, preview: '◎', accentClass: 'text-cyan-300 drop-shadow-[0_0_12px_rgba(34,211,238,0.7)]' },
+  { id: 'border_violet', category: 'borderFx', name: '바이올렛 코어', description: '우주풍 바이올렛 글로우', cost: 2200, preview: '◎', accentClass: 'text-violet-300 drop-shadow-[0_0_12px_rgba(167,139,250,0.7)]' },
+  { id: 'border_solar', category: 'borderFx', name: '솔라 크라운', description: '황금빛 왕좌 테두리', cost: 2200, preview: '◎', accentClass: 'text-yellow-300 drop-shadow-[0_0_14px_rgba(250,204,21,0.75)]' },
+  { id: 'border_crimson', category: 'borderFx', name: '크림슨 블레이즈', description: '강렬한 붉은 플레어', cost: 2200, preview: '◎', accentClass: 'text-red-300 drop-shadow-[0_0_13px_rgba(248,113,113,0.75)]' },
+  { id: 'border_aurora', category: 'borderFx', name: '오로라 프리즘', description: '다색 오로라 테두리', cost: 4200, preview: '◎', accentClass: 'text-cyan-200 drop-shadow-[0_0_16px_rgba(34,211,238,0.8)]' },
+  { id: 'border_plasma', category: 'borderFx', name: '플라즈마 라인', description: '전기 플라즈마 이펙트', cost: 4200, preview: '◎', accentClass: 'text-indigo-200 drop-shadow-[0_0_16px_rgba(129,140,248,0.8)]' },
+  { id: 'border_void', category: 'borderFx', name: '보이드 섀도우', description: '암흑 성운 테두리', cost: 4200, preview: '◎', accentClass: 'text-slate-200 drop-shadow-[0_0_16px_rgba(148,163,184,0.75)]' },
 ];
 
 function App() {
@@ -72,9 +84,10 @@ function App() {
   const [profileTab, setProfileTab] = useState<'overview' | 'details'>('overview');
   const [myProfileTab, setMyProfileTab] = useState<'overview' | 'items'>('overview');
   const [copyStatus, setCopyStatus] = useState(false);
-  const [ownedItemIds, setOwnedItemIds] = useState<string[]>(['name_default', 'border_default']);
-  const [equippedItems, setEquippedItems] = useState<{ nameColor: string; borderFx: string }>({
+  const [ownedItemIds, setOwnedItemIds] = useState<string[]>(['name_default', 'style_default', 'border_default']);
+  const [equippedItems, setEquippedItems] = useState<{ nameColor: string; nameStyle: string; borderFx: string }>({
     nameColor: 'name_default',
+    nameStyle: 'style_default',
     borderFx: 'border_default',
   });
   
@@ -93,7 +106,7 @@ function App() {
   const calculateRegularPoints = (wins?: number, losses?: number) =>
     Math.max(0, 1000 + (wins || 0) * 30 - (losses || 0) * 20);
   const cosmeticsStorageKey = user?.id ? `gt_cosmetics_v1_${user.id}` : null;
-  const defaultOwnedIds = ['name_default', 'border_default'];
+  const defaultOwnedIds = ['name_default', 'style_default', 'border_default'];
   const isCurrentUserDisplayName = (name?: string | null) => (name || '').trim() === (currentUserName || '').trim();
 
   const nameColorClassMap: Record<string, string> = {
@@ -101,12 +114,24 @@ function App() {
     name_cyan: 'text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.6)]',
     name_magenta: 'text-fuchsia-300 drop-shadow-[0_0_10px_rgba(232,121,249,0.65)]',
     name_gold: 'text-yellow-300 drop-shadow-[0_0_12px_rgba(250,204,21,0.65)]',
+    name_emerald: 'text-emerald-300 drop-shadow-[0_0_10px_rgba(52,211,153,0.65)]',
+    name_royal: 'text-violet-300 drop-shadow-[0_0_10px_rgba(167,139,250,0.65)]',
+  };
+  const nameStyleClassMap: Record<string, string> = {
+    style_default: '',
+    style_orbit: 'name-style-orbit',
+    style_rajdhani: 'name-style-rajdhani',
+    style_exo: 'name-style-exo',
   };
   const borderFxClassMap: Record<string, string> = {
     border_default: 'border-white/20 shadow-none',
     border_cyan: 'border-cyan-300 shadow-[0_0_14px_rgba(34,211,238,0.55)]',
     border_violet: 'border-violet-300 shadow-[0_0_14px_rgba(167,139,250,0.55)]',
     border_solar: 'border-yellow-300 shadow-[0_0_16px_rgba(250,204,21,0.65)]',
+    border_crimson: 'border-red-300 shadow-[0_0_16px_rgba(248,113,113,0.62)]',
+    border_aurora: 'border-cyan-200 shadow-[0_0_18px_rgba(34,211,238,0.68)]',
+    border_plasma: 'border-indigo-300 shadow-[0_0_18px_rgba(129,140,248,0.68)]',
+    border_void: 'border-slate-300 shadow-[0_0_18px_rgba(148,163,184,0.58)]',
   };
   const rankCardFxByTier = (idx: number) => {
     if (idx === 0) return 'border border-yellow-300/85 shadow-[0_0_32px_rgba(250,204,21,0.3)] bg-[linear-gradient(140deg,rgba(250,204,21,0.09),rgba(0,0,0,0.58)_45%,rgba(0,0,0,0.8))]';
@@ -124,10 +149,35 @@ function App() {
     return 'border border-indigo-300/62 shadow-[0_0_16px_rgba(165,180,252,0.18)] bg-[linear-gradient(140deg,rgba(165,180,252,0.07),rgba(0,0,0,0.62)_45%,rgba(0,0,0,0.84))]';
   };
 
-  const equippedNameClass = nameColorClassMap[equippedItems.nameColor] || nameColorClassMap.name_default;
+  const equippedNameColorClass = nameColorClassMap[equippedItems.nameColor] || nameColorClassMap.name_default;
+  const equippedNameStyleClass = nameStyleClassMap[equippedItems.nameStyle] || nameStyleClassMap.style_default;
+  const equippedNameClass = `${equippedNameColorClass} ${equippedNameStyleClass}`.trim();
   const equippedBorderFxClass = borderFxClassMap[equippedItems.borderFx] || borderFxClassMap.border_default;
-  const getNameClassForUser = (name?: string | null) => (isCurrentUserDisplayName(name) ? equippedNameClass : 'text-white');
-  const getAvatarBorderFxForUser = (name?: string | null) => (isCurrentUserDisplayName(name) ? equippedBorderFxClass : 'border-white/20');
+  const normalizePlayerName = (value?: string | null) => (value || '').trim().toLowerCase();
+  const getCosmeticStateForUser = (name?: string | null) => {
+    if (isCurrentUserDisplayName(name)) {
+      return equippedItems;
+    }
+    const found = rankers.find((r) => normalizePlayerName(r.display_name) === normalizePlayerName(name));
+    if (!found) {
+      return { nameColor: 'name_default', nameStyle: 'style_default', borderFx: 'border_default' };
+    }
+    return {
+      nameColor: found.equipped_name_color || 'name_default',
+      nameStyle: found.equipped_name_style || 'style_default',
+      borderFx: found.equipped_border_fx || 'border_default',
+    };
+  };
+  const getNameClassForUser = (name?: string | null) => {
+    const cosmetic = getCosmeticStateForUser(name);
+    const colorClass = nameColorClassMap[cosmetic.nameColor] || nameColorClassMap.name_default;
+    const styleClass = nameStyleClassMap[cosmetic.nameStyle] || '';
+    return `${colorClass} ${styleClass}`.trim();
+  };
+  const getAvatarBorderFxForUser = (name?: string | null) => {
+    const cosmetic = getCosmeticStateForUser(name);
+    return borderFxClassMap[cosmetic.borderFx] || borderFxClassMap.border_default;
+  };
 
   const isOwnedItem = (itemId: string) => defaultOwnedIds.includes(itemId) || ownedItemIds.includes(itemId);
 
@@ -136,6 +186,7 @@ function App() {
   const waitingForScoreRef = useRef(waitingForScore);
   const recentLogsBoardRef = useRef<HTMLDivElement | null>(null);
   const rankingBoardRef = useRef<HTMLDivElement | null>(null);
+  const cosmeticSyncWarnedRef = useRef(false);
 
   useEffect(() => { activeMatchRef.current = activeMatch; }, [activeMatch]);
   useEffect(() => { matchPhaseRef.current = matchPhase; }, [matchPhase]);
@@ -196,7 +247,7 @@ function App() {
   useEffect(() => {
     if (!cosmeticsStorageKey) {
       setOwnedItemIds([...defaultOwnedIds]);
-      setEquippedItems({ nameColor: 'name_default', borderFx: 'border_default' });
+      setEquippedItems({ nameColor: 'name_default', nameStyle: 'style_default', borderFx: 'border_default' });
       return;
     }
 
@@ -204,20 +255,21 @@ function App() {
       const raw = localStorage.getItem(cosmeticsStorageKey);
       if (!raw) {
         setOwnedItemIds([...defaultOwnedIds]);
-        setEquippedItems({ nameColor: 'name_default', borderFx: 'border_default' });
+        setEquippedItems({ nameColor: 'name_default', nameStyle: 'style_default', borderFx: 'border_default' });
         return;
       }
 
-      const parsed = JSON.parse(raw) as { owned?: string[]; equipped?: { nameColor?: string; borderFx?: string } };
+      const parsed = JSON.parse(raw) as { owned?: string[]; equipped?: { nameColor?: string; nameStyle?: string; borderFx?: string } };
       const mergedOwned = Array.from(new Set([...(parsed.owned || []), ...defaultOwnedIds]));
       setOwnedItemIds(mergedOwned);
       setEquippedItems({
         nameColor: parsed.equipped?.nameColor || 'name_default',
+        nameStyle: parsed.equipped?.nameStyle || 'style_default',
         borderFx: parsed.equipped?.borderFx || 'border_default',
       });
     } catch {
       setOwnedItemIds([...defaultOwnedIds]);
-      setEquippedItems({ nameColor: 'name_default', borderFx: 'border_default' });
+      setEquippedItems({ nameColor: 'name_default', nameStyle: 'style_default', borderFx: 'border_default' });
     }
   }, [cosmeticsStorageKey]);
 
@@ -231,6 +283,37 @@ function App() {
       })
     );
   }, [cosmeticsStorageKey, ownedItemIds, equippedItems]);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    const dbOwned = Array.isArray((profile as any).owned_cosmetics) ? (profile as any).owned_cosmetics : [];
+    const mergedOwned = Array.from(new Set([...dbOwned, ...defaultOwnedIds]));
+    setOwnedItemIds(mergedOwned);
+    setEquippedItems({
+      nameColor: (profile as any).equipped_name_color || 'name_default',
+      nameStyle: (profile as any).equipped_name_style || 'style_default',
+      borderFx: (profile as any).equipped_border_fx || 'border_default',
+    });
+  }, [profile?.id]);
+
+  useEffect(() => {
+    if (!user || !profile) return;
+    const timer = window.setTimeout(async () => {
+      const payload = {
+        owned_cosmetics: Array.from(new Set([...ownedItemIds, ...defaultOwnedIds])),
+        equipped_name_color: equippedItems.nameColor,
+        equipped_name_style: equippedItems.nameStyle,
+        equipped_border_fx: equippedItems.borderFx,
+      };
+      const { error } = await supabase.from('profiles').update(payload).eq('id', user.id);
+      if (error && !cosmeticSyncWarnedRef.current) {
+        cosmeticSyncWarnedRef.current = true;
+        console.warn('[cosmetics-sync] profiles 컬럼이 없거나 권한 문제로 동기화 실패:', error.message);
+      }
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [user?.id, profile?.id, ownedItemIds, equippedItems]);
 
   useEffect(() => { if (currentUserName) { checkActiveChallenge(currentUserName); } }, [currentUserName]);
 
@@ -432,7 +515,11 @@ function App() {
             ? r.regular_rp
             : calculateRegularPoints(r.wins || 0, r.losses || 0),
         gc: r.gc || 0,
-        win_streak: r.win_streak || 0
+        win_streak: r.win_streak || 0,
+        owned_cosmetics: Array.isArray(r.owned_cosmetics) ? r.owned_cosmetics : [...defaultOwnedIds],
+        equipped_name_color: r.equipped_name_color || 'name_default',
+        equipped_name_style: r.equipped_name_style || 'style_default',
+        equipped_border_fx: r.equipped_border_fx || 'border_default',
       }));
       setRankers(processed);
     }
@@ -449,8 +536,24 @@ function App() {
   const equipCosmeticItem = (item: ShopItem) => {
     if (item.category === 'nameColor') {
       setEquippedItems((prev) => ({ ...prev, nameColor: item.id }));
+    } else if (item.category === 'nameStyle') {
+      setEquippedItems((prev) => ({ ...prev, nameStyle: item.id }));
     } else {
       setEquippedItems((prev) => ({ ...prev, borderFx: item.id }));
+    }
+    if (user?.id) {
+      setRankers((prev) =>
+        prev.map((r) =>
+          r.id === user.id
+            ? {
+                ...r,
+                equipped_name_color: item.category === 'nameColor' ? item.id : r.equipped_name_color,
+                equipped_name_style: item.category === 'nameStyle' ? item.id : r.equipped_name_style,
+                equipped_border_fx: item.category === 'borderFx' ? item.id : r.equipped_border_fx,
+              }
+            : r
+        )
+      );
     }
     playSFX('success');
   };
@@ -481,8 +584,20 @@ function App() {
       return;
     }
 
-    setOwnedItemIds((prev) => Array.from(new Set([...prev, item.id])));
+    const nextOwned = Array.from(new Set([...ownedItemIds, item.id]));
+    setOwnedItemIds(nextOwned);
     equipCosmeticItem(item);
+    setRankers((prev) =>
+      prev.map((r) =>
+        r.id === user.id
+          ? {
+              ...r,
+              gc: nextGc,
+              owned_cosmetics: nextOwned,
+            }
+          : r
+      )
+    );
     fetchProfile(user.id);
     fetchRankers();
   };
@@ -682,17 +797,22 @@ function App() {
     return { title: "루키", num: idx + 1, color: "text-[#a3acb9]", glow: "", bg: "bg-[#a3acb9]/18", icon: badgeImage('rookie', 'rookie badge', 'bronze') };
   };
 
-  const seasonBadgeIcon = (glyph: React.ReactNode, shellClass: string, glowClass: string) => (
+  const seasonBadgeIcon = (fileName: string, alt: string, glowClass: string) => (
     <span className="relative inline-flex items-center justify-center w-12 h-12">
-      <span className={`absolute inset-0 blur-[10px] opacity-70 ${glowClass}`}></span>
-      <span className={`relative inline-flex items-center justify-center w-12 h-12 ${shellClass}`}>
-        {glyph}
-      </span>
+      <span className={`absolute inset-0 blur-[10px] opacity-65 ${glowClass}`}></span>
+      <img
+        src={`${import.meta.env.BASE_URL}ranks/${fileName}.png`}
+        alt={alt}
+        className="relative w-11 h-11 object-contain"
+        loading="lazy"
+        onError={(e) => {
+          const target = e.currentTarget as HTMLImageElement;
+          if (!target.src.includes('.webp')) {
+            target.src = `${import.meta.env.BASE_URL}ranks/${fileName}.webp`;
+          }
+        }}
+      />
     </span>
-  );
-
-  const seasonTierGlyph = (shape: string, colorClass: string) => (
-    <span className={`text-[22px] leading-none font-black ${colorClass}`}>{shape}</span>
   );
 
   const getRPTierInfo = (idx: number) => {
@@ -702,8 +822,7 @@ function App() {
       color: string,
       glow: string,
       bg: string,
-      glyph: React.ReactNode,
-      shellClass: string,
+      imageFile: string,
       glowClass: string
     ) => ({
       name,
@@ -711,7 +830,7 @@ function App() {
       color,
       glow,
       bg,
-      icon: seasonBadgeIcon(glyph, shellClass, glowClass),
+      icon: seasonBadgeIcon(imageFile, `${name} badge`, glowClass),
     });
 
     if (idx === 0) {
@@ -721,8 +840,7 @@ function App() {
         'text-[#ff5a5a]',
         'shadow-[0_0_18px_rgba(255,90,90,0.45)]',
         'bg-[#ff5a5a]/20',
-        seasonTierGlyph('◉', 'text-red-100'),
-        'rounded-[20px] bg-[radial-gradient(circle_at_30%_30%,rgba(254,202,202,0.95),rgba(220,38,38,0.85)_50%,rgba(69,10,10,0.95)_100%)]',
+        'eclipse',
         'bg-red-500/50'
       );
     }
@@ -733,8 +851,7 @@ function App() {
         'text-[#c67cff]',
         'shadow-[0_0_16px_rgba(198,124,255,0.4)]',
         'bg-[#c67cff]/20',
-        seasonTierGlyph('✷', 'text-violet-100'),
-        'rounded-[20px] bg-[radial-gradient(circle_at_30%_30%,rgba(233,213,255,0.95),rgba(124,58,237,0.9)_55%,rgba(46,16,101,0.95)_100%)]',
+        'quasar',
         'bg-violet-500/45'
       );
     }
@@ -745,8 +862,7 @@ function App() {
         'text-[#67d7ff]',
         'shadow-[0_0_14px_rgba(103,215,255,0.38)]',
         'bg-[#67d7ff]/20',
-        seasonTierGlyph('✹', 'text-sky-100'),
-        'rounded-[20px] bg-[radial-gradient(circle_at_30%_30%,rgba(186,230,253,0.95),rgba(2,132,199,0.9)_55%,rgba(12,74,110,0.95)_100%)]',
+        'supernova',
         'bg-sky-500/45'
       );
     }
@@ -757,8 +873,7 @@ function App() {
         'text-[#9df5ff]',
         'shadow-[0_0_12px_rgba(157,245,255,0.34)]',
         'bg-[#9df5ff]/20',
-        seasonTierGlyph('✦', 'text-cyan-100'),
-        'rounded-[20px] bg-[radial-gradient(circle_at_30%_30%,rgba(207,250,254,0.95),rgba(6,182,212,0.85)_55%,rgba(8,47,73,0.95)_100%)]',
+        'nebula',
         'bg-cyan-500/40'
       );
     }
@@ -769,8 +884,7 @@ function App() {
         'text-[#ffd84d]',
         'shadow-[0_0_10px_rgba(255,216,77,0.32)]',
         'bg-[#ffd84d]/20',
-        seasonTierGlyph('◆', 'text-yellow-100'),
-        'rounded-[20px] bg-[radial-gradient(circle_at_30%_30%,rgba(254,240,138,0.95),rgba(245,158,11,0.85)_55%,rgba(120,53,15,0.95)_100%)]',
+        'meteor',
         'bg-amber-500/40'
       );
     }
@@ -781,8 +895,7 @@ function App() {
         'text-[#d7dee8]',
         'shadow-[0_0_10px_rgba(215,222,232,0.3)]',
         'bg-[#d7dee8]/20',
-        seasonTierGlyph('⬢', 'text-slate-100'),
-        'rounded-[20px] bg-[radial-gradient(circle_at_30%_30%,rgba(226,232,240,0.95),rgba(148,163,184,0.82)_55%,rgba(51,65,85,0.95)_100%)]',
+        'asteroid',
         'bg-slate-500/35'
       );
     }
@@ -793,8 +906,7 @@ function App() {
         'text-[#c47a4a]',
         'shadow-[0_0_9px_rgba(196,122,74,0.28)]',
         'bg-[#c47a4a]/20',
-        seasonTierGlyph('✶', 'text-amber-100'),
-        'rounded-[20px] bg-[radial-gradient(circle_at_30%_30%,rgba(254,215,170,0.95),rgba(180,83,9,0.82)_55%,rgba(67,20,7,0.95)_100%)]',
+        'dust',
         'bg-orange-600/35'
       );
     }
@@ -804,8 +916,7 @@ function App() {
       'text-[#a3acb9]',
       'shadow-[0_0_8px_rgba(163,172,185,0.24)]',
       'bg-[#a3acb9]/20',
-      seasonTierGlyph('◌', 'text-slate-200'),
-      'rounded-[20px] bg-[radial-gradient(circle_at_30%_30%,rgba(226,232,240,0.9),rgba(100,116,139,0.78)_55%,rgba(15,23,42,0.95)_100%)]',
+      'void',
       'bg-slate-500/30'
     );
   };
@@ -982,8 +1093,10 @@ function App() {
   return (
     <div className="flex h-screen bg-black text-slate-300 overflow-hidden relative select-none">
       {globalFontStyle}
-      <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000" style={{ backgroundImage: `url(${bgImage})` }}>
-        <div className="absolute inset-0 bg-black/10"></div>
+      <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 brightness-[0.76] contrast-[1.08] saturate-[1.04]" style={{ backgroundImage: `url(${bgImage})` }}>
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.30),rgba(2,6,23,0.62))]"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_18%,rgba(56,189,248,0.08),transparent_40%),radial-gradient(circle_at_80%_22%,rgba(217,70,239,0.08),transparent_42%)]"></div>
+        <div className="absolute inset-0 backdrop-blur-[1.2px]"></div>
       </div>
       
       <aside className="w-14 sm:w-16 lg:w-20 bg-black/20 backdrop-blur-md border-r border-cyan-500/30 shadow-2xl flex flex-col items-center py-6 sm:py-8 lg:py-10 gap-6 sm:gap-8 lg:gap-10 z-20 shrink-0 h-screen fixed left-0">
