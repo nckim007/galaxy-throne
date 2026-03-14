@@ -46,7 +46,6 @@ function App() {
   const [profileTab, setProfileTab] = useState<'overview' | 'details'>('overview');
   const [copyStatus, setCopyStatus] = useState(false);
   
-  const [leftPanelTab, setLeftPanelTab] = useState<'users' | 'activity'>('users');
   const [miniRankMode, setMiniRankMode] = useState<'free' | 'random'>('free');
   const [mainRankTab, setMainRankTab] = useState<'free' | 'random'>('free');
   const [rankTab, setRankTab] = useState<number>(0);
@@ -387,46 +386,30 @@ function App() {
     const loseScore = isLeftWinner ? log.score_right : log.score_left;
 
     return (
-      <div key={index} onMouseEnter={() => playSFX('hover')} className="bg-black/60 border border-white/10 p-5 rounded-[1.5rem] flex flex-col justify-center gap-3 relative shrink-0 hover:border-cyan-500/50 transition-colors mx-2 mb-4 shadow-lg">
-        <div className={`absolute top-0 right-0 px-3 py-1.5 text-[10px] font-bold uppercase rounded-bl-xl rounded-tr-[1.5rem] ${log.match_type === 'free' ? 'bg-pink-600 text-white' : 'bg-cyan-600 text-black'}`}>
-          {log.match_type} MATCH
-        </div>
-
-        {/* 🌟 승리자 라인 (파란색 WIN 스티커 적용) */}
-        <div className="flex flex-col gap-1 pb-3 border-b border-white/5">
-          <div className="flex items-center gap-3 pr-2 mt-2">
-            <div className="bg-blue-600 border border-blue-400 text-white text-[11px] font-black px-2.5 py-1 rounded-md shadow-[0_0_10px_rgba(37,99,235,0.6)] shrink-0 tracking-widest">
-              WIN
-            </div>
-            <div className="flex items-center gap-2 cursor-pointer hover:opacity-80" onClick={() => handleProfileClick(winnerName)}>
-                <img src={winnerAvatar} className="w-9 h-9 rounded-full border-2 border-yellow-400 shrink-0" alt="winner"/>
-                <span className="text-white font-bold text-lg truncate max-w-[140px] tracking-wide">{winnerName}</span>
-            </div>
-            <span className="ml-auto text-3xl font-black text-yellow-400 drop-shadow-md">{winScore}</span>
-          </div>
-          <div className="flex items-center pl-[52px] text-sm font-bold truncate mt-0.5">
-            <span className="text-pink-400 mr-2 shrink-0">[{winnerLegend || '미선택'}]</span>
-            <span className="text-cyan-300 truncate">{winnerWeapons?.[0] || '미선택'} <span className="text-slate-500 mx-1">/</span> {winnerWeapons?.[1] || '미선택'}</span>
-          </div>
-        </div>
-
-        {/* 🌟 패배자 라인 (빨간색 LOSE 스티커 적용) */}
-        <div className="flex flex-col gap-1 opacity-70 hover:opacity-100 transition-opacity">
-          <div className="flex items-center gap-3 pr-2">
-            <div className="bg-red-600 border border-red-400 text-white text-[11px] font-black px-2.5 py-1 rounded-md shadow-[0_0_10px_rgba(220,38,38,0.6)] shrink-0 tracking-widest">
-              LOSE
-            </div>
-            <div className="flex items-center gap-2 cursor-pointer hover:opacity-80" onClick={() => handleProfileClick(loserName)}>
-                <img src={loserAvatar} className="w-9 h-9 rounded-full border-2 border-slate-500 shrink-0" alt="loser"/>
-                <span className="text-slate-300 font-bold text-lg truncate max-w-[140px] tracking-wide">{loserName}</span>
-            </div>
-            <span className="ml-auto text-2xl font-black text-slate-500">{loseScore}</span>
-          </div>
-          <div className="flex items-center pl-[52px] text-sm font-bold truncate mt-0.5">
-            <span className="text-pink-400 mr-2 shrink-0">[{loserLegend || '미선택'}]</span>
-            <span className="text-cyan-300 truncate">{loserWeapons?.[0] || '미선택'} <span className="text-slate-500 mx-1">/</span> {loserWeapons?.[1] || '미선택'}</span>
-          </div>
-        </div>
+      <div
+        key={index}
+        onMouseEnter={() => playSFX('hover')}
+        className="bg-black/55 border border-white/10 px-4 py-3 rounded-2xl flex items-center gap-3 hover:border-cyan-500/50 transition-colors shadow-md"
+      >
+        <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black tracking-widest shrink-0 ${log.match_type === 'free' ? 'bg-pink-600 text-white' : 'bg-cyan-600 text-black'}`}>
+          {log.match_type === 'free' ? 'FREE' : 'RANDOM'}
+        </span>
+        <span className="bg-blue-600 border border-blue-400 text-white text-[11px] font-black px-2.5 py-1 rounded-md shrink-0">WIN</span>
+        <button onClick={() => handleProfileClick(winnerName)} className="flex items-center gap-2 min-w-0 shrink max-w-[180px] cursor-pointer hover:opacity-80">
+          <img src={winnerAvatar} className="w-7 h-7 rounded-full border border-yellow-400 shrink-0" alt="winner" />
+          <span className="text-white font-bold text-sm truncate">{winnerName}</span>
+        </button>
+        <span className="text-yellow-400 font-black text-lg shrink-0">{winScore}</span>
+        <span className="text-slate-600 font-black text-sm shrink-0">VS</span>
+        <span className="bg-red-600 border border-red-400 text-white text-[11px] font-black px-2.5 py-1 rounded-md shrink-0">LOSE</span>
+        <button onClick={() => handleProfileClick(loserName)} className="flex items-center gap-2 min-w-0 shrink max-w-[180px] cursor-pointer hover:opacity-80">
+          <img src={loserAvatar} className="w-7 h-7 rounded-full border border-slate-500 shrink-0" alt="loser" />
+          <span className="text-slate-300 font-bold text-sm truncate">{loserName}</span>
+        </button>
+        <span className="text-slate-400 font-black text-base shrink-0">{loseScore}</span>
+        <span className="ml-auto text-xs font-bold text-cyan-300 truncate max-w-[42%] text-right">
+          [{winnerLegend || '미선택'}] {winnerWeapons?.[0] || '미선택'} / {winnerWeapons?.[1] || '미선택'}
+        </span>
       </div>
     );
   };
@@ -509,18 +492,14 @@ function App() {
 
         {activeMenu === 'home' && (
           <main className="flex-1 p-10 grid grid-cols-12 gap-8 items-stretch pb-20 animate-in fade-in duration-500 h-full">
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[85vh] relative">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-[52vh] relative">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <div className="flex gap-2 p-1.5 bg-black/50 rounded-2xl border border-white/5 mb-4 shrink-0">
-                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setLeftPanelTab('users'); }} className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-lg font-bold transition-all cursor-pointer ${leftPanelTab === 'users' ? 'bg-cyan-600 text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}>
+                    <div className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-lg font-bold bg-cyan-600 text-black shadow-lg">
                       <Users size={20}/> 접속 현황
-                    </button>
-                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setLeftPanelTab('activity'); }} className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-lg font-bold transition-all cursor-pointer ${leftPanelTab === 'activity' ? 'bg-cyan-600 text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}>
-                      <Activity size={20}/> 최근 기록
-                    </button>
+                    </div>
                   </div>
 
-                  {leftPanelTab === 'users' && (
                     <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2 pt-2 animate-in fade-in">
                        {rankers.length > 0 ? rankers.map((ou, i) => {
                           const rankInfo = getGrandRankInfo(ou.rankIndex);
@@ -560,17 +539,10 @@ function App() {
                           )
                        }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">로그인 후 도전하세요!</div>)}
                     </div>
-                  )}
-
-                  {leftPanelTab === 'activity' && (
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar pr-3 pt-2 pb-4 animate-in fade-in">
-                       {logs.length > 0 ? logs.slice(0, 15).map((log, i) => renderCombatLogItem(log, i)) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">전투 기록이 없습니다</div>)}
-                    </div>
-                  )}
                </section>
             </div>
 
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[85vh] relative">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-[52vh] relative">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-y-auto custom-scrollbar pr-3">
                   <div className="flex flex-col relative z-10">
                       <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
@@ -766,6 +738,21 @@ function App() {
                            </div>
                         </div>
                       )}
+                  </div>
+               </section>
+            </div>
+
+            <div className="col-span-12 xl:col-span-8 flex flex-col h-[31vh] relative">
+               <section className="bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2.5rem] p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
+                  <div className="flex items-center justify-between gap-3 mb-4 px-1 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Activity size={18} className="text-cyan-400"/>
+                      <h4 className="text-lg font-bold text-cyan-300 tracking-wider">최근 기록</h4>
+                    </div>
+                    <span className="text-xs font-bold text-slate-500">{logs.length} LOGS</span>
+                  </div>
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar pr-2 space-y-2">
+                    {logs.length > 0 ? logs.slice(0, 20).map((log, i) => renderCombatLogItem(log, i)) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">전투 기록이 없습니다</div>)}
                   </div>
                </section>
             </div>
