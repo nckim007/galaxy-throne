@@ -340,7 +340,11 @@ function App() {
 
   const handleModeChange = (mode: 'free' | 'random') => {
     playSFX('click'); setEntryMode(mode); setEntryLegend(''); setEntryWeapons(['', '']);
-    if (mode === 'free' && betAmount < 100) setBetAmount(100);
+    if (mode === 'free') {
+      if (betAmount < 100) setBetAmount(100);
+    } else {
+      setBetAmount(0);
+    }
   };
 
   const handleReroll = async () => {
@@ -488,19 +492,27 @@ function App() {
   }
 
   const getGrandRankInfo = (idx: number) => {
-    if (idx === 0) return { title: "왕좌", num: 1, color: "text-yellow-400", glow: "shadow-[0_0_18px_rgba(250,204,21,0.35)]", bg: "bg-yellow-400/20", icon: <Crown size={28} className="text-yellow-400 animate-pulse"/> };
-    if (idx < 6) return { title: "성좌", num: idx + 1, color: "text-purple-400", glow: "shadow-[0_0_14px_rgba(192,132,252,0.32)]", bg: "bg-purple-400/20", icon: <Star size={22} className="text-purple-400"/> };
-    if (idx < 12) return { title: "항성", num: idx - 5, color: "text-cyan-400", glow: "shadow-[0_0_10px_rgba(34,211,238,0.28)]", bg: "bg-cyan-400/20", icon: <Zap size={22} className="text-cyan-400"/> };
-    return { title: "정예", num: idx - 11, color: "text-slate-500", glow: "", bg: "bg-slate-500/20", icon: <Shield size={20} className="text-slate-500"/> };
+    const badgeImage = (name: string, alt: string) => (
+      <img src={`/ranks/${name}.webp`} alt={alt} className="w-6 h-6 rounded-sm object-contain shrink-0" />
+    );
+
+    if (idx === 0) return { title: "프레데터", num: 1, color: "text-[#ff5a5a]", glow: "shadow-[0_0_18px_rgba(255,90,90,0.45)]", bg: "bg-[#ff5a5a]/20", icon: badgeImage('predator', 'predator badge') };
+    if (idx < 4) return { title: "마스터", num: idx + 1, color: "text-[#c67cff]", glow: "shadow-[0_0_14px_rgba(198,124,255,0.4)]", bg: "bg-[#c67cff]/20", icon: badgeImage('master', 'master badge') };
+    if (idx < 9) return { title: "다이아몬드", num: idx + 1, color: "text-[#4fd8ff]", glow: "shadow-[0_0_12px_rgba(79,216,255,0.35)]", bg: "bg-[#4fd8ff]/20", icon: badgeImage('diamond', 'diamond badge') };
+    if (idx < 16) return { title: "플래티넘", num: idx + 1, color: "text-[#61ff90]", glow: "shadow-[0_0_10px_rgba(97,255,144,0.3)]", bg: "bg-[#61ff90]/20", icon: badgeImage('platinum', 'platinum badge') };
+    if (idx < 25) return { title: "골드", num: idx + 1, color: "text-[#ffd84d]", glow: "shadow-[0_0_8px_rgba(255,216,77,0.28)]", bg: "bg-[#ffd84d]/20", icon: badgeImage('gold', 'gold badge') };
+    if (idx < 36) return { title: "실버", num: idx + 1, color: "text-[#d0d8e6]", glow: "", bg: "bg-[#d0d8e6]/18", icon: badgeImage('silver', 'silver badge') };
+    return { title: "브론즈", num: idx + 1, color: "text-[#d39a6a]", glow: "", bg: "bg-[#d39a6a]/18", icon: badgeImage('bronze', 'bronze badge') };
   };
 
   const getRPTierInfo = (idx: number) => {
-    if (idx < 3) return { name: "PREDATOR", color: "text-[#ff4d4d]", glow: "shadow-[0_0_16px_#ff4d4d]", bg: "bg-[#ff4d4d]/20", icon: "🔴" };
-    if (idx < 10) return { name: "MASTER", color: "text-[#b14fff]", glow: "shadow-[0_0_13px_#b14fff]", bg: "bg-[#b14fff]/20", icon: "🟣" };
-    if (idx < 20) return { name: "DIAMOND", color: "text-[#00d2ff]", glow: "shadow-[0_0_10px_#00d2ff]", bg: "bg-[#00d2ff]/20", icon: "🔵" };
-    if (idx < 30) return { name: "PLATINUM", color: "text-[#3aff00]", glow: "shadow-[0_0_8px_#3aff00]", bg: "bg-[#3aff00]/20", icon: "🟢" };
-    if (idx < 40) return { name: "GOLD", color: "text-[#ffcc00]", glow: "", bg: "bg-[#ffcc00]/20", icon: "🟡" };
-    return { name: "SILVER", color: "text-slate-400", glow: "", bg: "bg-slate-400/20", icon: "⚪" };
+    if (idx === 0) return { name: "왕좌 1", color: "text-yellow-400", glow: "shadow-[0_0_16px_rgba(250,204,21,0.45)]", bg: "bg-yellow-400/20", icon: "👑" };
+    if (idx < 6) return { name: `성좌 ${idx + 1}`, color: "text-purple-400", glow: "shadow-[0_0_12px_rgba(192,132,252,0.35)]", bg: "bg-purple-400/20", icon: "✨" };
+    if (idx < 12) return { name: `항성 ${idx - 5}`, color: "text-cyan-400", glow: "shadow-[0_0_10px_rgba(34,211,238,0.32)]", bg: "bg-cyan-400/20", icon: "⚡" };
+    if (idx < 20) return { name: `성운 ${idx - 11}`, color: "text-sky-300", glow: "shadow-[0_0_8px_rgba(125,211,252,0.28)]", bg: "bg-sky-300/20", icon: "🌌" };
+    if (idx < 30) return { name: `혜성 ${idx - 19}`, color: "text-emerald-300", glow: "shadow-[0_0_7px_rgba(110,231,183,0.25)]", bg: "bg-emerald-300/20", icon: "☄️" };
+    if (idx < 45) return { name: `유성 ${idx - 29}`, color: "text-indigo-300", glow: "", bg: "bg-indigo-300/20", icon: "🌠" };
+    return { name: `은하편린 ${idx - 44}`, color: "text-slate-400", glow: "", bg: "bg-slate-400/20", icon: "🪐" };
   };
 
   const rpRankers = [...rankers].sort((a, b) => (b.rp || 0) - (a.rp || 0));
@@ -1034,9 +1046,9 @@ function App() {
                {mainRankTab === 'free' ? (
                  <>
                    <div className="flex gap-4 mb-12 justify-center max-w-4xl mx-auto w-full">
-                     <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(0); }} className={`flex-1 py-5 rounded-xl text-lg font-bold transition-all border cursor-pointer ${rankTab === 0 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>👑 왕좌·성좌</button>
-                     <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(1); }} className={`flex-1 py-5 rounded-xl text-lg font-bold transition-all border cursor-pointer ${rankTab === 1 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>⚡ 항성 (1~6)</button>
-                     <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(2); }} className={`flex-1 py-5 rounded-xl text-lg font-bold transition-all border cursor-pointer ${rankTab === 2 ? 'bg-slate-500/20 text-slate-300 border-slate-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>🛡️ 정예</button>
+                     <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(0); }} className={`flex-1 py-5 rounded-xl text-lg font-bold transition-all border cursor-pointer ${rankTab === 0 ? 'bg-red-500/20 text-red-300 border-red-400/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>🔥 프레데터·마스터</button>
+                     <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(1); }} className={`flex-1 py-5 rounded-xl text-lg font-bold transition-all border cursor-pointer ${rankTab === 1 ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>💎 다이아·플래티넘</button>
+                     <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(2); }} className={`flex-1 py-5 rounded-xl text-lg font-bold transition-all border cursor-pointer ${rankTab === 2 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-400/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>🥇 골드·실버·브론즈</button>
                    </div>
                    
                    <div className="flex justify-end mb-8 max-w-7xl mx-auto w-full px-4">
@@ -1047,11 +1059,10 @@ function App() {
                    </div>
 
                    <div className="grid grid-cols-12 gap-10 pb-20 justify-center px-4 grid-glow-fix">
-                      {rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).filter(r => { if (rankTab === 0) return r.rankIndex < 6; if (rankTab === 1) return r.rankIndex >= 6 && r.rankIndex < 12; return r.rankIndex >= 12; }).map((r) => {
+                      {rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).filter(r => { if (rankTab === 0) return r.rankIndex < 4; if (rankTab === 1) return r.rankIndex >= 4 && r.rankIndex < 16; return r.rankIndex >= 16; }).map((r) => {
                            const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
                            const isRank1 = r.rankIndex === 0;
-                           const isRank2_3 = r.rankIndex === 1 || r.rankIndex === 2;
-                           const isRank4_6 = r.rankIndex >= 3 && r.rankIndex <= 5;
+                           const isRank2_4 = r.rankIndex >= 1 && r.rankIndex <= 3;
                            
                            let spanClass = "col-span-6";
                            let cardClass = "p-8 pt-12 pb-8 rounded-[2rem]";
@@ -1062,8 +1073,7 @@ function App() {
 
                            if (rankTab === 0) {
                                if (isRank1) { spanClass = "col-span-12 flex justify-center"; cardClass = "w-full max-w-5xl p-12 pt-16 pb-12 rounded-[3.5rem] shadow-[0_0_30px_rgba(250,204,21,0.5)] hover:shadow-[0_0_50px_rgba(250,204,21,0.7)] hover:scale-[1.03]"; badgeClass = "px-12 py-4 text-[26px] -top-10"; avatarClass = "w-32 h-32"; statSize = "text-5xl"; nameSize = 'text-5xl'; }
-                               else if (isRank2_3) { spanClass = "col-span-6"; badgeClass = "px-10 py-3 text-[20px] -top-7"; }
-                               else if (isRank4_6) { spanClass = "col-span-4"; cardClass = "p-6 pt-10 pb-6 rounded-[1.5rem]"; badgeClass = "px-8 py-2.5 text-[18px] -top-6"; avatarClass = "w-16 h-16"; statSize = "text-2xl"; nameSize = 'text-xl'; }
+                               else if (isRank2_4) { spanClass = "col-span-4"; cardClass = "p-6 pt-10 pb-6 rounded-[1.5rem]"; badgeClass = "px-8 py-2.5 text-[18px] -top-6"; avatarClass = "w-16 h-16"; statSize = "text-2xl"; nameSize = 'text-xl'; }
                            } else if (rankTab === 1) {
                                spanClass = "col-span-4"; cardClass = "p-6 pt-10 pb-6 rounded-[1.5rem]"; badgeClass = "px-8 py-2.5 text-[18px] -top-6"; avatarClass = "w-16 h-16"; statSize = "text-2xl"; nameSize = 'text-xl';
                            } else {
