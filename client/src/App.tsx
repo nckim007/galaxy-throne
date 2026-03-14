@@ -446,17 +446,17 @@ function App() {
   }
 
   const getGrandRankInfo = (idx: number) => {
-    if (idx === 0) return { title: "왕좌", num: 1, color: "text-yellow-400", glow: "shadow-[0_0_45px_rgba(250,204,21,0.6)]", bg: "bg-yellow-400/20", icon: <Crown size={28} className="text-yellow-400 animate-pulse"/> };
-    if (idx < 6) return { title: "성좌", num: idx + 1, color: "text-purple-400", glow: "shadow-[0_0_40px_rgba(192,132,252,0.5)]", bg: "bg-purple-400/20", icon: <Star size={22} className="text-purple-400"/> };
-    if (idx < 12) return { title: "항성", num: idx - 5, color: "text-cyan-400", glow: "shadow-[0_0_35px_rgba(34,211,238,0.4)]", bg: "bg-cyan-400/20", icon: <Zap size={22} className="text-cyan-400"/> };
+    if (idx === 0) return { title: "왕좌", num: 1, color: "text-yellow-400", glow: "shadow-[0_0_24px_rgba(250,204,21,0.45)]", bg: "bg-yellow-400/20", icon: <Crown size={28} className="text-yellow-400 animate-pulse"/> };
+    if (idx < 6) return { title: "성좌", num: idx + 1, color: "text-purple-400", glow: "shadow-[0_0_20px_rgba(192,132,252,0.4)]", bg: "bg-purple-400/20", icon: <Star size={22} className="text-purple-400"/> };
+    if (idx < 12) return { title: "항성", num: idx - 5, color: "text-cyan-400", glow: "shadow-[0_0_16px_rgba(34,211,238,0.35)]", bg: "bg-cyan-400/20", icon: <Zap size={22} className="text-cyan-400"/> };
     return { title: "정예", num: idx - 11, color: "text-slate-500", glow: "", bg: "bg-slate-500/20", icon: <Shield size={20} className="text-slate-500"/> };
   };
 
   const getRPTierInfo = (idx: number) => {
-    if (idx < 3) return { name: "PREDATOR", color: "text-[#ff4d4d]", glow: "shadow-[0_0_40px_#ff4d4d]", bg: "bg-[#ff4d4d]/20", icon: "🔴" };
-    if (idx < 10) return { name: "MASTER", color: "text-[#b14fff]", glow: "shadow-[0_0_35px_#b14fff]", bg: "bg-[#b14fff]/20", icon: "🟣" };
-    if (idx < 20) return { name: "DIAMOND", color: "text-[#00d2ff]", glow: "shadow-[0_0_30px_#00d2ff]", bg: "bg-[#00d2ff]/20", icon: "🔵" };
-    if (idx < 30) return { name: "PLATINUM", color: "text-[#3aff00]", glow: "shadow-[0_0_20px_#3aff00]", bg: "bg-[#3aff00]/20", icon: "🟢" };
+    if (idx < 3) return { name: "PREDATOR", color: "text-[#ff4d4d]", glow: "shadow-[0_0_22px_#ff4d4d]", bg: "bg-[#ff4d4d]/20", icon: "🔴" };
+    if (idx < 10) return { name: "MASTER", color: "text-[#b14fff]", glow: "shadow-[0_0_18px_#b14fff]", bg: "bg-[#b14fff]/20", icon: "🟣" };
+    if (idx < 20) return { name: "DIAMOND", color: "text-[#00d2ff]", glow: "shadow-[0_0_14px_#00d2ff]", bg: "bg-[#00d2ff]/20", icon: "🔵" };
+    if (idx < 30) return { name: "PLATINUM", color: "text-[#3aff00]", glow: "shadow-[0_0_10px_#3aff00]", bg: "bg-[#3aff00]/20", icon: "🟢" };
     if (idx < 40) return { name: "GOLD", color: "text-[#ffcc00]", glow: "", bg: "bg-[#ffcc00]/20", icon: "🟡" };
     return { name: "SILVER", color: "text-slate-400", glow: "", bg: "bg-slate-400/20", icon: "⚪" };
   };
@@ -561,7 +561,7 @@ function App() {
       .grid-glow-fix { padding: 20px; }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      .rank-glow-buffer { padding: 28px 20px 36px; }
+      .rank-glow-buffer { padding: 20px 10px 24px; }
     `}</style>
   );
 
@@ -821,8 +821,8 @@ function App() {
                                  <span className="text-3xl font-black text-yellow-400">{myLosses ?? '-'}</span>
                              </div>
 
-                             <div className="space-y-2 mt-2">
-                               <div className="bg-black/50 rounded-xl border border-white/10 px-3 py-2">
+                             <div className="grid grid-cols-2 gap-3 mt-2">
+                               <div className="min-w-0 bg-black/50 rounded-xl border border-white/10 px-3 py-2">
                                  <div className="flex items-start gap-3">
                                    <img src={currentUserAvatar || getAvatarFallback(currentUserName, rankers)} className="w-8 h-8 rounded-full border border-cyan-300 shrink-0 mt-0.5" alt="my-avatar"/>
                                    <div className="min-w-0">
@@ -834,7 +834,7 @@ function App() {
                                  </div>
                                </div>
 
-                               <div className="bg-black/50 rounded-xl border border-white/10 px-3 py-2">
+                               <div className="min-w-0 bg-black/50 rounded-xl border border-white/10 px-3 py-2">
                                  <div className="flex items-start gap-3">
                                    <img src={getAvatarFallback(activeMatch.opponent, rankers)} className="w-8 h-8 rounded-full border border-pink-300 shrink-0 mt-0.5" alt="opponent-avatar"/>
                                    <div className="min-w-0">
@@ -876,7 +876,7 @@ function App() {
                 </div>
               </div>
 
-            <div className="flex flex-col h-[82vh] xl:flex-1 xl:min-h-0 relative">
+            <div className="flex flex-col h-[82vh] xl:h-[82vh] relative">
                <section className="bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2.5rem] p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
                     최근 기록 (Battle Logs)
