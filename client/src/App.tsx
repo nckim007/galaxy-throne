@@ -388,31 +388,31 @@ function App() {
         </div>
 
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-          <button onClick={() => handleProfileClick(leftP)} className="flex items-center gap-2.5 min-w-0 cursor-pointer text-left">
+          <button onClick={() => handleProfileClick(leftP)} className={`flex items-center gap-2.5 min-w-0 cursor-pointer text-left ${isLeftWinner ? 'opacity-100' : 'opacity-55'}`}>
             <img src={getAvatarFallback(leftP, rankers)} className="w-9 h-9 rounded-full border border-white/30 shrink-0" alt="left-player" />
             <span className="font-bold text-xl text-white truncate">{leftP}</span>
           </button>
 
           <div className="flex items-center gap-2 whitespace-nowrap">
-            <span className={`text-xs font-black px-3 py-1 rounded-md shadow-md ${leftResult === 'WIN' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>{leftResult}</span>
-            <span className="text-4xl font-black text-yellow-400 leading-none">{log.score_left ?? 0}</span>
-            <span className="text-4xl font-black text-cyan-300 drop-shadow-[0_0_14px_rgba(34,211,238,0.8)] mx-1">VS</span>
-            <span className="text-4xl font-black text-yellow-400 leading-none">{log.score_right ?? 0}</span>
-            <span className={`text-xs font-black px-3 py-1 rounded-md shadow-md ${rightResult === 'WIN' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>{rightResult}</span>
+            <span className={`text-xs font-black px-3 py-1 rounded-md shadow-md ${leftResult === 'WIN' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white opacity-55'}`}>{leftResult}</span>
+            <span className={`text-6xl font-black leading-none ${isLeftWinner ? 'text-yellow-300 drop-shadow-[0_0_12px_rgba(250,204,21,0.9)]' : 'text-slate-500/70'}`}>{log.score_left ?? 0}</span>
+            <span className="text-5xl font-black text-cyan-300 drop-shadow-[0_0_14px_rgba(34,211,238,0.8)] mx-1">VS</span>
+            <span className={`text-6xl font-black leading-none ${!isLeftWinner ? 'text-yellow-300 drop-shadow-[0_0_12px_rgba(250,204,21,0.9)]' : 'text-slate-500/70'}`}>{log.score_right ?? 0}</span>
+            <span className={`text-xs font-black px-3 py-1 rounded-md shadow-md ${rightResult === 'WIN' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white opacity-55'}`}>{rightResult}</span>
           </div>
 
-          <button onClick={() => handleProfileClick(rightP)} className="flex items-center justify-end gap-2.5 min-w-0 cursor-pointer text-right">
+          <button onClick={() => handleProfileClick(rightP)} className={`flex items-center justify-end gap-2.5 min-w-0 cursor-pointer text-right ${!isLeftWinner ? 'opacity-100' : 'opacity-55'}`}>
             <span className="font-bold text-xl text-white truncate">{rightP}</span>
             <img src={getAvatarFallback(rightP, rankers)} className="w-9 h-9 rounded-full border border-white/30 shrink-0" alt="right-player" />
           </button>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mt-1">
-          <div className="min-w-0">
+          <div className={`min-w-0 ${isLeftWinner ? 'opacity-100' : 'opacity-60'}`}>
             <p className="text-sm font-bold text-pink-400 truncate">레전드: {log.left_legend || '미선택'}</p>
             <p className="text-sm font-bold text-cyan-300 truncate">무기: {log.left_weapons?.[0] || '미선택'} / {log.left_weapons?.[1] || '미선택'}</p>
           </div>
-          <div className="min-w-0 text-right">
+          <div className={`min-w-0 text-right ${!isLeftWinner ? 'opacity-100' : 'opacity-60'}`}>
             <p className="text-sm font-bold text-pink-400 truncate">레전드: {log.right_legend || '미선택'}</p>
             <p className="text-sm font-bold text-cyan-300 truncate">무기: {log.right_weapons?.[0] || '미선택'} / {log.right_weapons?.[1] || '미선택'}</p>
           </div>
@@ -498,8 +498,8 @@ function App() {
         </header>
 
         {activeMenu === 'home' && (
-          <main className="flex-1 p-10 grid grid-cols-12 xl:grid-rows-[52vh_68vh] gap-8 items-stretch pb-20 animate-in fade-in duration-500 h-full">
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[52vh] xl:h-full relative order-1 xl:order-1">
+          <main className="flex-1 p-10 grid grid-cols-12 xl:grid-rows-[56vh_82vh] gap-8 items-stretch pb-20 animate-in fade-in duration-500 h-full">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-[56vh] xl:h-full relative order-1 xl:order-1">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
                     접속 현황 (Online Board)
@@ -547,27 +547,27 @@ function App() {
                </section>
             </div>
 
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[52vh] xl:h-full relative order-2 xl:order-2">
-               <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-y-auto custom-scrollbar pr-3">
-                  <div className="flex flex-col relative z-10">
-                      <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-[56vh] xl:h-full relative order-2 xl:order-2">
+               <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-5 flex flex-col h-full shrink-0 relative z-10 overflow-hidden">
+                  <div className="flex flex-col relative z-10 h-full">
+                      <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3">
                          {(matchPhase === 'idle' || matchPhase === 'setup_mode') && '대전 신청 (Match Entry)'}
                          {(matchPhase === 'waiting_sync' || matchPhase === 'picking' || matchPhase === 'waiting_ready') && '대전 준비 (Match Prep)'}
                          {matchPhase === 'scoring' && '결과 제출 (Submit Score)'}
                       </h3>
                       
                       {matchPhase === 'idle' && (
-                        <div className="flex flex-col pt-4 pb-4 animate-in fade-in gap-6 mt-4">
-                           <div className="flex flex-col items-center text-center mb-4">
-                              <Target size={70} className="text-cyan-400 drop-shadow-[0_0_15px_cyan] mb-6" />
-                              <h4 className="text-3xl font-bold text-white tracking-widest">타겟을 설정하세요</h4>
-                              <p className="text-slate-400 text-base mt-3">좌측 접속 현황에서 선택하거나 직접 입력하세요.</p>
+                        <div className="flex flex-col h-full justify-between pt-1 pb-1 animate-in fade-in gap-3">
+                           <div className="flex flex-col items-center text-center mb-1">
+                              <Target size={58} className="text-cyan-400 drop-shadow-[0_0_15px_cyan] mb-3" />
+                              <h4 className="text-2xl font-bold text-white tracking-widest">타겟을 설정하세요</h4>
+                              <p className="text-slate-400 text-sm mt-2">좌측 접속 현황에서 선택하거나 직접 입력하세요.</p>
                            </div>
-                           <div className="bg-black/60 p-5 rounded-3xl border border-white/10 shadow-inner mt-4">
-                              <p className="text-sm text-slate-500 font-bold mb-3 pl-2">TARGET NICKNAME</p>
-                              <input value={entryOpponent} onChange={(e) => setEntryOpponent(e.target.value)} placeholder="상대방 닉네임 직접 입력" className="w-full bg-transparent outline-none text-white font-bold text-2xl select-text pl-2" />
+                           <div className="bg-black/60 p-4 rounded-2xl border border-white/10 shadow-inner mt-1">
+                              <p className="text-xs text-slate-500 font-bold mb-2 pl-2">TARGET NICKNAME</p>
+                              <input value={entryOpponent} onChange={(e) => setEntryOpponent(e.target.value)} placeholder="상대방 닉네임 직접 입력" className="w-full bg-transparent outline-none text-white font-bold text-xl select-text pl-2" />
                            </div>
-                           <button onMouseEnter={() => playSFX('hover')} onClick={() => handleTargetLock()} className="w-full py-5 rounded-[2rem] font-bold text-2xl text-white bg-cyan-600 shadow-[0_0_20px_rgba(34,211,238,0.5)] hover:bg-cyan-500 transition-all border border-cyan-400 cursor-pointer mt-4">다음 단계 (Next)</button>
+                           <button onMouseEnter={() => playSFX('hover')} onClick={() => handleTargetLock()} className="w-full py-4 rounded-[1.5rem] font-bold text-xl text-white bg-cyan-600 shadow-[0_0_20px_rgba(34,211,238,0.5)] hover:bg-cyan-500 transition-all border border-cyan-400 cursor-pointer mt-2">다음 단계 (Next)</button>
                         </div>
                       )}
 
@@ -755,7 +755,7 @@ function App() {
                </section>
             </div>
 
-            <div className="col-span-12 xl:col-span-8 flex flex-col h-[68vh] xl:h-full relative order-4 xl:order-4">
+            <div className="col-span-12 xl:col-span-8 flex flex-col h-[82vh] xl:h-full relative order-4 xl:order-4">
                <section className="bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2.5rem] p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
                     최근 기록 (Battle Logs)
