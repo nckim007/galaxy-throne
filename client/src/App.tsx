@@ -43,6 +43,8 @@ const SHOP_ITEMS: ShopItem[] = [
   { id: 'style_orbit', category: 'nameStyle', name: '오비트 폰트', description: 'SF 느낌의 하이테크 폰트', cost: 3500, preview: 'Aa', accentClass: 'text-cyan-300' },
   { id: 'style_rajdhani', category: 'nameStyle', name: '블레이드 폰트', description: '날렵한 전투형 폰트', cost: 3500, preview: 'Aa', accentClass: 'text-fuchsia-300' },
   { id: 'style_exo', category: 'nameStyle', name: '엑소 코어 폰트', description: '미래형 커맨드 폰트', cost: 3500, preview: 'Aa', accentClass: 'text-yellow-300' },
+  { id: 'style_dohyeon', category: 'nameStyle', name: '도현 전장체', description: '굵고 강한 전투형 한글 폰트', cost: 3500, preview: 'Aa', accentClass: 'text-emerald-300' },
+  { id: 'style_jua', category: 'nameStyle', name: '쥬아 네온체', description: '부드럽고 선명한 네온 한글 폰트', cost: 3500, preview: 'Aa', accentClass: 'text-sky-300' },
 
   { id: 'border_default', category: 'borderFx', name: '기본 링', description: '기본 아바타 테두리', cost: 0, preview: '◎', accentClass: 'text-slate-300' },
   { id: 'border_cyan', category: 'borderFx', name: '시안 플럭스', description: '네온 시안 테두리 효과', cost: 2200, preview: '◎', accentClass: 'text-cyan-300 drop-shadow-[0_0_12px_rgba(34,211,238,0.7)]' },
@@ -93,7 +95,6 @@ function App() {
   
   const [miniRankMode, setMiniRankMode] = useState<'free' | 'random'>('free');
   const [mainRankTab, setMainRankTab] = useState<'free' | 'random'>('free');
-  const [rankTab, setRankTab] = useState<number>(0);
 
   const [bgmEnabled, setBgmEnabled] = useState(localStorage.getItem('bgmEnabled') !== 'false');
   const [sfxEnabled, setSfxEnabled] = useState(localStorage.getItem('sfxEnabled') !== 'false');
@@ -122,6 +123,8 @@ function App() {
     style_orbit: 'name-style-orbit',
     style_rajdhani: 'name-style-rajdhani',
     style_exo: 'name-style-exo',
+    style_dohyeon: 'name-style-dohyeon',
+    style_jua: 'name-style-jua',
   };
   const borderFxClassMap: Record<string, string> = {
     border_default: 'border-white/20 shadow-none',
@@ -762,10 +765,14 @@ function App() {
     if (legendStatsArray.length > 0) favLegend = legendStatsArray[0].name; if (weaponStatsArray.length > 0) favWeapon = weaponStatsArray[0].name;
   }
 
+  const rankAssetVersion = '20260315';
+  const getRankAssetPath = (name: string, ext: 'png' | 'webp' = 'png') =>
+    `${import.meta.env.BASE_URL}ranks/${name}.${ext}?v=${rankAssetVersion}`;
+
   const getGrandRankInfo = (idx: number) => {
     const badgeImage = (name: string, alt: string, fallbackName?: string) => (
       <img
-        src={`${import.meta.env.BASE_URL}ranks/${name}.png`}
+        src={getRankAssetPath(name, 'png')}
         alt={alt}
         className="w-10 h-10 object-contain shrink-0"
         loading="lazy"
@@ -773,12 +780,12 @@ function App() {
           const target = e.currentTarget as HTMLImageElement;
           const current = target.getAttribute('data-fallback-step') || 'png';
           if (current === 'png') {
-            target.src = `${import.meta.env.BASE_URL}ranks/${name}.webp`;
+            target.src = getRankAssetPath(name, 'webp');
             target.setAttribute('data-fallback-step', 'webp');
             return;
           }
           if (fallbackName && current !== 'fallback') {
-            target.src = `${import.meta.env.BASE_URL}ranks/${fallbackName}.png`;
+            target.src = getRankAssetPath(fallbackName, 'png');
             target.setAttribute('data-fallback-step', 'fallback');
             return;
           }
@@ -801,15 +808,24 @@ function App() {
     <span className="relative inline-flex items-center justify-center w-12 h-12">
       <span className={`absolute inset-0 blur-[10px] opacity-65 ${glowClass}`}></span>
       <img
-        src={`${import.meta.env.BASE_URL}ranks/${fileName}.png`}
+        src={getRankAssetPath(fileName, 'png')}
         alt={alt}
         className="relative w-11 h-11 object-contain"
         loading="lazy"
         onError={(e) => {
           const target = e.currentTarget as HTMLImageElement;
-          if (!target.src.includes('.webp')) {
-            target.src = `${import.meta.env.BASE_URL}ranks/${fileName}.webp`;
+          const step = target.getAttribute('data-fallback-step') || 'png';
+          if (step === 'png') {
+            target.src = getRankAssetPath(fileName, 'webp');
+            target.setAttribute('data-fallback-step', 'webp');
+            return;
           }
+          if (step === 'webp') {
+            target.src = getRankAssetPath('void', 'png');
+            target.setAttribute('data-fallback-step', 'void');
+            return;
+          }
+          target.style.display = 'none';
         }}
       />
     </span>
@@ -924,7 +940,6 @@ function App() {
   const rpRankers = [...rankers].sort((a, b) => (b.rp || 0) - (a.rp || 0));
   const normalizeName = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
   const regularRankMap = new Map(rankers.map((r) => [normalizeName(r.display_name), r]));
-  const seasonRankIndexMap = new Map(rpRankers.map((r, i) => [normalizeName(r.display_name), i]));
 
   const getRegularRankInfoByName = (name?: string | null) => {
     const found = regularRankMap.get(normalizeName(name));
@@ -940,14 +955,16 @@ function App() {
   };
 
   const getSeasonRankInfoByName = (name?: string | null) => {
-    const idx = seasonRankIndexMap.get(normalizeName(name));
-    if (idx === undefined) return null;
+    const normalized = normalizeName(name);
+    if (!normalized) return null;
+    const idx = rpRankers.findIndex((r) => normalizeName(r.display_name) === normalized);
+    if (idx < 0) return null;
     return { index: idx, ...getRPTierInfo(idx) };
   };
 
   const getSeasonRankLabelByName = (name?: string | null) => {
     const info = getSeasonRankInfoByName(name);
-    return info ? `${info.name} ${info.tierRank}위` : '미집계';
+    return info ? `${info.name} ${info.index + 1}위` : '미집계';
   };
 
   const getRegularRankIndexByName = (name?: string | null) => {
@@ -958,7 +975,13 @@ function App() {
 
   const currentUserRegularInfo = getRegularRankInfoByName(currentUserName);
   const currentUserRegularIndex = getRegularRankIndexByName(currentUserName);
-  const currentUserSeasonInfo = getSeasonRankInfoByName(currentUserName);
+  const currentUserSeasonIndex = rpRankers.findIndex(
+    (r) =>
+      (user?.id && r.id === user.id) ||
+      normalizeName(r.display_name) === normalizeName(currentUserName)
+  );
+  const currentUserSeasonInfo =
+    currentUserSeasonIndex >= 0 ? { index: currentUserSeasonIndex, ...getRPTierInfo(currentUserSeasonIndex) } : null;
   const currentUserRegularPoints =
     typeof profile?.regular_rp === 'number'
       ? profile.regular_rp
@@ -1068,6 +1091,7 @@ function App() {
     <style>{`
       @import url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansMedium.woff');
       @import url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff');
+      @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Rajdhani:wght@600;700&family=Exo+2:wght@700;800&family=Do+Hyeon&family=Jua&display=swap');
       
       body, div, span, p, h1, h2, h3, h4, button, input, select {
         font-family: 'GmarketSansMedium', sans-serif !important;
@@ -1087,6 +1111,17 @@ function App() {
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       .rank-glow-buffer { padding: 4px 2px; scrollbar-gutter: stable; }
       .rank-card-stable { transform: translateZ(0); backface-visibility: hidden; will-change: transform; }
+      .name-style-orbit { font-family: 'Orbitron', 'GmarketSansBold', sans-serif !important; letter-spacing: 0.02em; }
+      .name-style-rajdhani { font-family: 'Rajdhani', 'GmarketSansBold', sans-serif !important; letter-spacing: 0.01em; }
+      .name-style-exo { font-family: 'Exo 2', 'GmarketSansBold', sans-serif !important; letter-spacing: 0.01em; }
+      .name-style-dohyeon { font-family: 'Do Hyeon', 'GmarketSansBold', sans-serif !important; letter-spacing: 0.01em; }
+      .name-style-jua { font-family: 'Jua', 'GmarketSansBold', sans-serif !important; letter-spacing: 0.01em; }
+      .board-soft-glow {
+        box-shadow:
+          0 0 0 1px rgba(34, 211, 238, 0.28),
+          0 0 26px rgba(34, 211, 238, 0.2),
+          0 0 52px rgba(167, 139, 250, 0.12);
+      }
     `}</style>
   );
 
@@ -1117,15 +1152,19 @@ function App() {
 
       <div className="flex-1 flex flex-col z-10 relative ml-14 sm:ml-16 lg:ml-20 h-screen overflow-y-auto custom-scrollbar">
         <header className="px-3 sm:px-4 lg:px-10 py-3 sm:py-4 lg:py-6 flex justify-between items-center flex-wrap gap-3 sm:gap-4 shrink-0 border-b border-cyan-500/30 bg-black/20 backdrop-blur-md">
-          <div onMouseEnter={() => playSFX('hover')} className="flex items-center gap-2 sm:gap-3 lg:gap-6 cursor-pointer min-w-0 flex-1" onClick={() => setActiveMenu('home')}>
-            <h1 className="text-3xl sm:text-4xl lg:text-6xl font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple]">은하단</h1>
-            <div className="h-8 sm:h-10 lg:h-12 w-[2px] sm:w-[3px] bg-gradient-to-b from-cyan-400 to-purple-400 mx-1 sm:mx-2 lg:mx-3 shadow-lg"></div>
-            <div className="flex flex-col justify-center min-w-0">
-              <p className="text-[10px] sm:text-xs lg:text-sm font-bold text-white/90 italic tracking-tight truncate max-w-[52vw] sm:max-w-none">
-                "우주 먼지(Dust)로 시작해 별을 지우는 그림자(Eclipse)가 되십시오."
-              </p>
-              <p className="text-lg sm:text-2xl lg:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 uppercase tracking-wider sm:tracking-widest whitespace-nowrap">별들의 전쟁 : 시즌 1</p>
-              <p className="hidden sm:block text-[10px] lg:text-[12px] font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-purple-300 tracking-[0.25em] lg:tracking-[0.4em] mt-1 uppercase italic">SEASON 01 BATTLE FOR THE STAR THRONE</p>
+          <div onMouseEnter={() => playSFX('hover')} className="min-w-0 flex-1 cursor-pointer" onClick={() => setActiveMenu('home')}>
+            <div className="flex items-end gap-2 sm:gap-3 lg:gap-6 min-w-0 flex-wrap sm:flex-nowrap">
+              <div className="flex flex-col min-w-0 shrink-0">
+                <p className="text-[10px] sm:text-[11px] lg:text-[13px] font-bold text-white/90 italic tracking-tight leading-tight mb-1 max-w-[200px] sm:max-w-[260px] lg:max-w-[340px]">
+                  "우주 먼지(Dust)로 시작해 별을 지우는 그림자(Eclipse)가 되십시오."
+                </p>
+                <h1 className="text-3xl sm:text-4xl lg:text-6xl font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple] leading-none">은하단</h1>
+              </div>
+              <div className="h-8 sm:h-10 lg:h-12 w-[2px] sm:w-[3px] bg-gradient-to-b from-cyan-400 to-purple-400 mx-1 sm:mx-2 lg:mx-3 shadow-lg"></div>
+              <div className="flex flex-col justify-end min-w-0">
+                <p className="text-lg sm:text-2xl lg:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 uppercase tracking-wider sm:tracking-widest whitespace-nowrap">별들의 전쟁 : 시즌 1</p>
+                <p className="hidden sm:block text-[10px] lg:text-[12px] font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-purple-300 tracking-[0.25em] lg:tracking-[0.4em] mt-1 uppercase italic">SEASON 01 BATTLE FOR THE STAR THRONE</p>
+              </div>
             </div>
           </div>
           {user ? (
@@ -1140,7 +1179,7 @@ function App() {
                     <div className="flex items-center gap-3 w-full mt-1.5">
                       <span className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 flex items-center justify-center leading-none shrink-0">{currentUserSeasonInfo?.icon || '🪐'}</span>
                       <span className={`text-[1.1rem] sm:text-[1.35rem] lg:text-[1.95rem] font-black leading-tight whitespace-nowrap drop-shadow-[0_0_10px_rgba(34,211,238,0.35)] ${currentUserSeasonInfo?.color || 'text-slate-300'}`}>
-                        {currentUserSeasonInfo ? `${currentUserSeasonInfo.name} ${currentUserSeasonInfo.tierRank}위` : '미집계'}
+                        {currentUserSeasonInfo ? `${currentUserSeasonInfo.name} ${currentUserSeasonInfo.index + 1}위` : '미집계'}
                       </span>
                     </div>
                 </div>
@@ -1178,7 +1217,7 @@ function App() {
             <div className="col-span-12 xl:col-span-8 flex flex-col gap-4 lg:gap-8 h-auto xl:h-full relative order-1 xl:order-1">
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-8 items-start">
                 <div className="flex flex-col h-auto relative">
-               <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2rem] lg:rounded-[2.5rem] p-4 sm:p-5 lg:p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
+               <section className="board-soft-glow bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2rem] lg:rounded-[2.5rem] p-4 sm:p-5 lg:p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 lg:mb-6 border-b border-white/5 pb-3 lg:pb-4">
                     접속 현황 (Online Board)
                   </h3>
@@ -1197,7 +1236,7 @@ function App() {
                                   <div className="flex flex-col flex-1 min-w-0">
                                      <span className={`group-hover/profile:text-cyan-400 text-base sm:text-lg font-bold truncate ${getNameClassForUser(ou.display_name)}`}>{ou.display_name}</span>
                                      <span className={`text-[11px] font-bold mt-1 ${rankInfo?.color || ''}`}>{rankInfo ? `${rankInfo.title} ${rankInfo.num}위` : '미집계'}</span>
-                                     <span className={`text-[11px] font-bold mt-0.5 ${seasonInfo?.color || 'text-slate-400'}`}>{seasonInfo ? `${seasonInfo.name} ${seasonInfo.tierRank}위` : '미집계'}</span>
+                                     <span className={`text-[11px] font-bold mt-0.5 ${seasonInfo?.color || 'text-slate-400'}`}>{seasonInfo ? `${seasonInfo.name} ${seasonInfo.index + 1}위` : '미집계'}</span>
                                   </div>
                                </div>
                                {ou.display_name.trim() === currentUserName?.trim() ? (
@@ -1220,7 +1259,7 @@ function App() {
                 </div>
 
                 <div className="flex flex-col h-auto relative">
-               <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[2rem] lg:rounded-[3rem] p-4 sm:p-5 flex flex-col h-auto shrink-0 relative z-10 overflow-visible">
+               <section className="board-soft-glow bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[2rem] lg:rounded-[3rem] p-4 sm:p-5 flex flex-col h-auto shrink-0 relative z-10 overflow-visible">
                   <div className="flex flex-col relative z-10">
                       <h3 onMouseEnter={() => playSFX('hover')} className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3">
                          {(matchPhase === 'idle' || matchPhase === 'setup_mode') && '대전 신청 (Match Entry)'}
@@ -1433,7 +1472,7 @@ function App() {
               </div>
 
             <div ref={recentLogsBoardRef} className="flex flex-col h-[72vh] sm:h-[80vh] xl:h-[90vh] relative">
-               <section className="bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2rem] lg:rounded-[2.5rem] p-3 sm:p-4 lg:p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
+               <section className="board-soft-glow bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2rem] lg:rounded-[2.5rem] p-3 sm:p-4 lg:p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 lg:mb-6 border-b border-white/5 pb-3 lg:pb-4">
                     최근 기록 (Battle Logs)
                   </h3>
@@ -1449,7 +1488,7 @@ function App() {
               className="col-span-12 xl:col-span-4 flex flex-col h-[78vh] sm:h-[84vh] xl:h-auto relative order-2 xl:order-2"
               style={homeRankingHeight ? { height: `${homeRankingHeight}px` } : undefined}
             >
-               <section className="bg-[#060b18]/95 border-2 border-cyan-400 shadow-xl rounded-[2.4rem] sm:rounded-[3rem] lg:rounded-[3.5rem] p-4 sm:p-5 lg:p-6 flex flex-col h-full shrink-0 relative z-10 overflow-hidden">
+               <section className="board-soft-glow bg-[#060b18]/95 border-2 border-cyan-400 shadow-xl rounded-[2.4rem] sm:rounded-[3rem] lg:rounded-[3.5rem] p-4 sm:p-5 lg:p-6 flex flex-col h-full shrink-0 relative z-10 overflow-hidden">
                   <div className="pt-2 flex flex-col relative z-10 h-full">
                       
                       <div onMouseEnter={() => playSFX('hover')} className="flex items-center justify-center gap-3 sm:gap-4 lg:gap-5 mb-4 lg:mb-6 mt-1">
@@ -1485,8 +1524,8 @@ function App() {
                                       <span className={`font-bold text-base sm:text-[1.2rem] leading-tight whitespace-normal break-all ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
                                     <div className="flex flex-col items-end shrink-0">
+                                      {r.rankIndex === 0 && (<span className="font-bold text-[9px] px-2 py-1 rounded-full bg-yellow-400/20 text-yellow-400 mb-1">방어전: {r.defense_stack || 0}</span>)}
                                       <span className="font-black text-yellow-300 text-[1.15rem] sm:text-[1.5rem] tracking-tight drop-shadow-[0_0_8px_rgba(250,204,21,0.38)]">{r.regular_rp || 1000} RP</span>
-                                      {r.rankIndex === 0 && (<span className="font-bold text-[9px] px-2 py-1 rounded-full bg-yellow-400/20 text-yellow-400 mt-1">방어전: {r.defense_stack || 0}</span>)}
                                     </div>
                                   </div>
                                 </div>
@@ -1512,8 +1551,8 @@ function App() {
                                       <span className={`font-bold text-base sm:text-[1.2rem] leading-tight whitespace-normal break-all ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
                                     <div className="flex flex-col items-end shrink-0">
+                                      {(r.win_streak || 0) >= 2 && <span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 mb-1">🔥 {r.win_streak} 연승</span>}
                                       <span className="font-black text-fuchsia-400 text-[1.15rem] sm:text-[1.5rem]">{r.rp || 1000} SP</span>
-                                      {(r.win_streak || 0) >= 2 && <span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 mt-1">🔥 {r.win_streak} 연승</span>}
                                     </div>
                                   </div>
                                 </div>
@@ -1549,6 +1588,9 @@ function App() {
                     <span className="px-3 py-1.5 rounded-full bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 font-bold">
                       닉네임: {SHOP_ITEMS.find((item) => item.id === equippedItems.nameColor)?.name || '기본 화이트'}
                     </span>
+                    <span className="px-3 py-1.5 rounded-full bg-violet-500/15 border border-violet-400/40 text-violet-300 font-bold">
+                      폰트: {SHOP_ITEMS.find((item) => item.id === equippedItems.nameStyle)?.name || '기본 폰트'}
+                    </span>
                     <span className="px-3 py-1.5 rounded-full bg-fuchsia-500/15 border border-fuchsia-400/40 text-fuchsia-300 font-bold">
                       테두리: {SHOP_ITEMS.find((item) => item.id === equippedItems.borderFx)?.name || '기본 링'}
                     </span>
@@ -1559,12 +1601,19 @@ function App() {
                 </div>
               </section>
 
-              {(['nameColor', 'borderFx'] as CosmeticCategory[]).map((category) => {
-                const sectionTitle = category === 'nameColor' ? '닉네임 컬러' : '프로필 테두리 이펙트';
+              {(['nameColor', 'nameStyle', 'borderFx'] as CosmeticCategory[]).map((category) => {
+                const sectionTitle =
+                  category === 'nameColor'
+                    ? '닉네임 컬러'
+                    : category === 'nameStyle'
+                      ? '닉네임 폰트'
+                      : '프로필 테두리 이펙트';
                 const sectionDesc =
                   category === 'nameColor'
                     ? '닉네임 색상을 변경해 전장 존재감을 높이세요.'
-                    : '아바타 주변 글로우/테두리로 티어 감성을 강조하세요.';
+                    : category === 'nameStyle'
+                      ? '닉네임 전용 폰트를 장착해 개성을 강조하세요.'
+                      : '아바타 주변 글로우/테두리로 티어 감성을 강조하세요.';
                 const items = SHOP_ITEMS.filter((item) => item.category === category);
 
                 return (
@@ -1585,7 +1634,9 @@ function App() {
                         const equipped =
                           item.category === 'nameColor'
                             ? equippedItems.nameColor === item.id
-                            : equippedItems.borderFx === item.id;
+                            : item.category === 'nameStyle'
+                              ? equippedItems.nameStyle === item.id
+                              : equippedItems.borderFx === item.id;
 
                         return (
                           <div
@@ -1598,6 +1649,8 @@ function App() {
                             <div className="h-20 sm:h-24 rounded-2xl bg-black/50 border border-white/10 flex items-center justify-center mb-3 sm:mb-4">
                               {item.category === 'nameColor' ? (
                                 <span className={`text-4xl sm:text-5xl font-black ${item.accentClass}`}>닉</span>
+                              ) : item.category === 'nameStyle' ? (
+                                <span className={`text-3xl sm:text-4xl font-black ${item.accentClass} ${nameStyleClassMap[item.id] || ''}`}>Aa</span>
                               ) : (
                                 <span
                                   className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 ${
@@ -1655,12 +1708,6 @@ function App() {
 
                {mainRankTab === 'free' ? (
                  <>
-                   <div className="flex gap-4 mb-12 justify-center max-w-4xl mx-auto w-full">
-                     <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(0); }} className={`flex-1 py-5 rounded-xl text-lg font-bold transition-all border cursor-pointer ${rankTab === 0 ? 'bg-red-500/20 text-red-300 border-red-400/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>🔥 프레데터·마스터</button>
-                     <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(1); }} className={`flex-1 py-5 rounded-xl text-lg font-bold transition-all border cursor-pointer ${rankTab === 1 ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>💎 다이아·플래티넘</button>
-                     <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(2); }} className={`flex-1 py-5 rounded-xl text-lg font-bold transition-all border cursor-pointer ${rankTab === 2 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-400/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>🥇 골드·실버·브론즈·루키</button>
-                   </div>
-                   
                    <div className="flex justify-end mb-8 max-w-7xl mx-auto w-full px-4">
                      <div className="relative w-96">
                        <Search className="absolute left-6 top-4.5 text-slate-500" size={24}/>
@@ -1669,70 +1716,76 @@ function App() {
                    </div>
 
                    <div className="grid grid-cols-12 gap-10 pb-20 justify-center px-4 grid-glow-fix">
-                      {rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).filter(r => { if (rankTab === 0) return r.rankIndex < 4; if (rankTab === 1) return r.rankIndex >= 4 && r.rankIndex < 16; return r.rankIndex >= 16; }).map((r, localIdx) => {
-                           const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
-                           const isRank1 = r.rankIndex === 0;
-                           const isRank2_4 = r.rankIndex >= 1 && r.rankIndex <= 3;
-                            
-                            let spanClass = "col-span-6";
-                           let cardClass = "p-8 pt-12 pb-8 rounded-[2rem]";
-                           let badgeClass = "px-10 py-3 text-[20px] -top-7";
-                           let avatarClass = "w-20 h-20";
-                           let nameSize = r.rankIndex === 0 ? 'text-4xl' : 'text-2xl';
-                           let statSize = "text-3xl";
+                       {rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).map((r) => {
+                            const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
+                           const idx = r.rankIndex;
 
-                            if (rankTab === 0) {
-                                if (isRank1) { spanClass = "col-span-12 flex justify-center"; cardClass = "w-full max-w-5xl p-12 pt-16 pb-12 rounded-[3.5rem] shadow-[0_0_30px_rgba(250,204,21,0.5)] hover:shadow-[0_0_50px_rgba(250,204,21,0.7)] hover:scale-[1.03]"; badgeClass = "px-12 py-4 text-[26px] -top-10"; avatarClass = "w-32 h-32"; statSize = "text-5xl"; nameSize = 'text-5xl'; }
-                                else if (isRank2_4) { spanClass = "col-span-4"; cardClass = "p-6 pt-10 pb-6 rounded-[1.5rem]"; badgeClass = "px-8 py-2.5 text-[18px] -top-6"; avatarClass = "w-16 h-16"; statSize = "text-2xl"; nameSize = 'text-xl'; }
-                            } else if (rankTab === 1) {
-                                const diamondPyramid = [
-                                  "col-span-6", "col-span-6",
-                                  "col-span-4", "col-span-4", "col-span-4",
-                                  "col-span-3", "col-span-3", "col-span-3", "col-span-3",
-                                  "col-span-4", "col-span-4", "col-span-4",
-                                ];
-                                spanClass = diamondPyramid[localIdx] || "col-span-4";
-                                cardClass = "h-[178px] p-6 pt-10 pb-6 rounded-[1.6rem]";
-                                badgeClass = "px-8 py-2.5 text-[18px] -top-6";
-                                avatarClass = "w-16 h-16";
-                                statSize = "text-2xl";
-                                nameSize = 'text-xl';
-                            } else {
-                                const cycle = localIdx % 10;
-                                if (cycle < 3) spanClass = "col-span-4";
-                                else if (cycle < 7) spanClass = "col-span-3";
-                                else spanClass = "col-span-4";
-                                cardClass = "h-[168px] p-5 pt-9 pb-5 rounded-[1.2rem]";
-                                badgeClass = "px-6 py-2 text-[15px] -top-5";
-                                avatarClass = "w-14 h-14";
-                                statSize = "text-xl";
-                                nameSize = 'text-lg';
-                            }
+                           const regularPyramidPattern = [
+                             "col-span-12 flex justify-center",
+                             "col-span-6", "col-span-6",
+                             "col-span-4", "col-span-4", "col-span-4",
+                             "col-span-3", "col-span-3", "col-span-3", "col-span-3",
+                             "col-span-4", "col-span-4", "col-span-4",
+                             "col-span-6", "col-span-6",
+                           ];
+
+                           let spanClass = regularPyramidPattern[idx] || "col-span-3";
+                           let cardClass = "h-[172px] p-5 pt-9 pb-5 rounded-[1.3rem]";
+                           let badgeClass = "px-7 py-2 text-[15px] -top-5";
+                           let avatarClass = "w-14 h-14";
+                           let nameSize = "text-lg";
+                           let statSize = "text-xl";
+
+                           if (idx === 0) {
+                             spanClass = "col-span-12 flex justify-center";
+                             cardClass = "w-full max-w-5xl p-12 pt-16 pb-12 rounded-[3.5rem] shadow-[0_0_30px_rgba(250,204,21,0.5)] hover:shadow-[0_0_50px_rgba(250,204,21,0.7)] hover:scale-[1.03]";
+                             badgeClass = "px-12 py-4 text-[26px] -top-10";
+                             avatarClass = "w-32 h-32";
+                             statSize = "text-5xl";
+                             nameSize = "text-5xl";
+                           } else if (idx <= 2) {
+                             spanClass = "col-span-6";
+                             cardClass = "p-8 pt-12 pb-8 rounded-[2rem]";
+                             badgeClass = "px-10 py-3 text-[20px] -top-7";
+                             avatarClass = "w-20 h-20";
+                             statSize = "text-3xl";
+                             nameSize = "text-2xl";
+                           } else if (idx <= 5) {
+                             spanClass = "col-span-4";
+                             cardClass = "h-[178px] p-6 pt-10 pb-6 rounded-[1.6rem]";
+                             badgeClass = "px-8 py-2.5 text-[18px] -top-6";
+                             avatarClass = "w-16 h-16";
+                             statSize = "text-2xl";
+                             nameSize = "text-xl";
+                           } else if (idx <= 9) {
+                             spanClass = "col-span-3";
+                           } else if (idx <= 15) {
+                             spanClass = regularPyramidPattern[idx] || "col-span-4";
+                             cardClass = "h-[168px] p-5 pt-9 pb-5 rounded-[1.2rem]";
+                           }
 
                            return (
                              <div key={r.id} className={spanClass}>
                                 <div onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${rankCardFxByTier(r.rankIndex)} hover:brightness-110 mt-10`}>
                                    {r.rankIndex === 0 && <div className="absolute inset-0 bg-yellow-400/5 animate-pulse rounded-[3rem] pointer-events-none"></div>}
-                                   
-                                   <div className="absolute w-full flex justify-center z-20" style={{top: 0}}>
+
+                                   <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)] z-20">
+                                     {r.rankIndex + 1}위
+                                   </span>
+                                   <div className="absolute w-full flex justify-center z-20 pointer-events-none" style={{top: 0}}>
                                       <div className={`${badgeClass} absolute flex items-center justify-center`}>
                                         {grandRank.icon}
                                       </div>
                                     </div>
-                                    
-                                    <div className="mt-2 mb-1 flex justify-center">
-                                      <span className="px-4 py-1 rounded-full bg-black/70 text-cyan-200 text-sm font-black tracking-wider border border-cyan-500/35">
-                                        {r.rankIndex + 1}위
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center justify-between w-full mt-2 px-2 relative z-10 gap-4">
+
+                                    <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
                                       <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
                                         <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_20px_gold]' : 'border-white/20'} shrink-0`} alt="p"/>
                                         <span className={`group-hover:text-cyan-400 font-bold text-white truncate ${nameSize}`}>{r.display_name}</span>
                                      </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
+                                        {(r.defense_stack || 0) > 0 && (<span className="font-bold text-xs px-3 py-1 rounded-full bg-yellow-400/15 text-yellow-300 border border-yellow-400/40 mb-1">방어전: {r.defense_stack}</span>)}
                                         <span className={`font-black text-yellow-300 tracking-tight ${statSize}`}>{r.regular_rp || 1000} RP</span>
-                                        {r.rankIndex === 0 && (<span className="font-bold text-base px-4 py-1.5 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50 mt-2 shadow-[0_0_10px_gold]">👑 방어전 스택: {r.defense_stack || 0}</span>)}
                                       </div>
                                     </div>
                                 </div>
@@ -1774,18 +1827,16 @@ function App() {
                                 <div onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${seasonCardFxByTier(i)} hover:brightness-110 mt-10`}>
                                    {i === 0 && <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-[3rem] pointer-events-none"></div>}
                                    
-                                   <div className="absolute w-full flex justify-center z-20" style={{top: 0}}>
+                                   <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)] z-20">
+                                     {i + 1}위
+                                   </span>
+                                   <div className="absolute w-full flex justify-center z-20 pointer-events-none" style={{top: 0}}>
                                       <div className={`${badgeClass} absolute flex items-center justify-center`}>
                                         {tier.icon}
                                       </div>
                                     </div>
-                                    
-                                    <div className="mt-2 mb-1 flex justify-center">
-                                      <span className="px-4 py-1 rounded-full bg-black/70 text-cyan-200 text-sm font-black tracking-wider border border-cyan-500/35">
-                                        {i + 1}위
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center justify-between w-full mt-2 px-2 relative z-10 gap-4">
+
+                                    <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
                                       <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
                                         <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${i < 3 ? 'border-red-500 shadow-[0_0_20px_red]' : 'border-white/20'} shrink-0`} alt="p"/>
                                         <span className={`group-hover:text-cyan-400 font-bold text-white truncate ${nameSize}`}>{r.display_name}</span>
@@ -1857,24 +1908,28 @@ function App() {
                     장착 버튼을 누르면 즉시 전체 UI에 반영됩니다.
                   </p>
 
-                  {(['nameColor', 'borderFx'] as CosmeticCategory[]).map((category) => {
+                  {(['nameColor', 'nameStyle', 'borderFx'] as CosmeticCategory[]).map((category) => {
                     const ownedItems = SHOP_ITEMS.filter((item) => item.category === category && isOwnedItem(item.id));
                     return (
                       <div key={category} className="mb-5 sm:mb-6 last:mb-0">
                         <h4 className="text-base sm:text-lg font-black text-cyan-300 mb-3">
-                          {category === 'nameColor' ? '닉네임 컬러' : '프로필 테두리 이펙트'}
+                          {category === 'nameColor' ? '닉네임 컬러' : category === 'nameStyle' ? '닉네임 폰트' : '프로필 테두리 이펙트'}
                         </h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                           {ownedItems.map((item) => {
                             const equipped =
                               item.category === 'nameColor'
                                 ? equippedItems.nameColor === item.id
-                                : equippedItems.borderFx === item.id;
+                                : item.category === 'nameStyle'
+                                  ? equippedItems.nameStyle === item.id
+                                  : equippedItems.borderFx === item.id;
                             return (
                               <div key={item.id} className={`rounded-2xl border p-4 bg-black/55 ${equipped ? 'border-cyan-400/70 shadow-[0_0_14px_rgba(34,211,238,0.25)]' : 'border-white/10'}`}>
                                 <div className="flex items-center gap-3 mb-2">
                                   {item.category === 'nameColor' ? (
                                     <span className={`text-3xl font-black ${item.accentClass}`}>닉</span>
+                                  ) : item.category === 'nameStyle' ? (
+                                    <span className={`text-2xl font-black ${item.accentClass} ${nameStyleClassMap[item.id] || ''}`}>Aa</span>
                                   ) : (
                                     <span className={`w-10 h-10 rounded-full border-2 ${borderFxClassMap[item.id] || 'border-white/20'}`}></span>
                                   )}
@@ -1962,19 +2017,21 @@ function App() {
               
              <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-8 lg:gap-10 mb-6 sm:mb-8 mt-2">
                 <img src={selectedPlayer.avatar_url} className={`w-24 h-24 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-[2rem] sm:rounded-[2.5rem] lg:rounded-[3rem] border-4 ${isCurrentUserDisplayName(selectedPlayer.display_name) ? equippedBorderFxClass : (selectedPlayer.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_20px_gold]' : 'border-cyan-400 shadow-[0_0_20px_cyan]')} shrink-0`} alt="p" />
-                <div className="flex-1 min-w-0 flex flex-col justify-center">
-                   <div className="flex flex-wrap items-center gap-2 sm:gap-3 pb-2 min-w-0 justify-center sm:justify-start">
-                     <h2 className={`italic font-black text-3xl sm:text-4xl lg:text-5xl truncate ${getNameClassForUser(selectedPlayer.display_name)}`}>{selectedPlayer.display_name}</h2>
-                     <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 shrink-0`}>
-                       {selectedPlayerRegularInfo?.icon}
-                       {selectedPlayerRegularLabel}
-                     </span>
-                     <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerSeasonInfo?.color || 'text-slate-300'} bg-white/10 shrink-0`}>
-                        <span>{selectedPlayerSeasonInfo?.icon || '🪐'}</span>
-                        {selectedPlayerSeasonInfo?.name || '미집계'}
-                     </span>
-                   </div>
-                </div>
+                 <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <div className="flex flex-col items-center sm:items-start gap-2 pb-2 min-w-0">
+                      <h2 className={`italic font-black text-3xl sm:text-4xl lg:text-5xl truncate ${getNameClassForUser(selectedPlayer.display_name)}`}>{selectedPlayer.display_name}</h2>
+                      <div className="flex flex-col gap-2 w-full sm:w-auto">
+                        <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
+                          {selectedPlayerRegularInfo?.icon}
+                          정규랭킹 {selectedPlayerRegularLabel}
+                        </span>
+                        <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerSeasonInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
+                           <span>{selectedPlayerSeasonInfo?.icon || '🪐'}</span>
+                           시즌랭킹 {selectedPlayerSeasonInfo ? `${selectedPlayerSeasonInfo.name} ${selectedPlayerSeasonInfo.index + 1}위` : '미집계'}
+                        </span>
+                      </div>
+                    </div>
+                 </div>
              </div>
 
              <div className="flex gap-2 sm:gap-3 mb-6 sm:mb-8 justify-center">
