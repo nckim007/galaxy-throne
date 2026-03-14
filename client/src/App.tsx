@@ -558,7 +558,7 @@ function App() {
       optgroup { font-style: normal; font-weight: 700; background: #000; color: #fff; } 
       option { background-color: #000; color: #fff; padding: 10px; }
       
-      .grid-glow-fix { padding: 20px; }
+      .grid-glow-fix { padding: 34px 28px 40px; }
     `}</style>
   );
 
@@ -618,7 +618,7 @@ function App() {
 
         {activeMenu === 'home' && (
           <main className="flex-1 p-10 grid grid-cols-12 gap-8 items-start pb-20 animate-in fade-in duration-500 h-full">
-            <div className="col-span-12 xl:col-span-8 flex flex-col gap-8 h-auto relative order-1 xl:order-1">
+            <div className="col-span-12 xl:col-span-8 flex flex-col gap-8 h-auto xl:h-[85vh] relative order-1 xl:order-1">
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
                 <div className="flex flex-col h-auto relative">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
@@ -812,31 +812,37 @@ function App() {
                                </span>
                              </div>
 
-                             <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center">
-                               <div className="min-w-0">
-                                 <div className="flex items-center gap-2">
-                                   <img src={currentUserAvatar || getAvatarFallback(currentUserName, rankers)} className="w-9 h-9 rounded-full border border-cyan-300 shrink-0" alt="my-avatar"/>
-                                   <span className={`truncate ${getResponsiveNameClass(currentUserName || '', 'small')}`}>{currentUserName}</span>
-                                 </div>
-                                 <p className="mt-1 text-sm font-bold text-pink-400 truncate">레전드: {activeMatch.legend || '?'}</p>
-                                 <p className="text-sm font-bold text-cyan-300 truncate">무기: {activeMatch.weapons[0] || '?'} / {activeMatch.weapons[1] || '?'}</p>
-                               </div>
-
-                               <div className="flex items-center gap-2 whitespace-nowrap px-2">
+                             <div className="flex items-center justify-center gap-2 whitespace-nowrap px-1">
                                  <span className="text-[10px] font-black px-2 py-0.5 rounded bg-blue-600 text-white">WIN</span>
                                  <span className="text-2xl font-black text-yellow-400">{myWins ?? '-'}</span>
                                  <span className="text-3xl font-black text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)]">VS</span>
                                  <span className="text-2xl font-black text-yellow-400">{myLosses ?? '-'}</span>
                                  <span className="text-[10px] font-black px-2 py-0.5 rounded bg-red-600 text-white">LOSE</span>
+                             </div>
+
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                               <div className="min-w-0 bg-black/50 rounded-2xl border border-white/10 p-3">
+                                 <div className="flex items-start gap-2">
+                                   <img src={currentUserAvatar || getAvatarFallback(currentUserName, rankers)} className="w-10 h-10 rounded-full border border-cyan-300 shrink-0 mt-0.5" alt="my-avatar"/>
+                                   <div className="min-w-0">
+                                     <p className={`${getResponsiveNameClass(currentUserName || '', 'small')} leading-tight whitespace-normal break-all`}>{currentUserName}</p>
+                                     <p className="mt-1 text-xs font-bold text-pink-400 leading-snug whitespace-normal break-words">레전드: {activeMatch.legend || '?'}</p>
+                                     <p className="text-xs font-bold text-cyan-300 leading-snug whitespace-normal break-words">무기 1: {activeMatch.weapons[0] || '?'}</p>
+                                     <p className="text-xs font-bold text-cyan-300 leading-snug whitespace-normal break-words">무기 2: {activeMatch.weapons[1] || '?'}</p>
+                                   </div>
+                                 </div>
                                </div>
 
-                               <div className="min-w-0 text-right">
-                                 <div className="flex items-center justify-end gap-2">
-                                   <span className={`truncate ${getResponsiveNameClass(activeMatch.opponent, 'small')}`}>{activeMatch.opponent}</span>
-                                   <img src={getAvatarFallback(activeMatch.opponent, rankers)} className="w-9 h-9 rounded-full border border-pink-300 shrink-0" alt="opponent-avatar"/>
+                               <div className="min-w-0 bg-black/50 rounded-2xl border border-white/10 p-3 text-right">
+                                 <div className="flex items-start justify-end gap-2">
+                                   <div className="min-w-0">
+                                     <p className={`${getResponsiveNameClass(activeMatch.opponent, 'small')} leading-tight whitespace-normal break-all`}>{activeMatch.opponent}</p>
+                                     <p className="mt-1 text-xs font-bold text-pink-400 leading-snug whitespace-normal break-words">레전드: {activeMatch.oppLegend || '?'}</p>
+                                     <p className="text-xs font-bold text-cyan-300 leading-snug whitespace-normal break-words">무기 1: {activeMatch.oppWeapons?.[0] || '?'}</p>
+                                     <p className="text-xs font-bold text-cyan-300 leading-snug whitespace-normal break-words">무기 2: {activeMatch.oppWeapons?.[1] || '?'}</p>
+                                   </div>
+                                   <img src={getAvatarFallback(activeMatch.opponent, rankers)} className="w-10 h-10 rounded-full border border-pink-300 shrink-0 mt-0.5" alt="opponent-avatar"/>
                                  </div>
-                                 <p className="mt-1 text-sm font-bold text-pink-400 truncate">레전드: {activeMatch.oppLegend || '?'}</p>
-                                 <p className="text-sm font-bold text-cyan-300 truncate">무기: {activeMatch.oppWeapons?.[0] || '?'} / {activeMatch.oppWeapons?.[1] || '?'}</p>
                                </div>
                              </div>
                            </div>
@@ -869,7 +875,7 @@ function App() {
                 </div>
               </div>
 
-            <div className="flex flex-col h-[82vh] xl:h-full relative">
+            <div className="flex flex-col h-[82vh] xl:flex-1 xl:h-auto min-h-0 relative">
                <section className="bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2.5rem] p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
                     최근 기록 (Battle Logs)
@@ -897,17 +903,9 @@ function App() {
                         <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setMiniRankMode('random'); }} className={`flex-1 py-3 rounded-xl text-base font-bold transition-all border cursor-pointer ${miniRankMode === 'random' ? 'bg-cyan-600/20 text-cyan-400 border-cyan-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>🎲 랜덤 랭킹</button>
                       </div>
                       
-                      {miniRankMode === 'free' && (
-                        <div className="flex gap-2 mt-2 mb-2">
-                          <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(0); }} className={`flex-1 py-2.5 rounded-lg text-[11px] font-bold transition-all border cursor-pointer ${rankTab === 0 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>왕좌·성좌</button>
-                          <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(1); }} className={`flex-1 py-2.5 rounded-lg text-[11px] font-bold transition-all border cursor-pointer ${rankTab === 1 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>항성 (1~6)</button>
-                          <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setRankTab(2); }} className={`flex-1 py-2.5 rounded-lg text-[11px] font-bold transition-all border cursor-pointer ${rankTab === 2 ? 'bg-slate-500/20 text-slate-300 border-slate-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>정예</button>
-                        </div>
-                      )}
-
-                      <div className="flex-1 overflow-y-auto overflow-x-visible space-y-4 custom-scrollbar pr-2 pl-2 py-4 grid-glow-fix">
+                      <div className="flex-1 overflow-y-auto overflow-x-visible space-y-5 custom-scrollbar pr-4 pl-4 py-8 grid-glow-fix">
                          {miniRankMode === 'free' ? (
-                             rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).filter(r => { if (rankTab === 0) return r.rankIndex < 6; if (rankTab === 1) return r.rankIndex >= 6 && r.rankIndex < 12; return r.rankIndex >= 12; }).map((r) => {
+                             rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).map((r) => {
                                   const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
                                   return (
                                     <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`p-5 pt-11 pb-6 rounded-[1.75rem] border transition-all cursor-pointer group bg-black/55 flex flex-col items-center hover:scale-[1.02] ${grandRank.glow} border-cyan-400/40 hover:border-cyan-300/80 mt-6 relative`}>
