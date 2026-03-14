@@ -496,7 +496,7 @@ function App() {
       <img
         src={`${import.meta.env.BASE_URL}ranks/${name}.png`}
         alt={alt}
-        className="w-6 h-6 rounded-sm object-contain shrink-0"
+        className="w-9 h-9 object-contain shrink-0"
         loading="lazy"
         onError={(e) => {
           const target = e.currentTarget as HTMLImageElement;
@@ -613,10 +613,10 @@ function App() {
             <div className="flex items-center gap-2 mb-0.5 min-w-0">
               <img src={getAvatarFallback(leftP, rankers)} className="w-8 h-8 rounded-full border border-white/30 shrink-0" alt="left-player" />
               <span className="font-bold text-xl text-white truncate">{leftP}</span>
-              <span title={`정규 ${leftRegularLabel}`} className="w-5 h-5 rounded-full bg-black/70 border border-yellow-400/35 flex items-center justify-center shrink-0">
+              <span title={`정규 ${leftRegularLabel}`} className="w-8 h-8 rounded-full bg-black/70 flex items-center justify-center shrink-0">
                 {leftRegularInfo?.icon || <Shield size={11} className="text-slate-300" />}
               </span>
-              <span title={`시즌 ${leftSeasonInfo?.name || '미집계'}`} className={`w-5 h-5 rounded-full bg-black/70 border border-cyan-400/35 flex items-center justify-center text-[11px] font-black shrink-0 ${leftSeasonInfo?.color || 'text-slate-300'}`}>
+              <span title={`시즌 ${leftSeasonInfo?.name || '미집계'}`} className={`w-8 h-8 rounded-full bg-black/70 flex items-center justify-center text-[12px] font-black shrink-0 ${leftSeasonInfo?.color || 'text-slate-300'}`}>
                 {leftSeasonInfo?.icon || '🪐'}
               </span>
             </div>
@@ -640,10 +640,10 @@ function App() {
 
           <button onClick={() => handleProfileClick(rightP)} className={`text-right min-w-0 cursor-pointer ${!isLeftWinner ? 'opacity-100' : 'opacity-55'}`}>
             <div className="flex items-center justify-end gap-2 mb-0.5 min-w-0">
-              <span title={`시즌 ${rightSeasonInfo?.name || '미집계'}`} className={`w-5 h-5 rounded-full bg-black/70 border border-cyan-400/35 flex items-center justify-center text-[11px] font-black shrink-0 ${rightSeasonInfo?.color || 'text-slate-300'}`}>
+              <span title={`시즌 ${rightSeasonInfo?.name || '미집계'}`} className={`w-8 h-8 rounded-full bg-black/70 flex items-center justify-center text-[12px] font-black shrink-0 ${rightSeasonInfo?.color || 'text-slate-300'}`}>
                 {rightSeasonInfo?.icon || '🪐'}
               </span>
-              <span title={`정규 ${rightRegularLabel}`} className="w-5 h-5 rounded-full bg-black/70 border border-yellow-400/35 flex items-center justify-center shrink-0">
+              <span title={`정규 ${rightRegularLabel}`} className="w-8 h-8 rounded-full bg-black/70 flex items-center justify-center shrink-0">
                 {rightRegularInfo?.icon || <Shield size={11} className="text-slate-300" />}
               </span>
               <span className="font-bold text-xl text-white truncate">{rightP}</span>
@@ -679,8 +679,8 @@ function App() {
       .grid-glow-fix { padding: 20px; }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      .rank-glow-buffer { padding: 6px 0 12px; scrollbar-gutter: stable; }
-      .rank-card-stable { transform: translateZ(0); backface-visibility: hidden; }
+      .rank-glow-buffer { padding: 4px 2px; scrollbar-gutter: stable; }
+      .rank-card-stable { transform: translateZ(0); backface-visibility: hidden; will-change: transform; }
     `}</style>
   );
 
@@ -721,11 +721,11 @@ function App() {
             <div className="flex items-center gap-6">
                 <div className="flex flex-col items-start min-w-[300px] pr-2">
                     <div className="flex items-center gap-3 w-full">
-                      <span className="w-10 h-10 rounded-lg bg-black/50 border border-white/15 flex items-center justify-center shrink-0">{currentUserRegularInfo?.icon || <Shield size={20} className="text-slate-300" />}</span>
+                      <span className="w-11 h-11 rounded-lg bg-black/50 flex items-center justify-center shrink-0">{currentUserRegularInfo?.icon || <Shield size={20} className="text-slate-300" />}</span>
                       <span className="text-2xl font-black text-yellow-300 leading-tight truncate drop-shadow-[0_0_10px_rgba(250,204,21,0.4)]">정규 {currentUserRegularLabel}</span>
                     </div>
                     <div className="flex items-center gap-3 w-full mt-1.5">
-                      <span className="w-9 h-9 rounded-lg bg-black/50 border border-white/15 flex items-center justify-center text-lg shrink-0">{currentUserSeasonInfo?.icon || '🪐'}</span>
+                      <span className="w-10 h-10 rounded-lg bg-black/50 flex items-center justify-center text-xl shrink-0">{currentUserSeasonInfo?.icon || '🪐'}</span>
                       <span className={`text-2xl font-black leading-tight truncate drop-shadow-[0_0_10px_rgba(34,211,238,0.35)] ${currentUserSeasonInfo?.color || 'text-slate-300'}`}>시즌 {currentUserSeasonInfo?.name || '미집계'}</span>
                     </div>
                 </div>
@@ -1024,8 +1024,8 @@ function App() {
               className="col-span-12 xl:col-span-4 flex flex-col h-[85vh] xl:h-auto relative order-2 xl:order-2"
               style={homeRankingHeight ? { height: `${homeRankingHeight}px` } : undefined}
             >
-               <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-hidden">
-                  <div className="px-2 pt-2 flex flex-col relative z-10 h-full">
+               <section className="bg-[#060b18]/95 border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-hidden">
+                  <div className="pt-2 flex flex-col relative z-10 h-full">
                       
                       <div onMouseEnter={() => playSFX('hover')} className="flex items-center justify-center gap-5 mb-6 mt-1">
                         <Trophy className="text-yellow-400 drop-shadow-[0_0_18px_rgba(250,204,21,0.65)]" size={64}/>
@@ -1039,69 +1039,59 @@ function App() {
                         <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setMiniRankMode('random'); }} className={`flex-1 py-3 rounded-xl text-base font-bold transition-all border cursor-pointer ${miniRankMode === 'random' ? 'bg-cyan-600/20 text-cyan-400 border-cyan-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>🎲 시즌 랭킹</button>
                       </div>
                       
-                      <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 custom-scrollbar rank-glow-buffer">
-                         {miniRankMode === 'free' ? (
-                             rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).map((r, idx) => {
-                                  const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
-                                  const pyramidWidthClass =
-                                    idx === 0 ? 'w-full' :
-                                    idx < 3 ? 'w-[94%]' :
-                                    idx < 6 ? 'w-[88%]' :
-                                    idx < 10 ? 'w-[82%]' : 'w-[76%]';
-                                  return (
-                                    <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`rank-card-stable ${pyramidWidthClass} mx-auto p-4 pt-4 pb-5 rounded-[1.5rem] border transition-all cursor-pointer group bg-black/55 flex flex-col items-center border-cyan-400/40 hover:border-cyan-300/80 mt-4 relative`}>
-                                       <div className="w-full flex justify-center mb-2.5">
-                                         <div className={`px-4 py-1 rounded-full border-2 border-cyan-400/30 ${grandRank.bg} flex items-center justify-center gap-2 shadow-xl bg-black/90`}>
-                                             {grandRank.icon} 
-                                             <span className={`text-sm font-bold uppercase tracking-widest ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span>
-                                         </div>
-                                       </div>
-
-                                       <div className="flex items-center justify-between w-full px-2 relative z-10 gap-3">
-                                          <div className="flex items-center gap-4 flex-1 min-w-0 pr-2">
-                                             <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_14px_gold]' : 'border-cyan-200/40'} shrink-0`} alt="p"/>
-                                             <span className={`group-hover:text-cyan-300 font-bold text-white text-lg leading-tight break-all`}>{r.display_name}</span>
-                                          </div>
-                                          <div className="flex flex-col items-end shrink-0">
-                                            <span className="font-bold text-slate-200 text-lg tracking-tight">{r.wins}승 {r.losses}패</span>
-                                            {r.rankIndex === 0 && (<span className="font-bold text-[9px] px-2 py-1 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50 mt-1">방어전: {r.defense_stack || 0}</span>)}
-                                          </div>
-                                       </div>
+                      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar space-y-3 rank-glow-buffer">
+                          {miniRankMode === 'free' ? (
+                            rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).map((r) => {
+                              const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
+                              return (
+                                <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className="rank-card-stable w-full h-[156px] p-4 rounded-[1.45rem] border border-cyan-400/50 bg-black/65 cursor-pointer transition-all hover:border-cyan-300 shadow-[0_0_18px_rgba(34,211,238,0.22)] hover:shadow-[0_0_28px_rgba(34,211,238,0.3)] relative overflow-hidden">
+                                  <div className="w-full flex justify-center mb-2">
+                                    <div className={`${grandRank.bg} px-5 py-1 rounded-full flex items-center justify-center gap-2 shadow-[0_0_14px_rgba(0,0,0,0.35)] bg-black/88`}>
+                                      {grandRank.icon}
+                                      <span className={`text-sm font-bold uppercase tracking-widest ${grandRank.color}`}>{grandRank.title} {grandRank.num}</span>
                                     </div>
-                                  );
-                               }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400 mt-10 text-lg">랭커가 없습니다</div>)
-                         ) : (
-                             rpRankers.length > 0 ? rpRankers.filter(r => r.display_name?.includes(searchQuery)).slice(0, 10).map((r, i) => {
-                                 const tier = getRPTierInfo(i);
-                                 const pyramidWidthClass =
-                                   i === 0 ? 'w-full' :
-                                   i < 3 ? 'w-[94%]' :
-                                   i < 6 ? 'w-[88%]' :
-                                   i < 10 ? 'w-[82%]' : 'w-[76%]';
-                                 return (
-                                     <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className={`rank-card-stable ${pyramidWidthClass} mx-auto p-4 pt-4 pb-4 rounded-[1.45rem] border flex flex-col items-center bg-black/55 hover:border-cyan-300/80 transition-all cursor-pointer border-cyan-500/25 group mt-4 relative`}>
-                                         <div className="w-full flex justify-center mb-2.5">
-                                           <div className={`px-3.5 py-1 rounded-full border border-white/20 ${tier.bg} flex items-center justify-center gap-2 shadow-xl bg-black/90`}>
-                                               <span className="text-base">{tier.icon}</span> 
-                                               <span className={`text-xs font-bold uppercase tracking-widest ${tier.color}`}>{tier.name}</span>
-                                           </div>
-                                         </div>
+                                  </div>
 
-                                         <div className="flex items-center justify-between w-full px-1 relative z-10 gap-3">
-                                             <div className="flex items-center gap-4 flex-1 min-w-0">
-                                                 <span className={`text-2xl font-black ${tier.color} w-6 text-center drop-shadow-md shrink-0`}>{i + 1}</span>
-                                                 <img src={r.avatar_url} className={`w-11 h-11 rounded-full border-2 ${i < 3 ? 'border-red-500 shadow-[0_0_10px_red]' : 'border-cyan-200/40'} shrink-0`} alt="p"/>
-                                                 <span className={`group-hover:text-cyan-300 font-bold text-white text-base leading-tight break-all`}>{r.display_name}</span>
-                                             </div>
-                                             <div className="flex flex-col items-end shrink-0">
-                                                 <span className="font-black text-fuchsia-400 text-lg">{r.rp || 1000} RP</span>
-                                                 {(r.win_streak || 0) >= 2 && <span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 mt-1 shadow-[0_0_10px_emerald]">🔥 {r.win_streak} 연승</span>}
-                                             </div>
-                                         </div>
-                                     </div>
-                                 )
-                             }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400 mt-10 text-lg">데이터가 없습니다.</div>)
-                         )}
+                                  <div className="flex items-center justify-between w-full px-1 gap-3">
+                                    <div className="flex items-center gap-4 flex-1 min-w-0 pr-2">
+                                      <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_14px_gold]' : 'border-cyan-200/40'} shrink-0`} alt="p"/>
+                                      <span className="font-bold text-white text-xl leading-tight truncate">{r.display_name}</span>
+                                    </div>
+                                    <div className="flex flex-col items-end shrink-0">
+                                      <span className="font-bold text-slate-200 text-4xl tracking-tight">{r.wins}승 {r.losses}패</span>
+                                      {r.rankIndex === 0 && (<span className="font-bold text-[9px] px-2 py-1 rounded-full bg-yellow-400/20 text-yellow-400 mt-1">방어전: {r.defense_stack || 0}</span>)}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400 mt-10 text-lg">랭커가 없습니다</div>)
+                          ) : (
+                            rpRankers.length > 0 ? rpRankers.filter(r => r.display_name?.includes(searchQuery)).slice(0, 10).map((r, i) => {
+                              const tier = getRPTierInfo(i);
+                              return (
+                                <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className="rank-card-stable w-full h-[156px] p-4 rounded-[1.45rem] border border-cyan-500/35 bg-black/65 cursor-pointer transition-all hover:border-cyan-300 shadow-[0_0_18px_rgba(34,211,238,0.2)] hover:shadow-[0_0_28px_rgba(34,211,238,0.3)] relative overflow-hidden">
+                                  <div className="w-full flex justify-center mb-2">
+                                    <div className={`${tier.bg} px-5 py-1 rounded-full flex items-center justify-center gap-2 shadow-[0_0_14px_rgba(0,0,0,0.35)] bg-black/88`}>
+                                      <span className="text-lg">{tier.icon}</span>
+                                      <span className={`text-sm font-bold uppercase tracking-widest ${tier.color}`}>{tier.name}</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center justify-between w-full px-1 gap-3">
+                                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                                      <span className={`text-2xl font-black ${tier.color} w-6 text-center shrink-0`}>{i + 1}</span>
+                                      <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${i < 3 ? 'border-red-500 shadow-[0_0_10px_red]' : 'border-cyan-200/40'} shrink-0`} alt="p"/>
+                                      <span className="font-bold text-white text-xl leading-tight truncate">{r.display_name}</span>
+                                    </div>
+                                    <div className="flex flex-col items-end shrink-0">
+                                      <span className="font-black text-fuchsia-400 text-3xl">{r.rp || 1000} RP</span>
+                                      {(r.win_streak || 0) >= 2 && <span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 mt-1">🔥 {r.win_streak} 연승</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400 mt-10 text-lg">데이터가 없습니다.</div>)
+                          )}
                       </div>
 
                       <div className="relative px-2 mt-4 shrink-0">
@@ -1146,26 +1136,45 @@ function App() {
                    </div>
 
                    <div className="grid grid-cols-12 gap-10 pb-20 justify-center px-4 grid-glow-fix">
-                      {rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).filter(r => { if (rankTab === 0) return r.rankIndex < 4; if (rankTab === 1) return r.rankIndex >= 4 && r.rankIndex < 16; return r.rankIndex >= 16; }).map((r) => {
+                      {rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).filter(r => { if (rankTab === 0) return r.rankIndex < 4; if (rankTab === 1) return r.rankIndex >= 4 && r.rankIndex < 16; return r.rankIndex >= 16; }).map((r, localIdx) => {
                            const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
                            const isRank1 = r.rankIndex === 0;
                            const isRank2_4 = r.rankIndex >= 1 && r.rankIndex <= 3;
-                           
-                           let spanClass = "col-span-6";
+                            
+                            let spanClass = "col-span-6";
                            let cardClass = "p-8 pt-12 pb-8 rounded-[2rem]";
                            let badgeClass = "px-10 py-3 text-[20px] -top-7";
                            let avatarClass = "w-20 h-20";
                            let nameSize = r.rankIndex === 0 ? 'text-4xl' : 'text-2xl';
                            let statSize = "text-3xl";
 
-                           if (rankTab === 0) {
-                               if (isRank1) { spanClass = "col-span-12 flex justify-center"; cardClass = "w-full max-w-5xl p-12 pt-16 pb-12 rounded-[3.5rem] shadow-[0_0_30px_rgba(250,204,21,0.5)] hover:shadow-[0_0_50px_rgba(250,204,21,0.7)] hover:scale-[1.03]"; badgeClass = "px-12 py-4 text-[26px] -top-10"; avatarClass = "w-32 h-32"; statSize = "text-5xl"; nameSize = 'text-5xl'; }
-                               else if (isRank2_4) { spanClass = "col-span-4"; cardClass = "p-6 pt-10 pb-6 rounded-[1.5rem]"; badgeClass = "px-8 py-2.5 text-[18px] -top-6"; avatarClass = "w-16 h-16"; statSize = "text-2xl"; nameSize = 'text-xl'; }
-                           } else if (rankTab === 1) {
-                               spanClass = "col-span-4"; cardClass = "p-6 pt-10 pb-6 rounded-[1.5rem]"; badgeClass = "px-8 py-2.5 text-[18px] -top-6"; avatarClass = "w-16 h-16"; statSize = "text-2xl"; nameSize = 'text-xl';
-                           } else {
-                               spanClass = "col-span-3"; cardClass = "p-5 pt-8 pb-5 rounded-xl"; badgeClass = "px-6 py-2 text-[15px] -top-5"; avatarClass = "w-14 h-14"; statSize = "text-xl"; nameSize = 'text-lg';
-                           }
+                            if (rankTab === 0) {
+                                if (isRank1) { spanClass = "col-span-12 flex justify-center"; cardClass = "w-full max-w-5xl p-12 pt-16 pb-12 rounded-[3.5rem] shadow-[0_0_30px_rgba(250,204,21,0.5)] hover:shadow-[0_0_50px_rgba(250,204,21,0.7)] hover:scale-[1.03]"; badgeClass = "px-12 py-4 text-[26px] -top-10"; avatarClass = "w-32 h-32"; statSize = "text-5xl"; nameSize = 'text-5xl'; }
+                                else if (isRank2_4) { spanClass = "col-span-4"; cardClass = "p-6 pt-10 pb-6 rounded-[1.5rem]"; badgeClass = "px-8 py-2.5 text-[18px] -top-6"; avatarClass = "w-16 h-16"; statSize = "text-2xl"; nameSize = 'text-xl'; }
+                            } else if (rankTab === 1) {
+                                const diamondPyramid = [
+                                  "col-span-6", "col-span-6",
+                                  "col-span-4", "col-span-4", "col-span-4",
+                                  "col-span-3", "col-span-3", "col-span-3", "col-span-3",
+                                  "col-span-4", "col-span-4", "col-span-4",
+                                ];
+                                spanClass = diamondPyramid[localIdx] || "col-span-4";
+                                cardClass = "h-[178px] p-6 pt-10 pb-6 rounded-[1.6rem]";
+                                badgeClass = "px-8 py-2.5 text-[18px] -top-6";
+                                avatarClass = "w-16 h-16";
+                                statSize = "text-2xl";
+                                nameSize = 'text-xl';
+                            } else {
+                                const cycle = localIdx % 10;
+                                if (cycle < 3) spanClass = "col-span-4";
+                                else if (cycle < 7) spanClass = "col-span-3";
+                                else spanClass = "col-span-4";
+                                cardClass = "h-[168px] p-5 pt-9 pb-5 rounded-[1.2rem]";
+                                badgeClass = "px-6 py-2 text-[15px] -top-5";
+                                avatarClass = "w-14 h-14";
+                                statSize = "text-xl";
+                                nameSize = 'text-lg';
+                            }
 
                            return (
                              <div key={r.id} className={spanClass}>
@@ -1173,9 +1182,9 @@ function App() {
                                    {r.rankIndex === 0 && <div className="absolute inset-0 bg-yellow-400/5 animate-pulse rounded-[3rem] pointer-events-none"></div>}
                                    
                                    <div className="absolute w-full flex justify-center z-20" style={{top: 0}}>
-                                     <div className={`${badgeClass} absolute rounded-full border-2 border-cyan-400/30 ${grandRank.bg} flex items-center justify-center gap-3 shadow-2xl bg-black`}>
-                                       {grandRank.icon} <span className={`font-bold uppercase tracking-widest ${grandRank.color} text-center`}>{grandRank.title} {grandRank.num}</span>
-                                     </div>
+                                     <div className={`${badgeClass} absolute rounded-full ${grandRank.bg} flex items-center justify-center gap-3 shadow-2xl bg-black`}>
+                                        {grandRank.icon} <span className={`font-bold uppercase tracking-widest ${grandRank.color} text-center`}>{grandRank.title} {grandRank.num}</span>
+                                      </div>
                                    </div>
                                    
                                    <div className="flex items-center justify-between w-full mt-4 px-2 relative z-10 gap-4">
@@ -1228,10 +1237,10 @@ function App() {
                                    {i === 0 && <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-[3rem] pointer-events-none"></div>}
                                    
                                    <div className="absolute w-full flex justify-center z-20" style={{top: 0}}>
-                                     <div className={`${badgeClass} absolute rounded-full border-2 border-white/20 ${tier.bg} flex items-center justify-center gap-3 shadow-2xl bg-black`}>
-                                       <span className="text-2xl">{tier.icon}</span> 
-                                       <span className={`font-bold uppercase tracking-widest ${tier.color} text-center`}>{tier.name}</span>
-                                     </div>
+                                     <div className={`${badgeClass} absolute rounded-full ${tier.bg} flex items-center justify-center gap-3 shadow-2xl bg-black`}>
+                                        <span className="text-2xl">{tier.icon}</span> 
+                                        <span className={`font-bold uppercase tracking-widest ${tier.color} text-center`}>{tier.name}</span>
+                                      </div>
                                    </div>
                                    
                                    <div className="flex items-center justify-between w-full mt-4 px-2 relative z-10 gap-4">
