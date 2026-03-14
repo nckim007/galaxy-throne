@@ -561,7 +561,7 @@ function App() {
       .grid-glow-fix { padding: 20px; }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      .rank-glow-buffer { padding: 46px 56px 50px; }
+      .rank-glow-buffer { padding: 28px 20px 36px; }
     `}</style>
   );
 
@@ -620,8 +620,8 @@ function App() {
         </header>
 
         {activeMenu === 'home' && (
-          <main className="flex-1 p-10 grid grid-cols-12 gap-8 items-start pb-20 animate-in fade-in duration-500 h-full">
-            <div className="col-span-12 xl:col-span-8 flex flex-col gap-8 h-auto relative order-1 xl:order-1">
+          <main className="flex-1 p-10 grid grid-cols-12 gap-8 items-start xl:items-stretch pb-20 animate-in fade-in duration-500 h-full">
+            <div className="col-span-12 xl:col-span-8 flex flex-col gap-8 h-auto xl:h-full relative order-1 xl:order-1">
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
                 <div className="flex flex-col h-auto relative">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
@@ -816,31 +816,33 @@ function App() {
                              </div>
 
                              <div className="flex items-center justify-center gap-2 whitespace-nowrap px-1">
-                                 <span className="text-[10px] font-black px-2 py-0.5 rounded bg-blue-600 text-white">WIN</span>
-                                 <span className="text-2xl font-black text-yellow-400">{myWins ?? '-'}</span>
-                                 <span className="text-3xl font-black text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)]">VS</span>
-                                 <span className="text-2xl font-black text-yellow-400">{myLosses ?? '-'}</span>
-                                 <span className="text-[10px] font-black px-2 py-0.5 rounded bg-red-600 text-white">LOSE</span>
+                                 <span className="text-3xl font-black text-yellow-400">{myWins ?? '-'}</span>
+                                 <span className="text-4xl font-black text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)]">VS</span>
+                                 <span className="text-3xl font-black text-yellow-400">{myLosses ?? '-'}</span>
                              </div>
 
                              <div className="space-y-2 mt-2">
                                <div className="bg-black/50 rounded-xl border border-white/10 px-3 py-2">
-                                 <div className="flex items-center gap-3 whitespace-nowrap overflow-x-auto no-scrollbar">
-                                   <img src={currentUserAvatar || getAvatarFallback(currentUserName, rankers)} className="w-8 h-8 rounded-full border border-cyan-300 shrink-0" alt="my-avatar"/>
-                                   <span className="text-sm font-bold text-white shrink-0">{currentUserName}</span>
-                                   <span className="text-sm font-bold text-pink-400 shrink-0">레전드: {activeMatch.legend || '?'}</span>
-                                   <span className="text-sm font-bold text-cyan-300 shrink-0">무기 1: {activeMatch.weapons[0] || '?'}</span>
-                                   <span className="text-sm font-bold text-cyan-300 shrink-0">무기 2: {activeMatch.weapons[1] || '?'}</span>
+                                 <div className="flex items-start gap-3">
+                                   <img src={currentUserAvatar || getAvatarFallback(currentUserName, rankers)} className="w-8 h-8 rounded-full border border-cyan-300 shrink-0 mt-0.5" alt="my-avatar"/>
+                                   <div className="min-w-0">
+                                     <p className="text-base font-bold text-white leading-tight break-all">{currentUserName}</p>
+                                     <p className="text-sm font-bold text-pink-400 leading-snug whitespace-normal break-words">레전드: {activeMatch.legend || '?'}</p>
+                                     <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">무기 1: {activeMatch.weapons[0] || '?'}</p>
+                                     <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">무기 2: {activeMatch.weapons[1] || '?'}</p>
+                                   </div>
                                  </div>
                                </div>
 
                                <div className="bg-black/50 rounded-xl border border-white/10 px-3 py-2">
-                                 <div className="flex items-center gap-3 whitespace-nowrap overflow-x-auto no-scrollbar">
-                                   <img src={getAvatarFallback(activeMatch.opponent, rankers)} className="w-8 h-8 rounded-full border border-pink-300 shrink-0" alt="opponent-avatar"/>
-                                   <span className="text-sm font-bold text-white shrink-0">{activeMatch.opponent}</span>
-                                   <span className="text-sm font-bold text-pink-400 shrink-0">레전드: {activeMatch.oppLegend || '?'}</span>
-                                   <span className="text-sm font-bold text-cyan-300 shrink-0">무기 1: {activeMatch.oppWeapons?.[0] || '?'}</span>
-                                   <span className="text-sm font-bold text-cyan-300 shrink-0">무기 2: {activeMatch.oppWeapons?.[1] || '?'}</span>
+                                 <div className="flex items-start gap-3">
+                                   <img src={getAvatarFallback(activeMatch.opponent, rankers)} className="w-8 h-8 rounded-full border border-pink-300 shrink-0 mt-0.5" alt="opponent-avatar"/>
+                                   <div className="min-w-0">
+                                     <p className="text-base font-bold text-white leading-tight break-all">{activeMatch.opponent}</p>
+                                     <p className="text-sm font-bold text-pink-400 leading-snug whitespace-normal break-words">레전드: {activeMatch.oppLegend || '?'}</p>
+                                     <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">무기 1: {activeMatch.oppWeapons?.[0] || '?'}</p>
+                                     <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">무기 2: {activeMatch.oppWeapons?.[1] || '?'}</p>
+                                   </div>
                                  </div>
                                </div>
                              </div>
@@ -874,7 +876,7 @@ function App() {
                 </div>
               </div>
 
-            <div className="flex flex-col h-[82vh] xl:h-full relative">
+            <div className="flex flex-col h-[82vh] xl:flex-1 xl:min-h-0 relative">
                <section className="bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2.5rem] p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
                     최근 기록 (Battle Logs)
@@ -886,7 +888,7 @@ function App() {
             </div>
             </div>
 
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[85vh] xl:h-[85vh] relative order-2 xl:order-2">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-[85vh] xl:h-full relative order-2 xl:order-2">
                <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-visible">
                   <div className="px-2 pt-2 flex flex-col relative z-10 h-full">
                       
@@ -902,7 +904,7 @@ function App() {
                         <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setMiniRankMode('random'); }} className={`flex-1 py-3 rounded-xl text-base font-bold transition-all border cursor-pointer ${miniRankMode === 'random' ? 'bg-cyan-600/20 text-cyan-400 border-cyan-500/50 shadow-md' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>🎲 랜덤 랭킹</button>
                       </div>
                       
-                      <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-5 custom-scrollbar rank-glow-buffer">
+                      <div className="flex-1 overflow-y-auto overflow-x-visible space-y-5 custom-scrollbar rank-glow-buffer">
                          {miniRankMode === 'free' ? (
                              rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).map((r) => {
                                   const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
@@ -919,7 +921,7 @@ function App() {
                                        <div className="flex items-center justify-between w-full px-2 relative z-10 gap-3 mt-1">
                                           <div className="flex items-center gap-4 flex-1 min-w-0 pr-2">
                                              <img src={r.avatar_url} className={`w-14 h-14 rounded-full border-2 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_18px_gold]' : 'border-cyan-200/40'} shrink-0`} alt="p"/>
-                                             <span className={`group-hover:text-cyan-300 font-bold text-white text-xl truncate`}>{r.display_name}</span>
+                                             <span className={`group-hover:text-cyan-300 font-bold text-white text-xl leading-tight break-all`}>{r.display_name}</span>
                                           </div>
                                           <div className="flex flex-col items-end shrink-0">
                                             <span className="font-bold text-slate-200 text-xl tracking-tight">{r.wins}승 {r.losses}패</span>
@@ -946,7 +948,7 @@ function App() {
                                              <div className="flex items-center gap-4 flex-1 min-w-0">
                                                  <span className={`text-2xl font-black ${tier.color} w-6 text-center drop-shadow-md shrink-0`}>{i + 1}</span>
                                                  <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${i < 3 ? 'border-red-500 shadow-[0_0_12px_red]' : 'border-cyan-200/40'} shrink-0`} alt="p"/>
-                                                 <span className={`group-hover:text-cyan-300 font-bold text-white text-xl truncate`}>{r.display_name}</span>
+                                                 <span className={`group-hover:text-cyan-300 font-bold text-white text-xl leading-tight break-all`}>{r.display_name}</span>
                                              </div>
                                              <div className="flex flex-col items-end shrink-0">
                                                  <span className="font-black text-fuchsia-400 text-xl">{r.rp || 1000} RP</span>
