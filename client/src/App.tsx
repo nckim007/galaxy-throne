@@ -217,6 +217,7 @@ function App() {
   });
   const rankCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
+  const activeScrollTargetRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => { activeMatchRef.current = activeMatch; }, [activeMatch]);
   useEffect(() => { matchPhaseRef.current = matchPhase; }, [matchPhase]);
@@ -226,15 +227,36 @@ function App() {
   }, [mainRankTab, searchQuery]);
 
   useEffect(() => {
-    const node = mainScrollRef.current;
-    if (!node) return;
-    const onScroll = () => {
-      setShowScrollTop(node.scrollTop > 260);
+    const onPointerDown = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const scroller = target.closest?.('.custom-scrollbar') as HTMLElement | null;
+      if (!scroller) return;
+      activeScrollTargetRef.current = scroller;
+      setShowScrollTop(scroller.scrollTop > 260);
     };
-    onScroll();
-    node.addEventListener('scroll', onScroll, { passive: true });
-    return () => node.removeEventListener('scroll', onScroll);
+
+    const onScrollCapture = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || !target.classList?.contains('custom-scrollbar')) return;
+      activeScrollTargetRef.current = target;
+      setShowScrollTop(target.scrollTop > 260);
+    };
+
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('scroll', onScrollCapture, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('scroll', onScrollCapture, true);
+    };
   }, []);
+
+  useEffect(() => {
+    if (mainScrollRef.current) {
+      activeScrollTargetRef.current = mainScrollRef.current;
+      setShowScrollTop(mainScrollRef.current.scrollTop > 260);
+    }
+  }, [activeMenu]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -2178,26 +2200,37 @@ function App() {
                              <span className="text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)]">
                                {r.rankIndex + 1}위
                              </span>
-                             {move > 0 && <span className="text-sm font-black text-emerald-300">▲{move}</span>}
-                             {move < 0 && <span className="text-sm font-black text-red-300">▼{Math.abs(move)}</span>}
+                             {move > 0 && (
+                               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm sm:text-base font-black text-emerald-200 bg-emerald-500/18 border border-emerald-400/45 shadow-[0_0_10px_rgba(16,185,129,0.35)]">
+                                 ▲ {move}
+                               </span>
+                             )}
+                             {move < 0 && (
+                               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm sm:text-base font-black text-rose-200 bg-rose-500/18 border border-rose-400/45 shadow-[0_0_10px_rgba(244,63,94,0.35)]">
+                                 ▼ {Math.abs(move)}
+                               </span>
+                             )}
                            </div>
+
+                           {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 2) && (
+                             <div className="absolute right-3 sm:right-4 top-3 flex flex-col items-end gap-1.5 z-20">
+                               {(r.defense_stack || 0) > 0 && (
+                                 <span className="font-black text-sm sm:text-base px-3.5 py-1.5 rounded-full bg-red-500/18 text-red-200 border border-red-400/45 shadow-[0_0_12px_rgba(248,113,113,0.35)]">
+                                   🛡 방어전 {r.defense_stack} · +{defenseBonus}GC
+                                 </span>
+                               )}
+                               {(r.win_streak || 0) >= 2 && (
+                                 <span className="font-black text-sm sm:text-base px-3.5 py-1.5 rounded-full bg-emerald-500/16 text-emerald-200 border border-emerald-400/45 shadow-[0_0_12px_rgba(52,211,153,0.35)]">
+                                   🔥 {r.win_streak}연승{streakBounty > 0 ? ` · 현상금 ${streakBounty}GC` : ''}
+                                 </span>
+                               )}
+                             </div>
+                           )}
 
                            <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
                              <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
                                <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${r.rankIndex === 0 ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.65)]' : 'border-white/20'} shrink-0`} alt="p"/>
                                <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameClass}`}>{r.display_name}</span>
-                             </div>
-                             <div className="flex flex-col items-end shrink-0 ml-2">
-                               {(r.defense_stack || 0) > 0 && (
-                                 <span className="font-bold text-xs px-3 py-1 rounded-full bg-red-500/15 text-red-300 border border-red-400/40 mb-1">
-                                   방어전 {r.defense_stack} · +{defenseBonus}GC
-                                 </span>
-                               )}
-                               {(r.win_streak || 0) >= 2 && (
-                                 <span className="font-bold text-xs px-3 py-1 rounded-full bg-emerald-500/12 text-emerald-300 border border-emerald-400/35 mb-1">
-                                   🔥 {r.win_streak}연승{streakBounty > 0 ? ` · 현상금 ${streakBounty}GC` : ''}
-                                 </span>
-                               )}
                              </div>
                            </div>
                          </div>
@@ -2291,13 +2324,36 @@ function App() {
                                     <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)] z-20">
                                       {i + 1}위
                                     </span>
-                                    {move > 0 && <span className="absolute left-20 sm:left-24 top-4 text-sm font-black text-emerald-300 z-20">▲{move}</span>}
-                                    {move < 0 && <span className="absolute left-20 sm:left-24 top-4 text-sm font-black text-red-300 z-20">▼{Math.abs(move)}</span>}
+                                    {move > 0 && (
+                                      <span className="absolute left-20 sm:left-24 top-3.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm sm:text-base font-black text-emerald-200 bg-emerald-500/18 border border-emerald-400/45 shadow-[0_0_10px_rgba(16,185,129,0.35)] z-20">
+                                        ▲ {move}
+                                      </span>
+                                    )}
+                                    {move < 0 && (
+                                      <span className="absolute left-20 sm:left-24 top-3.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm sm:text-base font-black text-rose-200 bg-rose-500/18 border border-rose-400/45 shadow-[0_0_10px_rgba(244,63,94,0.35)] z-20">
+                                        ▼ {Math.abs(move)}
+                                      </span>
+                                    )}
                                     <div className="absolute w-full flex justify-center z-20 pointer-events-none" style={{top: 0}}>
                                        <div className={`${badgeClass} absolute flex items-center justify-center`}>
                                          {tier.icon}
                                       </div>
                                     </div>
+
+                                    {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 2) && (
+                                      <div className="absolute right-3 sm:right-4 top-3 flex flex-col items-end gap-1.5 z-20">
+                                        {(r.defense_stack || 0) > 0 && (
+                                          <span className="font-black text-sm sm:text-base px-3.5 py-1.5 rounded-full bg-red-500/18 text-red-200 border border-red-400/45 shadow-[0_0_12px_rgba(248,113,113,0.35)]">
+                                            🛡 방어전 {r.defense_stack} · +{defenseBonus}GC
+                                          </span>
+                                        )}
+                                        {(r.win_streak || 0) >= 2 && (
+                                          <span className="font-black text-sm sm:text-base px-3.5 py-1.5 rounded-full bg-emerald-500/16 text-emerald-200 border border-emerald-400/45 shadow-[0_0_12px_rgba(52,211,153,0.35)]">
+                                            🔥 {r.win_streak}연승{streakBounty > 0 ? ` · 현상금 ${streakBounty}GC` : ''}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
 
                                     <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
                                       <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
@@ -2305,16 +2361,6 @@ function App() {
                                         <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameSize}`}>{r.display_name}</span>
                                       </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
-                                       {(r.defense_stack || 0) > 0 && (
-                                         <span className="font-bold text-xs px-3 py-1 rounded-full bg-red-500/15 text-red-300 border border-red-400/40 mb-1">
-                                           방어전 {r.defense_stack} · +{defenseBonus}GC
-                                         </span>
-                                       )}
-                                       {(r.win_streak || 0) >= 2 && (
-                                         <span className="font-bold text-xs px-3 py-1 rounded-full bg-emerald-500/12 text-emerald-300 border border-emerald-400/35 mb-1">
-                                           🔥 {r.win_streak}연승{streakBounty > 0 ? ` · 현상금 ${streakBounty}GC` : ''}
-                                         </span>
-                                       )}
                                        <span className={`font-black text-fuchsia-400 tracking-tight ${statSize}`}>{r.rp || 1000}</span>
                                        <span className="text-[10px] font-black text-slate-400 tracking-wider">시즌 포인트</span>
                                      </div>
@@ -2694,9 +2740,8 @@ function App() {
           onMouseEnter={() => playSFX('hover')}
           onClick={() => {
             playSFX('click');
-            if (mainScrollRef.current) {
-              mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-            }
+            const target = activeScrollTargetRef.current || mainScrollRef.current;
+            target?.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           className="fixed right-4 sm:right-6 bottom-4 sm:bottom-6 z-[240] hvr-grow hvr-glow px-4 py-3 rounded-full border border-cyan-400/60 bg-black/65 text-cyan-300 font-black shadow-[0_0_16px_rgba(34,211,238,0.35)] cursor-pointer"
         >
