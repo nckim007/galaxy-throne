@@ -371,45 +371,65 @@ function App() {
     const rightP = log.right_player_name || log.right_player;
     
     const isLeftWinner = log.winner_name === leftP;
+    const modeLabel = log.match_type === 'free' ? '자유 대전' : '랜덤 대전';
     const winnerName = isLeftWinner ? leftP : rightP;
-    const loserName = isLeftWinner ? rightP : leftP;
-    
-    const winnerLegend = isLeftWinner ? log.left_legend : log.right_legend;
-    const winnerWeapons = isLeftWinner ? log.left_weapons : log.right_weapons;
-    const loserLegend = isLeftWinner ? log.right_legend : log.left_legend;
-    const loserWeapons = isLeftWinner ? log.right_weapons : log.left_weapons;
-    
-    const winnerAvatar = getAvatarFallback(winnerName, rankers);
-    const loserAvatar = getAvatarFallback(loserName, rankers);
-
-    const winScore = isLeftWinner ? log.score_left : log.score_right;
-    const loseScore = isLeftWinner ? log.score_right : log.score_left;
 
     return (
       <div
         key={index}
         onMouseEnter={() => playSFX('hover')}
-        className="bg-black/55 border border-white/10 px-4 py-3 rounded-2xl flex items-center gap-3 hover:border-cyan-500/50 transition-colors shadow-md"
+        className="bg-black/55 border border-white/10 rounded-2xl p-3 hover:border-cyan-500/50 transition-colors shadow-md"
       >
-        <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black tracking-widest shrink-0 ${log.match_type === 'free' ? 'bg-pink-600 text-white' : 'bg-cyan-600 text-black'}`}>
-          {log.match_type === 'free' ? 'FREE' : 'RANDOM'}
-        </span>
-        <span className="bg-blue-600 border border-blue-400 text-white text-[11px] font-black px-2.5 py-1 rounded-md shrink-0">WIN</span>
-        <button onClick={() => handleProfileClick(winnerName)} className="flex items-center gap-2 min-w-0 shrink max-w-[180px] cursor-pointer hover:opacity-80">
-          <img src={winnerAvatar} className="w-7 h-7 rounded-full border border-yellow-400 shrink-0" alt="winner" />
-          <span className="text-white font-bold text-sm truncate">{winnerName}</span>
-        </button>
-        <span className="text-yellow-400 font-black text-lg shrink-0">{winScore}</span>
-        <span className="text-slate-600 font-black text-sm shrink-0">VS</span>
-        <span className="bg-red-600 border border-red-400 text-white text-[11px] font-black px-2.5 py-1 rounded-md shrink-0">LOSE</span>
-        <button onClick={() => handleProfileClick(loserName)} className="flex items-center gap-2 min-w-0 shrink max-w-[180px] cursor-pointer hover:opacity-80">
-          <img src={loserAvatar} className="w-7 h-7 rounded-full border border-slate-500 shrink-0" alt="loser" />
-          <span className="text-slate-300 font-bold text-sm truncate">{loserName}</span>
-        </button>
-        <span className="text-slate-400 font-black text-base shrink-0">{loseScore}</span>
-        <span className="ml-auto text-xs font-bold text-cyan-300 truncate max-w-[42%] text-right">
-          [{winnerLegend || '미선택'}] {winnerWeapons?.[0] || '미선택'} / {winnerWeapons?.[1] || '미선택'}
-        </span>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black tracking-widest ${log.match_type === 'free' ? 'bg-pink-600 text-white' : 'bg-cyan-600 text-black'}`}>
+            {modeLabel}
+          </span>
+          <span className="text-[11px] font-bold text-emerald-400 tracking-wide truncate">{winnerName} 승리</span>
+          <span className="text-sm font-black text-slate-200 shrink-0">{log.score_left ?? 0} : {log.score_right ?? 0}</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {[{
+            name: leftP,
+            legend: log.left_legend,
+            weapons: log.left_weapons,
+            score: log.score_left,
+            isWinner: isLeftWinner,
+          }, {
+            name: rightP,
+            legend: log.right_legend,
+            weapons: log.right_weapons,
+            score: log.score_right,
+            isWinner: !isLeftWinner,
+          }].map((player, playerIndex) => (
+            <button
+              key={`${index}-${playerIndex}`}
+              onClick={() => handleProfileClick(player.name)}
+              className={`w-full text-left rounded-xl border p-2.5 transition-colors cursor-pointer ${
+                player.isWinner
+                  ? 'border-cyan-400/50 bg-cyan-500/10'
+                  : 'border-white/10 bg-black/45 hover:border-cyan-400/40'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <img
+                  src={getAvatarFallback(player.name, rankers)}
+                  className={`w-8 h-8 rounded-full border shrink-0 ${player.isWinner ? 'border-cyan-300' : 'border-slate-500'}`}
+                  alt="player"
+                />
+                <span className="font-bold text-sm text-white truncate">{player.name}</span>
+                <span className={`ml-auto text-[10px] font-black px-2 py-0.5 rounded ${player.isWinner ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>
+                  {player.isWinner ? 'WIN' : 'LOSE'}
+                </span>
+                <span className="text-sm font-black text-yellow-400 shrink-0">{player.score ?? 0}</span>
+              </div>
+              <div className="mt-1.5 text-xs font-bold text-pink-400 truncate">레전드: {player.legend || '미선택'}</div>
+              <div className="text-xs font-bold text-cyan-300 truncate">
+                무기: {player.weapons?.[0] || '미선택'} / {player.weapons?.[1] || '미선택'}
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
     );
   };
@@ -491,8 +511,8 @@ function App() {
         </header>
 
         {activeMenu === 'home' && (
-          <main className="flex-1 p-10 grid grid-cols-12 gap-8 items-stretch pb-20 animate-in fade-in duration-500 h-full">
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[52vh] relative">
+          <main className="flex-1 p-10 grid grid-cols-12 xl:grid-rows-[52vh_31vh] gap-8 items-stretch pb-20 animate-in fade-in duration-500 h-full">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-[52vh] xl:h-full relative order-1 xl:order-1">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <div className="flex gap-2 p-1.5 bg-black/50 rounded-2xl border border-white/5 mb-4 shrink-0">
                     <div className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-lg font-bold bg-cyan-600 text-black shadow-lg">
@@ -542,7 +562,7 @@ function App() {
                </section>
             </div>
 
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[52vh] relative">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-[52vh] xl:h-full relative order-2 xl:order-2">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-y-auto custom-scrollbar pr-3">
                   <div className="flex flex-col relative z-10">
                       <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
@@ -742,7 +762,7 @@ function App() {
                </section>
             </div>
 
-            <div className="col-span-12 xl:col-span-8 flex flex-col h-[31vh] relative">
+            <div className="col-span-12 xl:col-span-8 flex flex-col h-[31vh] xl:h-full relative order-4 xl:order-4">
                <section className="bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2.5rem] p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
                   <div className="flex items-center justify-between gap-3 mb-4 px-1 shrink-0">
                     <div className="flex items-center gap-2">
@@ -757,7 +777,7 @@ function App() {
                </section>
             </div>
 
-            <div className="col-span-12 lg:col-span-4 flex flex-col h-[85vh] relative">
+            <div className="col-span-12 xl:col-span-4 xl:row-span-2 flex flex-col h-[85vh] xl:h-full relative order-3 xl:order-3">
                <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-hidden">
                   <div className="px-2 pt-2 flex flex-col relative z-10 h-full">
                       
