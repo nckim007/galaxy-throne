@@ -390,7 +390,8 @@ function App() {
               <span className="font-bold text-2xl text-white truncate">{leftP}</span>
             </div>
             <p className="text-base font-bold text-pink-400 truncate">레전드: {log.left_legend || '미선택'}</p>
-            <p className="text-base font-bold text-cyan-300 truncate">무기: {log.left_weapons?.[0] || '미선택'} / {log.left_weapons?.[1] || '미선택'}</p>
+            <p className="text-base font-bold text-cyan-300 leading-tight">무기 1 : {log.left_weapons?.[0] || '미선택'}</p>
+            <p className="text-base font-bold text-cyan-300 leading-tight">무기 2 : {log.left_weapons?.[1] || '미선택'}</p>
           </button>
 
           <div className="flex flex-col items-center">
@@ -412,7 +413,8 @@ function App() {
               <img src={getAvatarFallback(rightP, rankers)} className="w-9 h-9 rounded-full border border-white/30 shrink-0" alt="right-player" />
             </div>
             <p className="text-base font-bold text-pink-400 truncate">레전드: {log.right_legend || '미선택'}</p>
-            <p className="text-base font-bold text-cyan-300 truncate">무기: {log.right_weapons?.[0] || '미선택'} / {log.right_weapons?.[1] || '미선택'}</p>
+            <p className="text-base font-bold text-cyan-300 leading-tight">무기 1 : {log.right_weapons?.[0] || '미선택'}</p>
+            <p className="text-base font-bold text-cyan-300 leading-tight">무기 2 : {log.right_weapons?.[1] || '미선택'}</p>
           </button>
         </div>
       </div>
@@ -497,7 +499,7 @@ function App() {
 
         {activeMenu === 'home' && (
           <main className="flex-1 p-10 grid grid-cols-12 xl:grid-rows-[auto_auto] gap-8 items-stretch pb-20 animate-in fade-in duration-500 h-full">
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-auto xl:h-full relative order-1 xl:order-1">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-[56vh] xl:h-[56vh] relative order-1 xl:order-1">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
                     접속 현황 (Online Board)
