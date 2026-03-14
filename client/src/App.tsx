@@ -588,6 +588,8 @@ function App() {
   const renderCombatLogItem = (log: any, index: number) => {
     const leftP = log.left_player_name || log.left_player;
     const rightP = log.right_player_name || log.right_player;
+    const leftRegularInfo = getRegularRankInfoByName(leftP);
+    const rightRegularInfo = getRegularRankInfoByName(rightP);
     const leftRegularLabel = getRegularRankLabelByName(leftP);
     const rightRegularLabel = getRegularRankLabelByName(rightP);
     const leftSeasonInfo = getSeasonRankInfoByName(leftP);
@@ -611,8 +613,12 @@ function App() {
             <div className="flex items-center gap-2 mb-0.5 min-w-0">
               <img src={getAvatarFallback(leftP, rankers)} className="w-8 h-8 rounded-full border border-white/30 shrink-0" alt="left-player" />
               <span className="font-bold text-xl text-white truncate">{leftP}</span>
-              <span className="px-2 py-0.5 rounded-full border border-yellow-400/40 bg-yellow-400/15 text-[10px] font-black text-yellow-300 leading-none shrink-0">정규 {leftRegularLabel}</span>
-              <span className={`px-2 py-0.5 rounded-full border border-cyan-400/35 bg-cyan-400/10 text-[10px] font-black leading-none shrink-0 ${leftSeasonInfo?.color || 'text-slate-300'}`}>시즌 {leftSeasonInfo?.name || '미집계'}</span>
+              <span title={`정규 ${leftRegularLabel}`} className="w-5 h-5 rounded-full bg-black/70 border border-yellow-400/35 flex items-center justify-center shrink-0">
+                {leftRegularInfo?.icon || <Shield size={11} className="text-slate-300" />}
+              </span>
+              <span title={`시즌 ${leftSeasonInfo?.name || '미집계'}`} className={`w-5 h-5 rounded-full bg-black/70 border border-cyan-400/35 flex items-center justify-center text-[11px] font-black shrink-0 ${leftSeasonInfo?.color || 'text-slate-300'}`}>
+                {leftSeasonInfo?.icon || '🪐'}
+              </span>
             </div>
             <p className="text-sm font-bold text-pink-400 truncate">{log.left_legend || '미선택'}</p>
             <p className="text-sm font-bold text-cyan-300 leading-tight">{log.left_weapons?.[0] || '미선택'}</p>
@@ -634,8 +640,12 @@ function App() {
 
           <button onClick={() => handleProfileClick(rightP)} className={`text-right min-w-0 cursor-pointer ${!isLeftWinner ? 'opacity-100' : 'opacity-55'}`}>
             <div className="flex items-center justify-end gap-2 mb-0.5 min-w-0">
-              <span className={`px-2 py-0.5 rounded-full border border-cyan-400/35 bg-cyan-400/10 text-[10px] font-black leading-none shrink-0 ${rightSeasonInfo?.color || 'text-slate-300'}`}>시즌 {rightSeasonInfo?.name || '미집계'}</span>
-              <span className="px-2 py-0.5 rounded-full border border-yellow-400/40 bg-yellow-400/15 text-[10px] font-black text-yellow-300 leading-none shrink-0">정규 {rightRegularLabel}</span>
+              <span title={`시즌 ${rightSeasonInfo?.name || '미집계'}`} className={`w-5 h-5 rounded-full bg-black/70 border border-cyan-400/35 flex items-center justify-center text-[11px] font-black shrink-0 ${rightSeasonInfo?.color || 'text-slate-300'}`}>
+                {rightSeasonInfo?.icon || '🪐'}
+              </span>
+              <span title={`정규 ${rightRegularLabel}`} className="w-5 h-5 rounded-full bg-black/70 border border-yellow-400/35 flex items-center justify-center shrink-0">
+                {rightRegularInfo?.icon || <Shield size={11} className="text-slate-300" />}
+              </span>
               <span className="font-bold text-xl text-white truncate">{rightP}</span>
               <img src={getAvatarFallback(rightP, rankers)} className="w-8 h-8 rounded-full border border-white/30 shrink-0" alt="right-player" />
             </div>
@@ -669,9 +679,8 @@ function App() {
       .grid-glow-fix { padding: 20px; }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      .rank-glow-buffer { padding: 8px 8px 14px; }
-      .rank-scroll-surface { background: transparent; border-radius: 1.35rem; isolation: isolate; }
-      .rank-card-stable { transform: none; backface-visibility: visible; }
+      .rank-glow-buffer { padding: 6px 0 12px; scrollbar-gutter: stable; }
+      .rank-card-stable { transform: translateZ(0); backface-visibility: hidden; }
     `}</style>
   );
 
@@ -710,19 +719,19 @@ function App() {
           </div>
           {user ? (
             <div className="flex items-center gap-6">
+                <div className="flex flex-col items-start min-w-[300px] pr-2">
+                    <div className="flex items-center gap-3 w-full">
+                      <span className="w-10 h-10 rounded-lg bg-black/50 border border-white/15 flex items-center justify-center shrink-0">{currentUserRegularInfo?.icon || <Shield size={20} className="text-slate-300" />}</span>
+                      <span className="text-2xl font-black text-yellow-300 leading-tight truncate drop-shadow-[0_0_10px_rgba(250,204,21,0.4)]">정규 {currentUserRegularLabel}</span>
+                    </div>
+                    <div className="flex items-center gap-3 w-full mt-1.5">
+                      <span className="w-9 h-9 rounded-lg bg-black/50 border border-white/15 flex items-center justify-center text-lg shrink-0">{currentUserSeasonInfo?.icon || '🪐'}</span>
+                      <span className={`text-2xl font-black leading-tight truncate drop-shadow-[0_0_10px_rgba(34,211,238,0.35)] ${currentUserSeasonInfo?.color || 'text-slate-300'}`}>시즌 {currentUserSeasonInfo?.name || '미집계'}</span>
+                    </div>
+                </div>
                 <div className="flex flex-col items-end bg-black/40 px-4 py-2 rounded-xl border border-white/10 shadow-inner">
                     <span className="text-xs font-bold text-emerald-400 tracking-widest">{profile?.gc || 0} GC</span>
                     <span className="text-sm font-bold text-fuchsia-400 tracking-widest">{profile?.rp || 1000} RP</span>
-                </div>
-                <div className="flex flex-col items-start bg-black/55 px-5 py-3 rounded-2xl border border-cyan-400/30 shadow-[0_0_12px_rgba(34,211,238,0.2)] min-w-[260px]">
-                    <div className="flex items-center gap-2 w-full">
-                      <span className="w-7 h-7 rounded-md bg-black/50 border border-white/15 flex items-center justify-center shrink-0">{currentUserRegularInfo?.icon || <Shield size={16} className="text-slate-300" />}</span>
-                      <span className="text-base font-black text-yellow-300 leading-tight truncate">정규 {currentUserRegularLabel}</span>
-                    </div>
-                    <div className="flex items-center gap-2 w-full mt-1.5">
-                      <span className="w-7 h-7 rounded-md bg-black/50 border border-white/15 flex items-center justify-center text-sm shrink-0">{currentUserSeasonInfo?.icon || '🪐'}</span>
-                      <span className={`text-base font-black leading-tight truncate ${currentUserSeasonInfo?.color || 'text-slate-300'}`}>시즌 {currentUserSeasonInfo?.name || '미집계'}</span>
-                    </div>
                 </div>
                 <div onMouseEnter={() => playSFX('hover')} onClick={handleLogout} className="flex items-center gap-4 bg-black/60 p-2 rounded-full border border-white/10 pr-8 border-l-cyan-500 border-l-4 cursor-pointer hover:border-l-pink-500 transition-all">
                   <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest"} className="w-10 h-10 rounded-full" alt="profile"/>
@@ -1032,10 +1041,15 @@ function App() {
                       
                       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 custom-scrollbar rank-glow-buffer">
                          {miniRankMode === 'free' ? (
-                             rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).map((r) => {
+                             rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).map((r, idx) => {
                                   const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
+                                  const pyramidWidthClass =
+                                    idx === 0 ? 'w-full' :
+                                    idx < 3 ? 'w-[94%]' :
+                                    idx < 6 ? 'w-[88%]' :
+                                    idx < 10 ? 'w-[82%]' : 'w-[76%]';
                                   return (
-                                    <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`rank-card-stable p-4 pt-4 pb-5 rounded-[1.5rem] border transition-all cursor-pointer group bg-black/55 flex flex-col items-center ${grandRank.glow} border-cyan-400/40 hover:border-cyan-300/80 mt-4 relative`}>
+                                    <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`rank-card-stable ${pyramidWidthClass} mx-auto p-4 pt-4 pb-5 rounded-[1.5rem] border transition-all cursor-pointer group bg-black/55 flex flex-col items-center border-cyan-400/40 hover:border-cyan-300/80 mt-4 relative`}>
                                        <div className="w-full flex justify-center mb-2.5">
                                          <div className={`px-4 py-1 rounded-full border-2 border-cyan-400/30 ${grandRank.bg} flex items-center justify-center gap-2 shadow-xl bg-black/90`}>
                                              {grandRank.icon} 
@@ -1059,8 +1073,13 @@ function App() {
                          ) : (
                              rpRankers.length > 0 ? rpRankers.filter(r => r.display_name?.includes(searchQuery)).slice(0, 10).map((r, i) => {
                                  const tier = getRPTierInfo(i);
+                                 const pyramidWidthClass =
+                                   i === 0 ? 'w-full' :
+                                   i < 3 ? 'w-[94%]' :
+                                   i < 6 ? 'w-[88%]' :
+                                   i < 10 ? 'w-[82%]' : 'w-[76%]';
                                  return (
-                                     <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className={`rank-card-stable p-4 pt-4 pb-4 rounded-[1.45rem] border flex flex-col items-center bg-black/55 hover:border-cyan-300/80 transition-all cursor-pointer border-cyan-500/25 group ${tier.glow} mt-4 relative`}>
+                                     <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className={`rank-card-stable ${pyramidWidthClass} mx-auto p-4 pt-4 pb-4 rounded-[1.45rem] border flex flex-col items-center bg-black/55 hover:border-cyan-300/80 transition-all cursor-pointer border-cyan-500/25 group mt-4 relative`}>
                                          <div className="w-full flex justify-center mb-2.5">
                                            <div className={`px-3.5 py-1 rounded-full border border-white/20 ${tier.bg} flex items-center justify-center gap-2 shadow-xl bg-black/90`}>
                                                <span className="text-base">{tier.icon}</span> 
