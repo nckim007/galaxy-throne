@@ -14,7 +14,6 @@ import { getAvatarFallback, getResponsiveNameClass } from './utils/profile';
 import { applyAudioSettings, playSFX, setMatchPhaseAudio } from './lib/audioManager';
 const MENU_ITEMS = [
   { id: 'home', icon: Home, label: '대시보드' },
-  { id: 'profile', icon: User, label: '내 정보' },
   { id: 'shop', icon: ShoppingBag, label: '상점' },
   { id: 'ranking', icon: Trophy, label: '명예의 전당' },
   { id: 'settings', icon: Settings, label: '환경 설정' }
@@ -99,6 +98,13 @@ function App() {
   const [regularRankMoves, setRegularRankMoves] = useState<Record<string, number>>({});
   const [seasonRankMoves, setSeasonRankMoves] = useState<Record<string, number>>({});
   const [resultFx, setResultFx] = useState<{ type: 'win' | 'lose'; message: string } | null>(null);
+  const [resultBursts, setResultBursts] = useState<
+    { id: number; left: string; top: string; size: number; delay: string }[]
+  >([]);
+  const [statusPopup, setStatusPopup] = useState<
+    { type: 'success' | 'error' | 'info'; title: string; message: string } | null
+  >(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   const [bgmEnabled, setBgmEnabled] = useState(localStorage.getItem('bgmEnabled') !== 'false');
   const [sfxEnabled, setSfxEnabled] = useState(localStorage.getItem('sfxEnabled') !== 'false');
@@ -209,6 +215,8 @@ function App() {
     regular: {},
     season: {},
   });
+  const rankCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const mainScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => { activeMatchRef.current = activeMatch; }, [activeMatch]);
   useEffect(() => { matchPhaseRef.current = matchPhase; }, [matchPhase]);
@@ -216,6 +224,32 @@ function App() {
   useEffect(() => {
     setShowMoreRegularRanks(false);
   }, [mainRankTab, searchQuery]);
+
+  useEffect(() => {
+    const node = mainScrollRef.current;
+    if (!node) return;
+    const onScroll = () => {
+      setShowScrollTop(node.scrollTop > 260);
+    };
+    onScroll();
+    node.addEventListener('scroll', onScroll, { passive: true });
+    return () => node.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (statusPopup) {
+        setStatusPopup(null);
+        return;
+      }
+      if (selectedPlayer) {
+        setSelectedPlayer(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedPlayer, statusPopup]);
 
   useEffect(() => {
     localStorage.setItem('bgmEnabled', bgmEnabled.toString());
@@ -229,6 +263,32 @@ function App() {
   useEffect(() => {
     setMatchPhaseAudio(matchPhase);
   }, [matchPhase]);
+
+  const showStatusPopup = (
+    type: 'success' | 'error' | 'info',
+    title: string,
+    message: string
+  ) => {
+    setStatusPopup({ type, title, message });
+  };
+
+  const triggerResultFx = (didWin: boolean, message: string) => {
+    setResultFx({ type: didWin ? 'win' : 'lose', message });
+    if (didWin) {
+      const bursts = Array.from({ length: 26 }).map((_, i) => ({
+        id: Date.now() + i,
+        left: `${4 + Math.random() * 92}%`,
+        top: `${8 + Math.random() * 70}%`,
+        size: 8 + Math.floor(Math.random() * 14),
+        delay: `${Math.random() * 0.32}s`,
+      }));
+      setResultBursts(bursts);
+      setTimeout(() => setResultBursts([]), 1800);
+    } else {
+      setResultBursts([]);
+    }
+    setTimeout(() => setResultFx(null), 2600);
+  };
 
   const checkActiveChallenge = async (username: string) => {
     if (!username) return;
@@ -502,7 +562,15 @@ function App() {
                        playSFX('success'); setActiveMatch(prev => prev ? { ...prev, oppLegend: prev.isChallenger ? updated.t_legend : updated.legend, oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons } : prev); setMatchPhase('scoring');
                    }
                    if (updated.c_win === null && updated.t_win === null && isWaiting) {
-                       playSFX('error'); alert("상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다.\n다시 합의 후 정확히 입력해주세요!"); setWaitingForScore(false); setMyWins(null); setMyLosses(null);
+                       playSFX('error');
+                       showStatusPopup(
+                         'error',
+                         '스코어 불일치',
+                         '상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다. 다시 합의 후 정확히 입력해주세요.'
+                       );
+                       setWaitingForScore(false);
+                       setMyWins(null);
+                       setMyLosses(null);
                    }
                }
                checkActiveChallenge(currentUserName);
@@ -511,9 +579,25 @@ function App() {
                const deletedRow = payload.old;
                if (currentMatch && deletedRow.id === currentMatch.id) {
                    if (currentPhase === 'scoring' || isWaiting) {
-                       playSFX('success'); alert("전투 결과 및 랭크가 성공적으로 업데이트 되었습니다."); setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null); setEntryOpponent(''); setEntryLegend(''); setEntryWeapons(['', '']); fetchData(); fetchRankers(); if(user) fetchProfile(user.id);
+                       playSFX('success');
+                       showStatusPopup('success', '업데이트 완료', '전투 결과가 성공적으로 반영되었습니다.');
+                       setMatchPhase('idle');
+                       setActiveMatch(null);
+                       setWaitingForScore(false);
+                       setMyWins(null);
+                       setMyLosses(null);
+                       setEntryOpponent('');
+                       setEntryLegend('');
+                       setEntryWeapons(['', '']);
+                       fetchData();
+                       fetchRankers();
+                       if(user) fetchProfile(user.id);
                    } else if (currentPhase !== 'idle') {
-                       playSFX('click'); alert("매치가 취소되었거나 정상적으로 종료되었습니다."); setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false);
+                       playSFX('click');
+                       showStatusPopup('info', '매치 종료', '매치가 취소되었거나 정상적으로 종료되었습니다.');
+                       setMatchPhase('idle');
+                       setActiveMatch(null);
+                       setWaitingForScore(false);
                    }
                }
            }
@@ -539,6 +623,7 @@ function App() {
         avatar_url: r.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.id}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
         defense_stack: r.defense_stack || 0,
         rp: r.rp || 1000,
+        rank_index: typeof r.rank_index === 'number' ? r.rank_index : null,
         regular_rp:
           typeof r.regular_rp === 'number'
             ? r.regular_rp
@@ -551,9 +636,15 @@ function App() {
         equipped_border_fx: r.equipped_border_fx || 'border_default',
       }));
 
-      const regularSorted = [...base].sort((a, b) => (b.regular_rp || 1000) - (a.regular_rp || 1000));
+      const hasPersistedRankIndex = base.length > 0 && base.every((r) => typeof r.rank_index === 'number');
+      const regularSorted = hasPersistedRankIndex
+        ? [...base].sort((a, b) => (a.rank_index ?? Number.MAX_SAFE_INTEGER) - (b.rank_index ?? Number.MAX_SAFE_INTEGER))
+        : [...base].sort((a, b) => (b.regular_rp || 1000) - (a.regular_rp || 1000));
       regularSorted.forEach((r, i) => {
         (r as any).rankIndex = i;
+        if (typeof (r as any).rank_index !== 'number') {
+          (r as any).rank_index = i;
+        }
       });
 
       const seasonSorted = [...base].sort((a, b) => (b.rp || 1000) - (a.rp || 1000));
@@ -738,7 +829,11 @@ function App() {
   };
 
   const handleReportScore = async () => {
-    if (myWins === null || myLosses === null || !activeMatch) { playSFX('error'); return alert("승리 및 패배 횟수를 모두 선택하세요!"); }
+    if (myWins === null || myLosses === null || !activeMatch) {
+      playSFX('error');
+      showStatusPopup('error', '입력 필요', '승리 및 패배 횟수를 모두 선택하세요.');
+      return;
+    }
     playSFX('click'); setWaitingForScore(true);
     
     const isC = activeMatch.isChallenger;
@@ -746,7 +841,11 @@ function App() {
     
     const { data: updatedData, error } = await supabase.from('challenges').update(updatePayload).eq('id', activeMatch.id).select().maybeSingle();
     
-    if (error) { alert("점수 제출 중 오류: " + error.message); setWaitingForScore(false); return; }
+    if (error) {
+      showStatusPopup('error', '점수 제출 실패', `점수 제출 중 오류가 발생했습니다: ${error.message}`);
+      setWaitingForScore(false);
+      return;
+    }
 
     if (updatedData) {
         const hasC = updatedData.c_win !== null && updatedData.c_lose !== null; const hasT = updatedData.t_win !== null && updatedData.t_lose !== null;
@@ -766,7 +865,11 @@ function App() {
                 };
 
                 const { error: matchErr } = await supabase.from('matches').insert([matchPayload]);
-                if (matchErr) { alert(`🚨 데이터베이스 저장 실패!\n원인: ${matchErr.message}`); setWaitingForScore(false); return; }
+                if (matchErr) {
+                  showStatusPopup('error', '저장 실패', `데이터베이스 저장에 실패했습니다: ${matchErr.message}`);
+                  setWaitingForScore(false);
+                  return;
+                }
 
                 const challengerWon = updatedData.c_win > updatedData.c_lose;
                 const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', challengerName).single();
@@ -778,8 +881,43 @@ function App() {
 
                     if (updatedData.mode.includes('free')) {
                         const bet = updatedData.bet_gc || 0;
-                        if (challengerWon) { cUpdates.defense_stack = 0; tUpdates.defense_stack = 0; cUpdates.gc = (cProfile.gc || 0) + bet; tUpdates.gc = (tProfile.gc || 0) - bet; } 
-                        else { tUpdates.defense_stack = (tProfile.defense_stack || 0) + 1; cUpdates.defense_stack = 0; cUpdates.gc = (cProfile.gc || 0) - bet; tUpdates.gc = (tProfile.gc || 0) + bet; }
+                        const cRankNow = typeof cProfile.rank_index === 'number' ? cProfile.rank_index : rankers.findIndex((r) => r.display_name === challengerName);
+                        const tRankNow = typeof tProfile.rank_index === 'number' ? tProfile.rank_index : rankers.findIndex((r) => r.display_name === targetName);
+                        const cRegular = typeof cProfile.regular_rp === 'number' ? cProfile.regular_rp : calculateRegularPoints(cProfile.wins || 0, cProfile.losses || 0);
+                        const tRegular = typeof tProfile.regular_rp === 'number' ? tProfile.regular_rp : calculateRegularPoints(tProfile.wins || 0, tProfile.losses || 0);
+
+                        if (challengerWon) {
+                          cUpdates.defense_stack = 0;
+                          tUpdates.defense_stack = 0;
+                          cUpdates.gc = (cProfile.gc || 0) + bet;
+                          tUpdates.gc = (tProfile.gc || 0) - bet;
+                        } else {
+                          tUpdates.defense_stack = (tProfile.defense_stack || 0) + 1;
+                          cUpdates.defense_stack = 0;
+                          cUpdates.gc = (cProfile.gc || 0) - bet;
+                          tUpdates.gc = (tProfile.gc || 0) + bet;
+                        }
+
+                        const winnerRank = challengerWon ? cRankNow : tRankNow;
+                        const loserRank = challengerWon ? tRankNow : cRankNow;
+                        const winnerIsBelow = winnerRank >= 0 && loserRank >= 0 && winnerRank > loserRank;
+
+                        if (winnerIsBelow) {
+                          if (challengerWon) {
+                            cUpdates.rank_index = tRankNow;
+                            tUpdates.rank_index = cRankNow;
+                            cUpdates.regular_rp = tRegular;
+                            tUpdates.regular_rp = cRegular;
+                          } else {
+                            cUpdates.rank_index = tRankNow;
+                            tUpdates.rank_index = cRankNow;
+                            cUpdates.regular_rp = tRegular;
+                            tUpdates.regular_rp = cRegular;
+                          }
+                        } else {
+                          if (cRankNow >= 0) cUpdates.rank_index = cRankNow;
+                          if (tRankNow >= 0) tUpdates.rank_index = tRankNow;
+                        }
                     } else {
                         const calcRP = (prof: any, won: boolean, oppProf: any) => {
                             let rpChg = won ? 50 : -20; let nStreak = won ? (prof.win_streak || 0) + 1 : 0;
@@ -793,9 +931,17 @@ function App() {
                     }
                     await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id); await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
                 }
+                const didWin = winnerName?.trim() === (currentUserName || '').trim();
+                triggerResultFx(didWin, didWin ? '전투 승리! 순위가 갱신되었습니다.' : '전투 종료! 결과가 반영되었습니다.');
+                showStatusPopup(didWin ? 'success' : 'info', didWin ? '승리' : '결과 반영', didWin ? '축하합니다. 승리 기록과 순위 변동이 적용되었습니다.' : '전투 결과와 랭킹 정보가 업데이트되었습니다.');
                 await supabase.from('challenges').delete().eq('id', activeMatch.id);
             } else {
-                playSFX('error'); alert(`스코어가 일치하지 않습니다!\n(도전자: ${updatedData.c_win}승 ${updatedData.c_lose}패 / 타겟: ${updatedData.t_win}승 ${updatedData.t_lose}패)\n초기화됩니다.`);
+                playSFX('error');
+                showStatusPopup(
+                  'error',
+                  '스코어 불일치',
+                  `도전자(${updatedData.c_win}승 ${updatedData.c_lose}패) / 타겟(${updatedData.t_win}승 ${updatedData.t_lose}패) 입력값이 달라 초기화됩니다.`
+                );
                 setWaitingForScore(false); setMyWins(null); setMyLosses(null); await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
             }
         }
@@ -812,22 +958,108 @@ function App() {
     if (profile) { playSFX('click'); setSelectedPlayer(profile); setProfileTab('overview'); }
   };
 
-  let favLegend = "미선택"; let favWeapon = "미선택"; let legendStatsArray: any[] = []; let weaponStatsArray: any[] = [];
+  const buildPlayerCombatStats = (playerName?: string | null) => {
+    const safeName = (playerName || '').trim();
+    if (!safeName) {
+      return {
+        matches: [] as any[],
+        wins: 0,
+        losses: 0,
+        winRate: '0.0%',
+        freeMatches: 0,
+        randomMatches: 0,
+        longestStreak: 0,
+        legendStats: [] as any[],
+        weaponStats: [] as any[],
+        favLegend: '미선택',
+        favWeapon: '미선택',
+      };
+    }
 
-  if (selectedPlayer) {
-    const pMatches = logs.filter(m => m.left_player_name === selectedPlayer.display_name || m.right_player_name === selectedPlayer.display_name || m.left_player === selectedPlayer.display_name || m.right_player === selectedPlayer.display_name);
-    const lStats: any = {}; const wStats: any = {};
-    pMatches.forEach(m => {
-      const leftP = m.left_player_name || m.left_player; const rightP = m.right_player_name || m.right_player;
-      const isWin = m.winner_name === selectedPlayer.display_name; const isLeft = leftP === selectedPlayer.display_name;
-      const myLeg = isLeft ? m.left_legend : m.right_legend; const myWep = isLeft ? m.left_weapons : m.right_weapons;
-      if (myLeg && myLeg !== '미선택') { if (!lStats[myLeg]) lStats[myLeg] = { name: myLeg, matches: 0, wins: 0 }; lStats[myLeg].matches += 1; if (isWin) lStats[myLeg].wins += 1; }
-      if (myWep && Array.isArray(myWep)) { myWep.forEach((w: string) => { if (!w || w === '미선택') return; if (!wStats[w]) wStats[w] = { name: w, matches: 0, wins: 0 }; wStats[w].matches += 1; if (isWin) wStats[w].wins += 1; }); }
+    const matches = logs.filter((m) => {
+      const leftP = m.left_player_name || m.left_player;
+      const rightP = m.right_player_name || m.right_player;
+      return leftP === safeName || rightP === safeName;
     });
-    legendStatsArray = Object.values(lStats).map((d: any) => ({ ...d, wr: d.matches > 0 ? d.wins / d.matches : 0 })).sort((a, b) => b.wr - a.wr || b.matches - a.matches);
-    weaponStatsArray = Object.values(wStats).map((d: any) => ({ ...d, wr: d.matches > 0 ? d.wins / d.matches : 0 })).sort((a, b) => b.wr - a.wr || b.matches - a.matches);
-    if (legendStatsArray.length > 0) favLegend = legendStatsArray[0].name; if (weaponStatsArray.length > 0) favWeapon = weaponStatsArray[0].name;
-  }
+
+    const lStats: any = {};
+    const wStats: any = {};
+    let wins = 0;
+    let losses = 0;
+    let freeMatches = 0;
+    let randomMatches = 0;
+    let longestStreak = 0;
+    let currentStreak = 0;
+
+    const byTimeAsc = [...matches].sort(
+      (a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+    );
+    byTimeAsc.forEach((m) => {
+      const isWin = m.winner_name === safeName;
+      if (isWin) {
+        currentStreak += 1;
+        longestStreak = Math.max(longestStreak, currentStreak);
+      } else {
+        currentStreak = 0;
+      }
+    });
+
+    matches.forEach((m) => {
+      const leftP = m.left_player_name || m.left_player;
+      const isLeft = leftP === safeName;
+      const isWin = m.winner_name === safeName;
+      if (isWin) wins += 1;
+      else losses += 1;
+
+      if ((m.match_type || '').includes('free')) freeMatches += 1;
+      else randomMatches += 1;
+
+      const myLeg = isLeft ? m.left_legend : m.right_legend;
+      const myWep = isLeft ? m.left_weapons : m.right_weapons;
+      if (myLeg && myLeg !== '미선택') {
+        if (!lStats[myLeg]) lStats[myLeg] = { name: myLeg, matches: 0, wins: 0 };
+        lStats[myLeg].matches += 1;
+        if (isWin) lStats[myLeg].wins += 1;
+      }
+      if (Array.isArray(myWep)) {
+        myWep.forEach((w: string) => {
+          if (!w || w === '미선택') return;
+          if (!wStats[w]) wStats[w] = { name: w, matches: 0, wins: 0 };
+          wStats[w].matches += 1;
+          if (isWin) wStats[w].wins += 1;
+        });
+      }
+    });
+
+    const legendStats = Object.values(lStats)
+      .map((d: any) => ({ ...d, wr: d.matches > 0 ? d.wins / d.matches : 0 }))
+      .sort((a: any, b: any) => b.wr - a.wr || b.matches - a.matches);
+    const weaponStats = Object.values(wStats)
+      .map((d: any) => ({ ...d, wr: d.matches > 0 ? d.wins / d.matches : 0 }))
+      .sort((a: any, b: any) => b.wr - a.wr || b.matches - a.matches);
+
+    const total = wins + losses;
+    return {
+      matches,
+      wins,
+      losses,
+      winRate: total > 0 ? `${((wins / total) * 100).toFixed(1)}%` : '0.0%',
+      freeMatches,
+      randomMatches,
+      longestStreak,
+      legendStats,
+      weaponStats,
+      favLegend: legendStats[0]?.name || '미선택',
+      favWeapon: weaponStats[0]?.name || '미선택',
+    };
+  };
+
+  const selectedStats = buildPlayerCombatStats(selectedPlayer?.display_name);
+  const legendStatsArray = selectedStats.legendStats;
+  const weaponStatsArray = selectedStats.weaponStats;
+  const favLegend = selectedStats.favLegend;
+  const favWeapon = selectedStats.favWeapon;
+  const myStats = buildPlayerCombatStats(currentUserName);
 
   const rankAssetVersion = '20260315';
   const getRankAssetPath = (name: string, ext: 'png' | 'webp' = 'png') =>
@@ -1049,10 +1281,6 @@ function App() {
   );
   const currentUserSeasonInfo =
     currentUserSeasonIndex >= 0 ? { index: currentUserSeasonIndex, ...getRPTierInfo(currentUserSeasonIndex) } : null;
-  const currentUserRegularPoints =
-    typeof profile?.regular_rp === 'number'
-      ? profile.regular_rp
-      : calculateRegularPoints(profile?.wins || 0, profile?.losses || 0);
   const currentUserSeasonPoints = profile?.rp || 1000;
   const getStreakBountyGC = (streak?: number) => {
     const safe = streak || 0;
@@ -1098,6 +1326,29 @@ function App() {
   const selectedPlayerRegularInfo = selectedPlayer ? getRegularRankInfoByName(selectedPlayer.display_name) : null;
   const selectedPlayerRegularLabel = selectedPlayer ? getRegularRankLabelByName(selectedPlayer.display_name) : '미집계';
   const selectedPlayerSeasonInfo = selectedPlayer ? getSeasonRankInfoByName(selectedPlayer.display_name) : null;
+  const setRankCardRef = (scope: 'mini' | 'main', mode: 'free' | 'random', name: string) => (el: HTMLDivElement | null) => {
+    const key = `${scope}:${mode}:${normalizeName(name)}`;
+    rankCardRefs.current[key] = el;
+  };
+  const handleRankSearchEnter = (scope: 'mini' | 'main') => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return;
+    const mode = scope === 'mini' ? miniRankMode : mainRankTab;
+    const source = mode === 'free' ? rankers : rpRankers;
+    const found = source.find((r) => (r.display_name || '').toLowerCase().includes(query));
+    if (!found) {
+      playSFX('error');
+      showStatusPopup('info', '검색 결과 없음', `입력하신 "${searchQuery}"와 일치하는 닉네임이 없습니다.`);
+      return;
+    }
+    const key = `${scope}:${mode}:${normalizeName(found.display_name)}`;
+    const target = rankCardRefs.current[key];
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.classList.add('rank-jump-highlight');
+    window.setTimeout(() => target.classList.remove('rank-jump-highlight'), 1300);
+    playSFX('success');
+  };
 
   // 🌟 V4.6: 전투기록 UI 완벽 분리 구현 (WIN/LOSE 직관적 스티커 형태 도입)
   const renderCombatLogItem = (log: any, index: number) => {
@@ -1127,7 +1378,7 @@ function App() {
           <button onClick={() => handleProfileClick(leftP)} className={`text-left min-w-0 cursor-pointer ${isLeftWinner ? 'opacity-100' : 'opacity-55'}`}>
             <div className="flex items-center gap-2 mb-0.5 min-w-0">
               <img src={getAvatarFallback(leftP, rankers)} className={`w-8 h-8 rounded-full border shrink-0 ${getAvatarBorderFxForUser(leftP)}`} alt="left-player" />
-              <span className={`font-bold text-lg sm:text-xl truncate ${getNameClassForUser(leftP)}`}>{leftP}</span>
+              <span className={`font-bold text-lg sm:text-xl whitespace-normal break-all leading-tight ${getNameClassForUser(leftP)}`}>{leftP}</span>
               <span title={`정규 ${leftRegularLabel}`} className="w-10 h-10 rounded-full bg-black/70 flex items-center justify-center shrink-0">
                 {leftRegularInfo?.icon || <Shield size={11} className="text-slate-300" />}
               </span>
@@ -1161,7 +1412,7 @@ function App() {
               <span title={`정규 ${rightRegularLabel}`} className="w-10 h-10 rounded-full bg-black/70 flex items-center justify-center shrink-0">
                 {rightRegularInfo?.icon || <Shield size={11} className="text-slate-300" />}
               </span>
-              <span className={`font-bold text-lg sm:text-xl truncate ${getNameClassForUser(rightP)}`}>{rightP}</span>
+              <span className={`font-bold text-lg sm:text-xl whitespace-normal break-all leading-tight ${getNameClassForUser(rightP)}`}>{rightP}</span>
               <img src={getAvatarFallback(rightP, rankers)} className={`w-8 h-8 rounded-full border shrink-0 ${getAvatarBorderFxForUser(rightP)}`} alt="right-player" />
             </div>
             <p className="text-sm font-bold text-pink-400 truncate">{log.right_legend || '미선택'}</p>
@@ -1197,6 +1448,14 @@ function App() {
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       .rank-glow-buffer { padding: 4px 2px; scrollbar-gutter: stable; }
       .rank-card-stable { transform: translateZ(0); backface-visibility: hidden; will-change: transform; }
+      .rank-jump-highlight {
+        animation: rank-jump-flash 1.2s ease;
+      }
+      @keyframes rank-jump-flash {
+        0% { box-shadow: 0 0 0 rgba(34,211,238,0); transform: scale(1); }
+        30% { box-shadow: 0 0 28px rgba(34,211,238,0.65); transform: scale(1.02); }
+        100% { box-shadow: 0 0 0 rgba(34,211,238,0); transform: scale(1); }
+      }
       .name-style-orbit { font-family: 'Orbitron', 'GmarketSansBold', sans-serif !important; letter-spacing: 0.02em; }
       .name-style-rajdhani { font-family: 'Rajdhani', 'GmarketSansBold', sans-serif !important; letter-spacing: 0.01em; }
       .name-style-exo { font-family: 'Exo 2', 'GmarketSansBold', sans-serif !important; letter-spacing: 0.01em; }
@@ -1207,6 +1466,53 @@ function App() {
           0 0 0 1px rgba(34, 211, 238, 0.28),
           0 0 26px rgba(34, 211, 238, 0.2),
           0 0 52px rgba(167, 139, 250, 0.12);
+      }
+      /* hover.css 스타일 감성을 참고한 인터랙션 */
+      .hvr-grow {
+        transform: translateZ(0);
+        transition: transform 0.2s ease;
+      }
+      .hvr-grow:hover { transform: scale(1.045); }
+      .hvr-glow {
+        transition: box-shadow 0.22s ease, border-color 0.22s ease;
+      }
+      .hvr-glow:hover {
+        border-color: rgba(34, 211, 238, 0.8);
+        box-shadow: 0 0 20px rgba(34, 211, 238, 0.38);
+      }
+      .hvr-buzz {
+        transform: translateZ(0);
+      }
+      .hvr-buzz:hover {
+        animation: hvr-buzz-out 0.75s linear 1;
+      }
+      @keyframes hvr-buzz-out {
+        10% { transform: translateX(3px) rotate(2deg); }
+        20% { transform: translateX(-3px) rotate(-2deg); }
+        30% { transform: translateX(2px) rotate(1deg); }
+        40% { transform: translateX(-2px) rotate(-1deg); }
+        50% { transform: translateX(1px) rotate(1deg); }
+        60% { transform: translateX(-1px) rotate(-1deg); }
+        100% { transform: translateX(0) rotate(0); }
+      }
+      @keyframes popup-in {
+        0% { opacity: 0; transform: translateY(16px) scale(0.96); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes fx-win-pulse {
+        0% { opacity: 0; transform: scale(0.86); }
+        20% { opacity: 1; transform: scale(1); }
+        100% { opacity: 0; transform: scale(1.08); }
+      }
+      @keyframes fx-lose-pulse {
+        0% { opacity: 0; transform: scale(0.92); }
+        20% { opacity: 1; transform: scale(1); }
+        100% { opacity: 0; transform: scale(1.02); }
+      }
+      @keyframes firework-burst {
+        0% { opacity: 0; transform: translate(-50%, -50%) scale(0.2); }
+        20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        100% { opacity: 0; transform: translate(-50%, -50%) scale(1.45); }
       }
     `}</style>
   );
@@ -1236,10 +1542,19 @@ function App() {
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col z-10 relative ml-14 sm:ml-16 lg:ml-20 h-screen overflow-y-auto custom-scrollbar">
+      <div ref={mainScrollRef} className="flex-1 flex flex-col z-10 relative ml-14 sm:ml-16 lg:ml-20 h-screen overflow-y-auto custom-scrollbar">
         <header className="px-3 sm:px-4 lg:px-10 py-3 sm:py-4 lg:py-6 flex justify-between items-center flex-wrap gap-3 sm:gap-4 shrink-0 border-b border-cyan-500/30 bg-black/20 backdrop-blur-md">
-          <div onMouseEnter={() => playSFX('hover')} className="min-w-0 flex-1 cursor-pointer" onClick={() => setActiveMenu('home')}>
-            <h1 className="text-3xl sm:text-4xl lg:text-6xl font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple] leading-none">은하단</h1>
+          <div onMouseEnter={() => playSFX('hover')} className="min-w-0 flex-1 cursor-pointer flex items-center gap-3 sm:gap-4 lg:gap-6" onClick={() => setActiveMenu('home')}>
+            <h1 className="text-3xl sm:text-4xl lg:text-6xl font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple] leading-none shrink-0">은하단</h1>
+            <div className="hidden sm:block w-px h-14 lg:h-16 bg-gradient-to-b from-cyan-300 to-fuchsia-400 opacity-80 shrink-0"></div>
+            <div className="hidden sm:flex flex-col min-w-0">
+              <h2 className="text-[1.45rem] lg:text-[2.35rem] leading-tight font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-300 tracking-tight">
+                별들의 전쟁 : 시즌 1
+              </h2>
+              <p className="text-[12px] lg:text-[15px] font-bold text-cyan-300/90 italic tracking-wide">
+                SEASON 01 BATTLE FOR THE STAR THRONE
+              </p>
+            </div>
           </div>
           {user ? (
             <div className="flex items-center gap-3 sm:gap-4 w-full lg:w-auto justify-end flex-wrap">
@@ -1262,22 +1577,33 @@ function App() {
                       <p className="text-[11px] font-black text-emerald-300 tracking-widest">GC (상점)</p>
                       <p className="text-[1.3rem] sm:text-[1.5rem] lg:text-[1.7rem] font-black text-emerald-300 leading-tight">{profile?.gc || 0}</p>
                     </div>
-                    <div className="bg-black/45 rounded-xl border border-yellow-400/25 px-3 py-2 text-center">
-                      <p className="text-[11px] font-black text-yellow-300 tracking-widest">명예 포인트</p>
-                      <p className="text-[1.2rem] sm:text-[1.35rem] lg:text-[1.5rem] font-black text-yellow-300 leading-tight">{currentUserRegularPoints}</p>
-                    </div>
                     <div className="bg-black/45 rounded-xl border border-fuchsia-400/25 px-3 py-2 text-center">
                       <p className="text-[11px] font-black text-fuchsia-300 tracking-widest">시즌 포인트</p>
                       <p className="text-[1.2rem] sm:text-[1.35rem] lg:text-[1.5rem] font-black text-fuchsia-300 leading-tight">{currentUserSeasonPoints}</p>
                     </div>
+                    <button
+                      onMouseEnter={() => playSFX('hover')}
+                      onClick={() => { playSFX('click'); setActiveMenu('profile'); }}
+                      className="bg-black/45 rounded-xl border border-cyan-400/30 px-3 py-2 text-center cursor-pointer hover:bg-cyan-500/15 transition-all"
+                    >
+                      <p className="text-[11px] font-black text-cyan-300 tracking-widest">내정보</p>
+                      <p className="text-[1rem] sm:text-[1.15rem] font-black text-cyan-200 leading-tight">열기</p>
+                    </button>
                 </div>
-                <div onMouseEnter={() => playSFX('hover')} onClick={handleLogout} className="flex items-center gap-3 sm:gap-4 bg-black/60 p-2.5 sm:p-3.5 rounded-full border border-white/10 pr-6 sm:pr-10 border-l-cyan-500 border-l-4 cursor-pointer hover:border-l-pink-500 transition-all w-full sm:w-auto justify-center sm:justify-start">
+                <div onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setActiveMenu('profile'); }} className="flex items-center gap-3 sm:gap-4 bg-black/60 p-2.5 sm:p-3.5 rounded-full border border-white/10 pr-4 sm:pr-6 border-l-cyan-500 border-l-4 cursor-pointer hover:border-l-pink-500 transition-all w-full sm:w-auto justify-center sm:justify-start">
                   <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest"} className={`w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full border-2 ${equippedBorderFxClass}`} alt="profile"/>
                   <div className="flex flex-col">
                     <span className={`text-[1.2rem] sm:text-[1.45rem] lg:text-[1.9rem] leading-tight font-black ${equippedNameClass}`}>{currentUserName || "GUEST"}</span>
-                    <span className="text-[10px] sm:text-xs font-bold text-cyan-400 uppercase tracking-wider">Logout</span>
+                    <span className="text-[10px] sm:text-xs font-bold text-cyan-400 uppercase tracking-wider">Profile</span>
                   </div>
                 </div>
+                <button
+                  onMouseEnter={() => playSFX('hover')}
+                  onClick={handleLogout}
+                  className="px-4 py-3 rounded-xl border border-pink-400/40 text-pink-300 font-bold bg-black/45 hover:bg-pink-500/20 transition-all cursor-pointer"
+                >
+                  로그아웃
+                </button>
             </div>
           ) : (
             <button onMouseEnter={() => playSFX('hover')} onClick={handleLogin} className="flex items-center gap-3 bg-cyan-600/20 border-2 border-cyan-400 py-2.5 px-8 rounded-full shadow-[0_0_20px_cyan] hover:bg-cyan-400 hover:text-black font-bold text-sm cursor-pointer">
@@ -1313,7 +1639,7 @@ function App() {
                                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-black rounded-full"></div>
                                   </div>
                                   <div className="flex flex-col flex-1 min-w-0">
-                                     <span className={`group-hover/profile:text-cyan-400 text-base sm:text-lg font-bold truncate ${getNameClassForUser(ou.display_name)}`}>{ou.display_name}</span>
+                                     <span className={`group-hover/profile:text-cyan-400 text-base sm:text-lg font-bold whitespace-normal break-all leading-tight ${getNameClassForUser(ou.display_name)}`}>{ou.display_name}</span>
                                      <span className={`text-[11px] font-bold mt-1 ${rankInfo?.color || ''}`}>{rankInfo ? `${rankInfo.title} ${rankInfo.num}위` : '미집계'}</span>
                                      <span className={`text-[11px] font-bold mt-0.5 ${seasonInfo?.color || 'text-slate-400'}`}>{seasonInfo ? `${seasonInfo.name} ${seasonInfo.index + 1}위` : '미집계'}</span>
                                   </div>
@@ -1361,9 +1687,20 @@ function App() {
                            </div>
                            <div className="bg-black/60 p-4 rounded-2xl border border-white/10 shadow-inner mt-1">
                               <p className="text-xs text-slate-500 font-bold mb-2 pl-2">TARGET NICKNAME</p>
-                               <input value={entryOpponent} onChange={(e) => setEntryOpponent(e.target.value)} placeholder="상대방 닉네임 직접 입력" className="w-full bg-transparent outline-none text-white font-bold text-lg sm:text-xl select-text pl-2" />
+                               <input
+                                 value={entryOpponent}
+                                 onChange={(e) => setEntryOpponent(e.target.value)}
+                                 onKeyDown={(e) => {
+                                   if (e.key === 'Enter' && !(e.nativeEvent as any).isComposing) {
+                                     e.preventDefault();
+                                     handleTargetLock();
+                                   }
+                                 }}
+                                 placeholder="상대방 닉네임 직접 입력"
+                                 className="w-full bg-transparent outline-none text-white font-bold text-lg sm:text-xl select-text pl-2"
+                               />
                            </div>
-                           <button onMouseEnter={() => playSFX('hover')} onClick={() => handleTargetLock()} className="w-full py-4 rounded-[1.5rem] font-bold text-xl text-white bg-cyan-600 shadow-[0_0_20px_rgba(34,211,238,0.5)] hover:bg-cyan-500 transition-all border border-cyan-400 cursor-pointer mt-2">다음 단계 (Next)</button>
+                           <button onMouseEnter={() => playSFX('hover')} onClick={() => handleTargetLock()} className="hvr-grow hvr-glow w-full py-4 rounded-[1.5rem] font-bold text-xl text-white bg-cyan-600 shadow-[0_0_20px_rgba(34,211,238,0.5)] hover:bg-cyan-500 transition-all border border-cyan-400 cursor-pointer mt-2">다음 단계 (Next)</button>
                         </div>
                       )}
 
@@ -1372,7 +1709,7 @@ function App() {
                            <div className="flex items-center justify-between bg-black/40 p-5 rounded-[2rem] border border-white/10 shadow-inner mb-2">
                               <div className="flex flex-col cursor-pointer group/target flex-1 min-w-0 pr-4" onClick={() => handleProfileClick(entryOpponent)}>
                                  <p className="text-xs text-slate-500 font-bold mb-1">SELECTED TARGET</p>
-                                 <h4 className={`text-pink-400 italic group-hover/target:text-cyan-400 text-2xl truncate font-bold`}>{entryOpponent}</h4>
+                                 <h4 className={`text-pink-400 italic group-hover/target:text-cyan-400 text-2xl whitespace-normal break-all leading-tight font-bold`}>{entryOpponent}</h4>
                               </div>
                               <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setMatchPhase('idle'); }} className="px-6 py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 text-base font-bold border border-white/10 transition-colors cursor-pointer shrink-0">변경</button>
                            </div>
@@ -1411,7 +1748,7 @@ function App() {
                               </div>
                            </div>
 
-                           <button onMouseEnter={() => playSFX('hover')} onClick={handleStartMatch} className="w-full py-5 mt-6 rounded-[2rem] font-bold text-2xl text-white bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.6)] hover:bg-blue-500 transition-all border border-blue-400 cursor-pointer">
+                           <button onMouseEnter={() => playSFX('hover')} onClick={handleStartMatch} className="hvr-grow hvr-glow w-full py-5 mt-6 rounded-[2rem] font-bold text-2xl text-white bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.6)] hover:bg-blue-500 transition-all border border-blue-400 cursor-pointer">
                               매칭 신청 및 수락
                            </button>
                         </div>
@@ -1474,7 +1811,7 @@ function App() {
                                  </div>
                               </div>
                            )}
-                           <button onMouseEnter={() => playSFX('hover')} onClick={handlePickReady} className="w-full py-5 mt-6 rounded-[2rem] font-bold text-2xl text-black bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)] hover:bg-yellow-300 transition-all cursor-pointer">준비 완료 (Ready)</button>
+                           <button onMouseEnter={() => playSFX('hover')} onClick={handlePickReady} className="hvr-grow hvr-glow w-full py-5 mt-6 rounded-[2rem] font-bold text-2xl text-black bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)] hover:bg-yellow-300 transition-all cursor-pointer">준비 완료 (Ready)</button>
                         </div>
                       )}
 
@@ -1545,7 +1882,7 @@ function App() {
                                   ))}
                                 </div>
                               </div>
-                              <button onMouseEnter={() => playSFX('hover')} onClick={handleReportScore} disabled={myWins === null || myLosses === null || waitingForScore} className={`w-full py-5 mt-2 rounded-[1.5rem] font-bold text-2xl transition-all uppercase ${waitingForScore ? 'text-yellow-400 border-2 border-yellow-400/50 cursor-wait animate-pulse' : (myWins !== null && myLosses !== null) ? 'text-cyan-400 border-2 border-cyan-400/50 shadow-md cursor-pointer hover:bg-cyan-500 hover:text-black' : 'text-slate-500 border-2 border-slate-700 bg-slate-800/50 cursor-not-allowed'}`}>
+                              <button onMouseEnter={() => playSFX('hover')} onClick={handleReportScore} disabled={myWins === null || myLosses === null || waitingForScore} className={`hvr-grow hvr-glow w-full py-5 mt-2 rounded-[1.5rem] font-bold text-2xl transition-all uppercase ${waitingForScore ? 'text-yellow-400 border-2 border-yellow-400/50 cursor-wait animate-pulse' : (myWins !== null && myLosses !== null) ? 'text-cyan-400 border-2 border-cyan-400/50 shadow-md cursor-pointer hover:bg-cyan-500 hover:text-black' : 'text-slate-500 border-2 border-slate-700 bg-slate-800/50 cursor-not-allowed'}`}>
                                 {waitingForScore ? '상대방의 결과 입력을 대기중입니다...' : '결과 검증 및 제출'}
                               </button>
                            </div>
@@ -1593,7 +1930,7 @@ function App() {
                             rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).map((r) => {
                               const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
                               return (
-                                <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${rankCardFxByTier(r.rankIndex)}`}>
+                                <div ref={setRankCardRef('mini', 'free', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${rankCardFxByTier(r.rankIndex)}`}>
                                   <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)]">
                                     {r.rankIndex + 1}위
                                   </span>
@@ -1611,7 +1948,6 @@ function App() {
                                     <div className="flex flex-col items-end shrink-0">
                                       {(r.defense_stack || 0) > 0 && (<span className="font-bold text-[9px] px-2 py-1 rounded-full bg-red-500/15 text-red-300 mb-1 border border-red-400/35">방어전 {r.defense_stack}</span>)}
                                       {(r.win_streak || 0) >= 2 && (<span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 mb-1">🔥 {r.win_streak}연승{getStreakBountyGC(r.win_streak || 0) > 0 ? ` · ${getStreakBountyGC(r.win_streak || 0)}GC` : ''}</span>)}
-                                      <span className="font-black text-yellow-300 text-[1.15rem] sm:text-[1.5rem] tracking-tight drop-shadow-[0_0_8px_rgba(250,204,21,0.38)]">{r.regular_rp || 1000}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -1621,7 +1957,7 @@ function App() {
                             rpRankers.length > 0 ? rpRankers.filter(r => r.display_name?.includes(searchQuery)).slice(0, 10).map((r, i) => {
                               const tier = getRPTierInfo(i);
                               return (
-                                <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${seasonCardFxByTier(i)}`}>
+                                <div ref={setRankCardRef('mini', 'random', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${seasonCardFxByTier(i)}`}>
                                   <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)]">
                                     {i + 1}위
                                   </span>
@@ -1650,7 +1986,7 @@ function App() {
 
                       <div className="relative px-2 mt-4 shrink-0">
                         <Search className="absolute left-6 top-4 text-slate-500" size={20}/>
-                        <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="검색..." className="w-full bg-white/5 border border-white/10 pl-14 pr-8 py-4 rounded-full text-base font-bold outline-none focus:border-cyan-400 text-white select-text"/>
+                        <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRankSearchEnter('mini'); } }} placeholder="검색..." className="w-full bg-white/5 border border-white/10 pl-14 pr-8 py-4 rounded-full text-base font-bold outline-none focus:border-cyan-400 text-white select-text"/>
                       </div>
                   </div>
                </section>
@@ -1798,7 +2134,7 @@ function App() {
                    <div className="flex justify-end mb-8 max-w-7xl mx-auto w-full px-4">
                      <div className="relative w-96">
                        <Search className="absolute left-6 top-4.5 text-slate-500" size={24}/>
-                       <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="랭커 검색..." className="w-full bg-black/40 border border-white/10 pl-16 pr-8 py-5 rounded-full text-lg font-bold outline-none focus:border-cyan-400 text-white select-text shadow-inner"/>
+                       <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRankSearchEnter('main'); } }} placeholder="랭커 검색..." className="w-full bg-black/40 border border-white/10 pl-16 pr-8 py-5 rounded-full text-lg font-bold outline-none focus:border-cyan-400 text-white select-text shadow-inner"/>
                      </div>
                    </div>
 
@@ -1825,11 +2161,11 @@ function App() {
                              : 'p-5 pt-9 pb-5 rounded-[1.35rem]';
                        const avatarClass = tone === 'hero' ? 'w-28 h-28' : tone === 'mid' ? 'w-20 h-20' : 'w-14 h-14';
                        const nameClass = tone === 'hero' ? 'text-5xl' : tone === 'mid' ? 'text-2xl' : 'text-lg';
-                       const pointClass = tone === 'hero' ? 'text-5xl' : tone === 'mid' ? 'text-3xl' : 'text-xl';
                        const badgeClass = tone === 'hero' ? 'px-12 py-4 text-[26px] -top-10' : tone === 'mid' ? 'px-10 py-3 text-[20px] -top-7' : 'px-7 py-2 text-[15px] -top-5';
 
                        return (
                          <div
+                           ref={setRankCardRef('main', 'free', r.display_name)}
                            key={r.id}
                            onMouseEnter={() => playSFX('hover')}
                            onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }}
@@ -1849,7 +2185,7 @@ function App() {
                            <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
                              <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
                                <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${r.rankIndex === 0 ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.65)]' : 'border-white/20'} shrink-0`} alt="p"/>
-                               <span className={`group-hover:text-cyan-400 font-bold text-white truncate ${nameClass}`}>{r.display_name}</span>
+                               <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameClass}`}>{r.display_name}</span>
                              </div>
                              <div className="flex flex-col items-end shrink-0 ml-2">
                                {(r.defense_stack || 0) > 0 && (
@@ -1862,8 +2198,6 @@ function App() {
                                    🔥 {r.win_streak}연승{streakBounty > 0 ? ` · 현상금 ${streakBounty}GC` : ''}
                                  </span>
                                )}
-                               <span className={`font-black text-yellow-300 tracking-tight ${pointClass}`}>{r.regular_rp || 1000}</span>
-                               <span className="text-[10px] font-black text-slate-400 tracking-wider">정규 포인트</span>
                              </div>
                            </div>
                          </div>
@@ -1923,7 +2257,7 @@ function App() {
                    <div className="flex justify-end mb-8 max-w-7xl mx-auto w-full px-4 mt-8">
                      <div className="relative w-96">
                        <Search className="absolute left-6 top-4.5 text-slate-500" size={24}/>
-                       <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="랭커 검색..." className="w-full bg-black/40 border border-white/10 pl-16 pr-8 py-5 rounded-full text-lg font-bold outline-none focus:border-cyan-400 text-white select-text shadow-inner"/>
+                       <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRankSearchEnter('main'); } }} placeholder="랭커 검색..." className="w-full bg-black/40 border border-white/10 pl-16 pr-8 py-5 rounded-full text-lg font-bold outline-none focus:border-cyan-400 text-white select-text shadow-inner"/>
                      </div>
                    </div>
                    
@@ -1951,7 +2285,7 @@ function App() {
 
                            return (
                              <div key={r.id} className={spanClass}>
-                                <div onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${seasonCardFxByTier(i)} hover:brightness-110 mt-10`}>
+                                <div ref={setRankCardRef('main', 'random', r.display_name)} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${seasonCardFxByTier(i)} hover:brightness-110 mt-10`}>
                                    {i === 0 && <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-[3rem] pointer-events-none"></div>}
                                    
                                     <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)] z-20">
@@ -1968,7 +2302,7 @@ function App() {
                                     <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
                                       <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
                                         <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${i < 3 ? 'border-red-500 shadow-[0_0_20px_red]' : 'border-white/20'} shrink-0`} alt="p"/>
-                                        <span className={`group-hover:text-cyan-400 font-bold text-white truncate ${nameSize}`}>{r.display_name}</span>
+                                        <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameSize}`}>{r.display_name}</span>
                                       </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
                                        {(r.defense_stack || 0) > 0 && (
@@ -2026,15 +2360,56 @@ function App() {
               </div>
 
               {myProfileTab === 'overview' ? (
-                <div onMouseEnter={() => playSFX('hover')} className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.5)] rounded-[3rem] p-6 sm:p-10 lg:p-12 flex flex-col lg:flex-row items-center gap-8 lg:gap-12 cursor-default">
-                  <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest&backgroundColor=b6e3f4"} className={`w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 rounded-full border-4 shrink-0 ${equippedBorderFxClass}`} alt="profile"/>
-                  <div className="flex-1 min-w-0 w-full">
-                    <h3 className={`italic uppercase mb-2 font-black text-3xl sm:text-4xl lg:text-5xl truncate ${equippedNameClass}`}>{currentUserName || "GUEST PILOT"}</h3>
-                    <p className="text-cyan-400 font-bold text-base sm:text-lg lg:text-xl mb-6 sm:mb-8 lg:mb-10 tracking-widest truncate">{user?.email || "로그인이 필요합니다"}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5 lg:gap-8">
-                      <div className="bg-white/5 p-5 sm:p-6 lg:p-8 rounded-3xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-xs sm:text-sm mb-2 sm:mb-3 tracking-widest font-bold">TOTAL WINS</p><p className="text-3xl sm:text-4xl lg:text-5xl font-black text-white">{profile?.wins || 0}</p></div>
-                      <div className="bg-white/5 p-5 sm:p-6 lg:p-8 rounded-3xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-xs sm:text-sm mb-2 sm:mb-3 tracking-widest font-bold">SEASON POINTS</p><p className="text-3xl sm:text-4xl lg:text-5xl font-black text-fuchsia-400">{profile?.rp || 1000}</p></div>
-                      <div className="bg-white/5 p-5 sm:p-6 lg:p-8 rounded-3xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-xs sm:text-sm mb-2 sm:mb-3 tracking-widest font-bold">GALAXY CREDITS</p><p className="text-3xl sm:text-4xl lg:text-5xl font-black text-emerald-400">{profile?.gc || 0}</p></div>
+                <div onMouseEnter={() => playSFX('hover')} className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.5)] rounded-[3rem] p-6 sm:p-8 lg:p-10 cursor-default space-y-6">
+                  <div className="flex flex-col lg:flex-row items-center gap-6 lg:gap-10">
+                    <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest&backgroundColor=b6e3f4"} className={`w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 rounded-full border-4 shrink-0 ${equippedBorderFxClass}`} alt="profile"/>
+                    <div className="flex-1 min-w-0 w-full">
+                      <h3 className={`italic uppercase mb-2 font-black text-3xl sm:text-4xl lg:text-5xl whitespace-normal break-all leading-tight ${equippedNameClass}`}>{currentUserName || "GUEST PILOT"}</h3>
+                      <p className="text-cyan-400 font-bold text-sm sm:text-base lg:text-lg mb-5 tracking-wide whitespace-normal break-all">{user?.email || "로그인이 필요합니다"}</p>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">전체 경기</p><p className="text-2xl font-black text-white">{myStats.matches.length}</p></div>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">승/패</p><p className="text-2xl font-black text-white">{myStats.wins} / {myStats.losses}</p></div>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">승률</p><p className="text-2xl font-black text-fuchsia-400">{myStats.winRate}</p></div>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">최고 연승</p><p className="text-2xl font-black text-amber-300">{myStats.longestStreak}</p></div>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">정규 경기</p><p className="text-2xl font-black text-cyan-300">{myStats.freeMatches}</p></div>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">시즌 경기</p><p className="text-2xl font-black text-violet-300">{myStats.randomMatches}</p></div>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">SEASON SP</p><p className="text-2xl font-black text-fuchsia-400">{profile?.rp || 1000}</p></div>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">GALAXY CREDITS</p><p className="text-2xl font-black text-emerald-400">{profile?.gc || 0}</p></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="bg-white/5 border border-white/10 rounded-[2rem] p-4">
+                      <h4 className="text-cyan-300 font-black text-base mb-3 tracking-widest border-b border-white/10 pb-2">레전드 승률 TOP 8</h4>
+                      <div className="space-y-2 max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
+                        {myStats.legendStats.slice(0, 8).map((l: any) => (
+                          <div key={l.name} className="flex items-center justify-between bg-black/40 border border-white/5 rounded-xl px-3 py-2 gap-3">
+                            <span className="text-white font-bold text-sm whitespace-normal break-all">{l.name}</span>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className="text-slate-400 text-xs">{l.wins}승 {l.matches - l.wins}패</span>
+                              <span className="text-cyan-300 font-black text-base">{(l.wr * 100).toFixed(0)}%</span>
+                            </div>
+                          </div>
+                        ))}
+                        {myStats.legendStats.length === 0 && <p className="text-slate-500 text-sm text-center py-8">데이터가 없습니다.</p>}
+                      </div>
+                    </div>
+
+                    <div className="bg-white/5 border border-white/10 rounded-[2rem] p-4">
+                      <h4 className="text-pink-300 font-black text-base mb-3 tracking-widest border-b border-white/10 pb-2">무기 승률 TOP 10</h4>
+                      <div className="space-y-2 max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
+                        {myStats.weaponStats.slice(0, 10).map((w: any) => (
+                          <div key={w.name} className="flex items-center justify-between bg-black/40 border border-white/5 rounded-xl px-3 py-2 gap-3">
+                            <span className="text-white font-bold text-sm whitespace-normal break-all">{w.name}</span>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className="text-slate-400 text-xs">{w.wins}승 {w.matches - w.wins}패</span>
+                              <span className="text-pink-300 font-black text-base">{(w.wr * 100).toFixed(0)}%</span>
+                            </div>
+                          </div>
+                        ))}
+                        {myStats.weaponStats.length === 0 && <p className="text-slate-500 text-sm text-center py-8">데이터가 없습니다.</p>}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2110,8 +2485,8 @@ function App() {
               <div className="flex items-center gap-10 border-b border-white/10 pb-12 cursor-default">
                 <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest&backgroundColor=b6e3f4"} className="w-32 h-32 rounded-full border-4 border-cyan-400 shadow-[0_0_20px_cyan]" alt="profile"/>
                 <div onMouseEnter={() => playSFX('hover')} className="flex-1 min-w-0">
-                  <h3 className={`italic uppercase font-black text-4xl text-white truncate mb-2`}>{currentUserName || "GUEST PILOT"}</h3>
-                  <p className="text-cyan-400 font-bold tracking-widest text-lg truncate">{user?.email || "디스코드 로그인이 필요합니다"}</p>
+                  <h3 className={`italic uppercase font-black text-4xl text-white whitespace-normal break-all leading-tight mb-2`}>{currentUserName || "GUEST PILOT"}</h3>
+                  <p className="text-cyan-400 font-bold tracking-widest text-lg whitespace-normal break-all leading-tight">{user?.email || "디스코드 로그인이 필요합니다"}</p>
                 </div>
               </div>
               <div className="flex items-center justify-between border-b border-white/10 pb-10">
@@ -2154,19 +2529,19 @@ function App() {
                <X size={32}/>
              </button>
               
-             <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-8 lg:gap-10 mb-6 sm:mb-8 mt-2">
+             <div className="flex flex-col sm:flex-row items-center sm:items-center gap-5 sm:gap-8 lg:gap-10 mb-6 sm:mb-8 mt-2">
                 <img src={selectedPlayer.avatar_url} className={`w-24 h-24 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-[2rem] sm:rounded-[2.5rem] lg:rounded-[3rem] border-4 ${isCurrentUserDisplayName(selectedPlayer.display_name) ? equippedBorderFxClass : (selectedPlayer.rankIndex === 0 ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.65)]' : 'border-cyan-400 shadow-[0_0_20px_cyan]')} shrink-0`} alt="p" />
                  <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <div className="flex items-start justify-between gap-4 pb-2 min-w-0">
-                      <h2 className={`italic font-black text-3xl sm:text-4xl lg:text-5xl truncate ${getNameClassForUser(selectedPlayer.display_name)}`}>{selectedPlayer.display_name}</h2>
+                    <div className="flex items-center justify-between gap-4 min-w-0">
+                      <h2 className={`italic font-black text-3xl sm:text-4xl lg:text-5xl whitespace-normal break-all leading-tight ${getNameClassForUser(selectedPlayer.display_name)}`}>{selectedPlayer.display_name}</h2>
                       <div className="flex flex-col gap-2 items-end shrink-0">
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                           {selectedPlayerRegularInfo?.icon}
-                          정규랭킹 {selectedPlayerRegularLabel}
+                          {selectedPlayerRegularLabel}
                         </span>
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerSeasonInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                            <span>{selectedPlayerSeasonInfo?.icon || '🪐'}</span>
-                           시즌랭킹 {selectedPlayerSeasonInfo ? `${selectedPlayerSeasonInfo.name} ${selectedPlayerSeasonInfo.index + 1}위` : '미집계'}
+                           {selectedPlayerSeasonInfo ? `${selectedPlayerSeasonInfo.name} ${selectedPlayerSeasonInfo.index + 1}위` : '미집계'}
                         </span>
                       </div>
                     </div>
@@ -2194,7 +2569,7 @@ function App() {
                           <p className="text-3xl font-black text-pink-400">{selectedPlayer.win_rate || "0.0%"}</p>
                         </div>
                         <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center">
-                          <p className="text-xs font-bold text-slate-400 mb-2">RANK POINTS</p>
+                          <p className="text-xs font-bold text-slate-400 mb-2">SEASON POINTS (SP)</p>
                           <p className="text-3xl font-black text-fuchsia-400">{selectedPlayer.rp || 1000}</p>
                         </div>
                         <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center col-span-1">
@@ -2263,6 +2638,70 @@ function App() {
              )}
           </div>
         </div>
+      )}
+
+      {resultFx && (
+        <div className="fixed inset-0 z-[260] pointer-events-none flex items-center justify-center">
+          <div className={`absolute inset-0 ${resultFx.type === 'win' ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`} style={{ animation: `${resultFx.type === 'win' ? 'fx-win-pulse' : 'fx-lose-pulse'} 1.2s ease-out` }}></div>
+          {resultFx.type === 'win' &&
+            resultBursts.map((b) => (
+              <span
+                key={b.id}
+                className="absolute rounded-full"
+                style={{
+                  left: b.left,
+                  top: b.top,
+                  width: `${b.size}px`,
+                  height: `${b.size}px`,
+                  background: 'radial-gradient(circle, rgba(250,204,21,0.96) 0%, rgba(34,211,238,0.9) 55%, rgba(232,121,249,0.85) 100%)',
+                  boxShadow: '0 0 18px rgba(34,211,238,0.7)',
+                  animation: `firework-burst 1.1s ease-out ${b.delay} forwards`,
+                }}
+              />
+            ))}
+          <div className={`px-7 py-4 rounded-2xl border font-black text-xl sm:text-2xl ${resultFx.type === 'win' ? 'text-emerald-300 border-emerald-400/60 bg-black/65' : 'text-rose-300 border-rose-400/60 bg-black/65'}`}>
+            {resultFx.message}
+          </div>
+        </div>
+      )}
+
+      {statusPopup && (
+        <div className="fixed inset-0 z-[280] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setStatusPopup(null)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-lg rounded-[2rem] border p-6 sm:p-7 bg-[#0a0f1d] shadow-2xl ${statusPopup.type === 'success' ? 'border-emerald-400/70' : statusPopup.type === 'error' ? 'border-rose-400/70' : 'border-cyan-400/70'}`}
+            style={{ animation: 'popup-in 260ms ease-out' }}
+          >
+            <h4 className={`text-2xl font-black mb-3 ${statusPopup.type === 'success' ? 'text-emerald-300' : statusPopup.type === 'error' ? 'text-rose-300' : 'text-cyan-300'}`}>
+              {statusPopup.title}
+            </h4>
+            <p className="text-slate-200 text-base sm:text-lg leading-relaxed whitespace-pre-line">{statusPopup.message}</p>
+            <div className="mt-6 flex justify-end">
+              <button
+                onMouseEnter={() => playSFX('hover')}
+                onClick={() => { playSFX('click'); setStatusPopup(null); }}
+                className="hvr-grow hvr-buzz px-5 py-2.5 rounded-xl border border-cyan-400/50 text-cyan-300 font-bold bg-black/50 hover:bg-cyan-500/20 cursor-pointer"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showScrollTop && (
+        <button
+          onMouseEnter={() => playSFX('hover')}
+          onClick={() => {
+            playSFX('click');
+            if (mainScrollRef.current) {
+              mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+          }}
+          className="fixed right-4 sm:right-6 bottom-4 sm:bottom-6 z-[240] hvr-grow hvr-glow px-4 py-3 rounded-full border border-cyan-400/60 bg-black/65 text-cyan-300 font-black shadow-[0_0_16px_rgba(34,211,238,0.35)] cursor-pointer"
+        >
+          맨 위로
+        </button>
       )}
       
     </div>

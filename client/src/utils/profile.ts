@@ -6,7 +6,7 @@
 
 export const getResponsiveNameClass = (name: string, sizeType: 'small' | 'medium' | 'large') => {
   const len = name?.length || 0;
-  const baseClass = 'font-bold text-white transition-colors whitespace-nowrap tracking-normal';
+  const baseClass = 'font-bold text-white transition-colors tracking-normal whitespace-normal break-all leading-tight';
   if (sizeType === 'small') {
     if (len > 12) return `${baseClass} text-xs`;
     if (len > 8) return `${baseClass} text-sm`;
