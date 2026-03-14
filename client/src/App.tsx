@@ -37,6 +37,7 @@ function App() {
   const [myWins, setMyWins] = useState<number | null>(null);
   const [myLosses, setMyLosses] = useState<number | null>(null);
   const [waitingForScore, setWaitingForScore] = useState(false);
+  const [homeRankingHeight, setHomeRankingHeight] = useState<number | null>(null);
   
   const [logs, setLogs] = useState<any[]>([]); 
   const [rankers, setRankers] = useState<any[]>([]); 
@@ -64,6 +65,8 @@ function App() {
   const activeMatchRef = useRef(activeMatch);
   const matchPhaseRef = useRef(matchPhase);
   const waitingForScoreRef = useRef(waitingForScore);
+  const recentLogsBoardRef = useRef<HTMLDivElement | null>(null);
+  const rankingBoardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => { activeMatchRef.current = activeMatch; }, [activeMatch]);
   useEffect(() => { matchPhaseRef.current = matchPhase; }, [matchPhase]);
@@ -217,6 +220,41 @@ function App() {
       setOnlineUsers(new Set());
     };
   }, [currentUserName]);
+
+  useEffect(() => {
+    const updateHomeRankingHeight = () => {
+      if (window.innerWidth < 1280) {
+        setHomeRankingHeight(null);
+        return;
+      }
+
+      const logsEl = recentLogsBoardRef.current;
+      const rankEl = rankingBoardRef.current;
+      if (!logsEl || !rankEl) return;
+
+      const desiredHeight = Math.round((logsEl.offsetTop + logsEl.offsetHeight) - rankEl.offsetTop);
+      if (desiredHeight > 320) {
+        setHomeRankingHeight((prev) => (prev === desiredHeight ? prev : desiredHeight));
+      }
+    };
+
+    if (activeMenu === 'home') {
+      const raf = window.requestAnimationFrame(updateHomeRankingHeight);
+      const resizeObserver = new ResizeObserver(() => updateHomeRankingHeight());
+      if (recentLogsBoardRef.current) resizeObserver.observe(recentLogsBoardRef.current);
+      if (rankingBoardRef.current) resizeObserver.observe(rankingBoardRef.current);
+      window.addEventListener('resize', updateHomeRankingHeight);
+
+      return () => {
+        window.cancelAnimationFrame(raf);
+        resizeObserver.disconnect();
+        window.removeEventListener('resize', updateHomeRankingHeight);
+      };
+    }
+
+    setHomeRankingHeight(null);
+    return;
+  }, [activeMenu, matchPhase, logs.length, rankers.length, miniRankMode, searchQuery]);
 
   useEffect(() => {
     const matchLogChannel = supabase.channel('matches_realtime_sync').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' }, payload => { fetchData(); fetchRankers(); }).subscribe();
@@ -876,7 +914,7 @@ function App() {
                 </div>
               </div>
 
-            <div className="flex flex-col h-[82vh] xl:h-[82vh] relative">
+            <div ref={recentLogsBoardRef} className="flex flex-col h-[90vh] xl:h-[90vh] relative">
                <section className="bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2.5rem] p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
                     최근 기록 (Battle Logs)
@@ -888,7 +926,11 @@ function App() {
             </div>
             </div>
 
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[85vh] xl:h-full relative order-2 xl:order-2">
+            <div
+              ref={rankingBoardRef}
+              className="col-span-12 xl:col-span-4 flex flex-col h-[85vh] xl:h-auto relative order-2 xl:order-2"
+              style={homeRankingHeight ? { height: `${homeRankingHeight}px` } : undefined}
+            >
                <section className="bg-black/40 backdrop-blur-3xl border-2 border-cyan-400 shadow-xl rounded-[3.5rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-visible">
                   <div className="px-2 pt-2 flex flex-col relative z-10 h-full">
                       
