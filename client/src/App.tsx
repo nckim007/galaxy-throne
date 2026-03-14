@@ -550,9 +550,9 @@ function App() {
               <img src={getAvatarFallback(leftP, rankers)} className="w-8 h-8 rounded-full border border-white/30 shrink-0" alt="left-player" />
               <span className="font-bold text-xl text-white truncate">{leftP}</span>
             </div>
-            <p className="text-sm font-bold text-pink-400 truncate">레전드: {log.left_legend || '미선택'}</p>
-            <p className="text-sm font-bold text-cyan-300 leading-tight">무기 1 : {log.left_weapons?.[0] || '미선택'}</p>
-            <p className="text-sm font-bold text-cyan-300 leading-tight">무기 2 : {log.left_weapons?.[1] || '미선택'}</p>
+            <p className="text-sm font-bold text-pink-400 truncate">{log.left_legend || '미선택'}</p>
+            <p className="text-sm font-bold text-cyan-300 leading-tight">{log.left_weapons?.[0] || '미선택'}</p>
+            <p className="text-sm font-bold text-cyan-300 leading-tight">{log.left_weapons?.[1] || '미선택'}</p>
           </button>
 
           <div className="flex flex-col items-center">
@@ -573,9 +573,9 @@ function App() {
               <span className="font-bold text-xl text-white truncate">{rightP}</span>
               <img src={getAvatarFallback(rightP, rankers)} className="w-8 h-8 rounded-full border border-white/30 shrink-0" alt="right-player" />
             </div>
-            <p className="text-sm font-bold text-pink-400 truncate">레전드: {log.right_legend || '미선택'}</p>
-            <p className="text-sm font-bold text-cyan-300 leading-tight">무기 1 : {log.right_weapons?.[0] || '미선택'}</p>
-            <p className="text-sm font-bold text-cyan-300 leading-tight">무기 2 : {log.right_weapons?.[1] || '미선택'}</p>
+            <p className="text-sm font-bold text-pink-400 truncate">{log.right_legend || '미선택'}</p>
+            <p className="text-sm font-bold text-cyan-300 leading-tight">{log.right_weapons?.[0] || '미선택'}</p>
+            <p className="text-sm font-bold text-cyan-300 leading-tight">{log.right_weapons?.[1] || '미선택'}</p>
           </button>
         </div>
       </div>
@@ -857,32 +857,34 @@ function App() {
                                </span>
                              </div>
 
-                             <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 mt-1">
-                               <div className="min-w-0 bg-black/55 rounded-xl border border-white/10 px-3 py-3">
-                                 <div className="flex items-center gap-2.5 min-w-0 mb-2">
-                                   <img src={currentUserAvatar || getAvatarFallback(currentUserName, rankers)} className="w-9 h-9 rounded-full border border-cyan-300 shrink-0" alt="my-avatar"/>
+                             <div className="flex items-center justify-center gap-2 whitespace-nowrap px-1">
+                                 <span className="text-3xl font-black text-yellow-400">{myWins ?? '-'}</span>
+                                 <span className="text-5xl font-black text-cyan-300 drop-shadow-[0_0_12px_rgba(34,211,238,0.75)]">VS</span>
+                                 <span className="text-3xl font-black text-yellow-400">{myLosses ?? '-'}</span>
+                             </div>
+
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                               <div className="min-w-0 bg-black/55 rounded-2xl border border-white/10 px-4 py-3">
+                                 <div className="flex items-center gap-3 min-w-0 mb-2">
+                                   <img src={currentUserAvatar || getAvatarFallback(currentUserName, rankers)} className="w-10 h-10 rounded-full border border-cyan-300 shrink-0" alt="my-avatar"/>
                                    <p className={`${getResponsiveNameClass(currentUserName || 'GUEST', 'medium')} leading-none`}>{currentUserName || 'GUEST'}</p>
                                  </div>
-                                 <div className="space-y-1.5">
-                                   <p className="text-sm font-bold text-pink-400 leading-snug whitespace-normal break-words">레전드 : {activeMatch.legend || '?'}</p>
-                                   <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">무기 1 : {activeMatch.weapons[0] || '?'}</p>
-                                   <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">무기 2 : {activeMatch.weapons[1] || '?'}</p>
+                                 <div className="space-y-1">
+                                   <p className="text-sm font-bold text-pink-400 leading-snug whitespace-normal break-words">{activeMatch.legend || '?'}</p>
+                                   <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">{activeMatch.weapons[0] || '?'}</p>
+                                   <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">{activeMatch.weapons[1] || '?'}</p>
                                  </div>
                                </div>
 
-                               <div className="flex flex-col items-center justify-start pt-6 px-1">
-                                 <span className="text-6xl font-black text-cyan-300 drop-shadow-[0_0_14px_rgba(34,211,238,0.75)] leading-none">VS</span>
-                               </div>
-
-                               <div className="min-w-0 bg-black/55 rounded-xl border border-white/10 px-3 py-3">
-                                 <div className="flex items-center justify-end gap-2.5 min-w-0 mb-2">
+                               <div className="min-w-0 bg-black/55 rounded-2xl border border-white/10 px-4 py-3">
+                                 <div className="flex items-center justify-end gap-3 min-w-0 mb-2">
                                    <p className={`${getResponsiveNameClass(activeMatch.opponent || 'OPPONENT', 'medium')} leading-none`}>{activeMatch.opponent || 'OPPONENT'}</p>
-                                   <img src={getAvatarFallback(activeMatch.opponent, rankers)} className="w-9 h-9 rounded-full border border-pink-300 shrink-0" alt="opponent-avatar"/>
+                                   <img src={getAvatarFallback(activeMatch.opponent, rankers)} className="w-10 h-10 rounded-full border border-pink-300 shrink-0" alt="opponent-avatar"/>
                                  </div>
-                                 <div className="space-y-1.5 text-right">
-                                   <p className="text-sm font-bold text-pink-400 leading-snug whitespace-normal break-words">레전드 : {activeMatch.oppLegend || '?'}</p>
-                                   <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">무기 1 : {activeMatch.oppWeapons?.[0] || '?'}</p>
-                                   <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">무기 2 : {activeMatch.oppWeapons?.[1] || '?'}</p>
+                                 <div className="space-y-1 text-right">
+                                   <p className="text-sm font-bold text-pink-400 leading-snug whitespace-normal break-words">{activeMatch.oppLegend || '?'}</p>
+                                   <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">{activeMatch.oppWeapons?.[0] || '?'}</p>
+                                   <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">{activeMatch.oppWeapons?.[1] || '?'}</p>
                                  </div>
                                </div>
                              </div>
