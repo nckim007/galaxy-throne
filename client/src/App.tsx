@@ -61,6 +61,8 @@ function App() {
   const currentUserName = profile?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name;
   const currentUserAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || profile?.avatar_url || null;
   const DISCORD_GUILD_ID = (import.meta.env.VITE_DISCORD_GUILD_ID as string | undefined)?.trim();
+  const calculateRegularPoints = (wins?: number, losses?: number) =>
+    Math.max(0, 1000 + (wins || 0) * 30 - (losses || 0) * 20);
 
   const activeMatchRef = useRef(activeMatch);
   const matchPhaseRef = useRef(matchPhase);
@@ -317,7 +319,14 @@ function App() {
         ...r, rankIndex: i, display_name: r.display_name || 'GUEST', wins: r.wins || 0, losses: r.losses || 0,
         win_rate: (r.wins + r.losses) > 0 ? (((r.wins) / (r.wins + r.losses)) * 100).toFixed(1) + '%' : '0.0%',
         avatar_url: r.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.id}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
-        defense_stack: r.defense_stack || 0, rp: r.rp || 1000, gc: r.gc || 0, win_streak: r.win_streak || 0
+        defense_stack: r.defense_stack || 0,
+        rp: r.rp || 1000,
+        regular_rp:
+          typeof r.regular_rp === 'number'
+            ? r.regular_rp
+            : calculateRegularPoints(r.wins || 0, r.losses || 0),
+        gc: r.gc || 0,
+        win_streak: r.win_streak || 0
       }));
       setRankers(processed);
     }
@@ -569,6 +578,11 @@ function App() {
   const currentUserRegularInfo = getRegularRankInfoByName(currentUserName);
   const currentUserRegularIndex = getRegularRankIndexByName(currentUserName);
   const currentUserSeasonInfo = getSeasonRankInfoByName(currentUserName);
+  const currentUserRegularPoints =
+    typeof profile?.regular_rp === 'number'
+      ? profile.regular_rp
+      : calculateRegularPoints(profile?.wins || 0, profile?.losses || 0);
+  const currentUserSeasonPoints = profile?.rp || 1000;
 
   const onlineRankers = rankers.filter((r) => {
     if (DISCORD_GUILD_ID) {
@@ -624,10 +638,10 @@ function App() {
             <div className="flex items-center gap-2 mb-0.5 min-w-0">
               <img src={getAvatarFallback(leftP, rankers)} className="w-8 h-8 rounded-full border border-white/30 shrink-0" alt="left-player" />
               <span className="font-bold text-xl text-white truncate">{leftP}</span>
-              <span title={`정규 ${leftRegularLabel}`} className="w-8 h-8 rounded-full bg-black/70 flex items-center justify-center shrink-0">
+              <span title={`정규 ${leftRegularLabel}`} className="w-10 h-10 rounded-full bg-black/70 flex items-center justify-center shrink-0">
                 {leftRegularInfo?.icon || <Shield size={11} className="text-slate-300" />}
               </span>
-              <span title={`시즌 ${leftSeasonInfo?.name || '미집계'}`} className={`w-8 h-8 rounded-full bg-black/70 flex items-center justify-center text-[18px] leading-none font-black shrink-0 ${leftSeasonInfo?.color || 'text-slate-300'}`}>
+              <span title={`시즌 ${leftSeasonInfo?.name || '미집계'}`} className={`w-10 h-10 rounded-full bg-black/70 flex items-center justify-center text-[24px] leading-none font-black shrink-0 ${leftSeasonInfo?.color || 'text-slate-300'}`}>
                 {leftSeasonInfo?.icon || '🪐'}
               </span>
             </div>
@@ -651,10 +665,10 @@ function App() {
 
           <button onClick={() => handleProfileClick(rightP)} className={`text-right min-w-0 cursor-pointer ${!isLeftWinner ? 'opacity-100' : 'opacity-55'}`}>
             <div className="flex items-center justify-end gap-2 mb-0.5 min-w-0">
-              <span title={`시즌 ${rightSeasonInfo?.name || '미집계'}`} className={`w-8 h-8 rounded-full bg-black/70 flex items-center justify-center text-[18px] leading-none font-black shrink-0 ${rightSeasonInfo?.color || 'text-slate-300'}`}>
+              <span title={`시즌 ${rightSeasonInfo?.name || '미집계'}`} className={`w-10 h-10 rounded-full bg-black/70 flex items-center justify-center text-[24px] leading-none font-black shrink-0 ${rightSeasonInfo?.color || 'text-slate-300'}`}>
                 {rightSeasonInfo?.icon || '🪐'}
               </span>
-              <span title={`정규 ${rightRegularLabel}`} className="w-8 h-8 rounded-full bg-black/70 flex items-center justify-center shrink-0">
+              <span title={`정규 ${rightRegularLabel}`} className="w-10 h-10 rounded-full bg-black/70 flex items-center justify-center shrink-0">
                 {rightRegularInfo?.icon || <Shield size={11} className="text-slate-300" />}
               </span>
               <span className="font-bold text-xl text-white truncate">{rightP}</span>
@@ -729,30 +743,40 @@ function App() {
             </div>
           </div>
           {user ? (
-            <div className="flex items-center gap-6">
-                <div className="flex flex-col items-start min-w-[360px] pr-2">
+            <div className="flex items-center gap-5">
+                <div className="flex flex-col items-start min-w-[380px] pr-1">
                     <div className="flex items-center gap-3 w-full">
-                      <span className="w-14 h-14 flex items-center justify-center shrink-0">{currentUserRegularInfo?.icon || <Shield size={30} className="text-slate-300" />}</span>
-                      <span className={`text-[2.15rem] font-black leading-tight truncate drop-shadow-[0_0_10px_rgba(250,204,21,0.4)] ${currentUserRegularInfo?.color || 'text-yellow-300'}`}>
+                      <span className="w-16 h-16 flex items-center justify-center shrink-0">{currentUserRegularInfo?.icon || <Shield size={34} className="text-slate-300" />}</span>
+                      <span className={`text-[2.1rem] font-black leading-tight truncate drop-shadow-[0_0_10px_rgba(250,204,21,0.4)] ${currentUserRegularInfo?.color || 'text-yellow-300'}`}>
                         {currentUserRegularIndex !== null ? `${currentUserRegularIndex + 1}위 ${currentUserRegularInfo?.title || '미집계'}` : '미집계'}
                       </span>
                     </div>
                     <div className="flex items-center gap-3 w-full mt-1.5">
-                      <span className="w-14 h-14 flex items-center justify-center text-[2rem] leading-none shrink-0">{currentUserSeasonInfo?.icon || '🪐'}</span>
-                      <span className={`text-[2.15rem] font-black leading-tight truncate drop-shadow-[0_0_10px_rgba(34,211,238,0.35)] ${currentUserSeasonInfo?.color || 'text-slate-300'}`}>
+                      <span className="w-16 h-16 flex items-center justify-center text-[2.1rem] leading-none shrink-0">{currentUserSeasonInfo?.icon || '🪐'}</span>
+                      <span className={`text-[2.1rem] font-black leading-tight truncate drop-shadow-[0_0_10px_rgba(34,211,238,0.35)] ${currentUserSeasonInfo?.color || 'text-slate-300'}`}>
                         {currentUserSeasonInfo ? `${currentUserSeasonInfo.index + 1}위 ${getSeasonTierBaseName(currentUserSeasonInfo.name)}` : '미집계'}
                       </span>
                     </div>
                 </div>
-                <div className="flex flex-col items-end bg-black/40 px-4 py-2 rounded-xl border border-white/10 shadow-inner">
-                    <span className="text-xs font-bold text-emerald-400 tracking-widest">{profile?.gc || 0} GC</span>
-                    <span className="text-sm font-bold text-fuchsia-400 tracking-widest">{profile?.rp || 1000} RP</span>
+                <div className="grid grid-cols-3 gap-2 bg-black/45 px-4 py-3 rounded-2xl border border-white/10 shadow-inner min-w-[360px]">
+                    <div className="bg-black/45 rounded-xl border border-emerald-400/25 px-3 py-2 text-center">
+                      <p className="text-[11px] font-black text-emerald-300 tracking-widest">GC</p>
+                      <p className="text-2xl font-black text-emerald-300">{profile?.gc || 0}</p>
+                    </div>
+                    <div className="bg-black/45 rounded-xl border border-yellow-400/25 px-3 py-2 text-center">
+                      <p className="text-[11px] font-black text-yellow-300 tracking-widest">RP</p>
+                      <p className="text-2xl font-black text-yellow-300">{currentUserRegularPoints}</p>
+                    </div>
+                    <div className="bg-black/45 rounded-xl border border-fuchsia-400/25 px-3 py-2 text-center">
+                      <p className="text-[11px] font-black text-fuchsia-300 tracking-widest">SP</p>
+                      <p className="text-2xl font-black text-fuchsia-300">{currentUserSeasonPoints}</p>
+                    </div>
                 </div>
-                <div onMouseEnter={() => playSFX('hover')} onClick={handleLogout} className="flex items-center gap-4 bg-black/60 p-2 rounded-full border border-white/10 pr-8 border-l-cyan-500 border-l-4 cursor-pointer hover:border-l-pink-500 transition-all">
-                  <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest"} className="w-10 h-10 rounded-full" alt="profile"/>
+                <div onMouseEnter={() => playSFX('hover')} onClick={handleLogout} className="flex items-center gap-4 bg-black/60 p-3 rounded-full border border-white/10 pr-9 border-l-cyan-500 border-l-4 cursor-pointer hover:border-l-pink-500 transition-all">
+                  <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest"} className="w-14 h-14 rounded-full" alt="profile"/>
                   <div className="flex flex-col">
-                    <span className="text-sm font-bold text-white">{currentUserName || "GUEST"}</span>
-                    <span className="text-[9px] font-bold text-cyan-400 uppercase tracking-tighter">Logout</span>
+                    <span className="text-[1.65rem] leading-tight font-black text-white">{currentUserName || "GUEST"}</span>
+                    <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Logout</span>
                   </div>
                 </div>
             </div>
@@ -1060,16 +1084,16 @@ function App() {
                               const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
                               return (
                                 <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className="rank-card-stable w-full h-[156px] p-4 rounded-[1.45rem] border border-cyan-400/50 bg-black/65 cursor-pointer transition-all hover:border-cyan-300 shadow-[0_0_18px_rgba(34,211,238,0.22)] hover:shadow-[0_0_28px_rgba(34,211,238,0.3)] relative overflow-hidden">
-                                  <div className="w-full flex justify-center -mt-2 mb-1">
-                                    <div className={`${grandRank.bg} px-5 py-1 rounded-full flex items-center justify-center gap-2 shadow-[0_0_14px_rgba(0,0,0,0.35)] bg-black/88`}>
-                                      {grandRank.icon}
-                                      <span className={`text-sm font-bold uppercase tracking-widest ${grandRank.color}`}>{grandRank.title}</span>
-                                    </div>
-                                  </div>
-                                  <div className="w-full flex justify-center mb-1">
-                                    <span className="px-3 py-1 rounded-full bg-black/70 text-cyan-200 text-xs font-black tracking-wider border border-cyan-500/35">
+                                  <div className="w-full grid grid-cols-[76px_1fr] items-center -mt-3 mb-1">
+                                    <span className="text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)] text-left pl-1">
                                       {r.rankIndex + 1}위
                                     </span>
+                                    <div className="justify-self-center">
+                                      <div className={`${grandRank.bg} px-5 py-1 rounded-full flex items-center justify-center gap-2 shadow-[0_0_14px_rgba(0,0,0,0.35)] bg-black/88`}>
+                                        {grandRank.icon}
+                                        <span className={`text-sm font-bold uppercase tracking-widest ${grandRank.color}`}>{grandRank.title}</span>
+                                      </div>
+                                    </div>
                                   </div>
 
                                   <div className="flex items-center justify-between w-full px-1 gap-3">
@@ -1078,7 +1102,7 @@ function App() {
                                       <span className="font-bold text-white text-xl leading-tight truncate">{r.display_name}</span>
                                     </div>
                                     <div className="flex flex-col items-end shrink-0">
-                                      <span className="font-bold text-slate-200 text-4xl tracking-tight">{r.wins}승 {r.losses}패</span>
+                                      <span className="font-black text-yellow-300 text-[2.15rem] tracking-tight drop-shadow-[0_0_10px_rgba(250,204,21,0.45)]">{r.regular_rp || 1000} RP</span>
                                       {r.rankIndex === 0 && (<span className="font-bold text-[9px] px-2 py-1 rounded-full bg-yellow-400/20 text-yellow-400 mt-1">방어전: {r.defense_stack || 0}</span>)}
                                     </div>
                                   </div>
@@ -1090,16 +1114,16 @@ function App() {
                               const tier = getRPTierInfo(i);
                               return (
                                 <div key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className="rank-card-stable w-full h-[156px] p-4 rounded-[1.45rem] border border-cyan-500/35 bg-black/65 cursor-pointer transition-all hover:border-cyan-300 shadow-[0_0_18px_rgba(34,211,238,0.2)] hover:shadow-[0_0_28px_rgba(34,211,238,0.3)] relative overflow-hidden">
-                                  <div className="w-full flex justify-center -mt-2 mb-1">
-                                    <div className={`${tier.bg} px-5 py-1 rounded-full flex items-center justify-center gap-2 shadow-[0_0_14px_rgba(0,0,0,0.35)] bg-black/88`}>
-                                      <span className="text-lg">{tier.icon}</span>
-                                      <span className={`text-sm font-bold uppercase tracking-widest ${tier.color}`}>{getSeasonTierBaseName(tier.name)}</span>
-                                    </div>
-                                  </div>
-                                  <div className="w-full flex justify-center mb-1">
-                                    <span className="px-3 py-1 rounded-full bg-black/70 text-cyan-200 text-xs font-black tracking-wider border border-cyan-500/35">
+                                  <div className="w-full grid grid-cols-[76px_1fr] items-center -mt-3 mb-1">
+                                    <span className="text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)] text-left pl-1">
                                       {i + 1}위
                                     </span>
+                                    <div className="justify-self-center">
+                                      <div className={`${tier.bg} px-5 py-1 rounded-full flex items-center justify-center gap-2 shadow-[0_0_14px_rgba(0,0,0,0.35)] bg-black/88`}>
+                                        <span className="text-lg">{tier.icon}</span>
+                                        <span className={`text-sm font-bold uppercase tracking-widest ${tier.color}`}>{getSeasonTierBaseName(tier.name)}</span>
+                                      </div>
+                                    </div>
                                   </div>
 
                                   <div className="flex items-center justify-between w-full px-1 gap-3">
@@ -1108,7 +1132,7 @@ function App() {
                                       <span className="font-bold text-white text-xl leading-tight truncate">{r.display_name}</span>
                                     </div>
                                     <div className="flex flex-col items-end shrink-0">
-                                      <span className="font-black text-fuchsia-400 text-3xl">{r.rp || 1000} RP</span>
+                                      <span className="font-black text-fuchsia-400 text-3xl">{r.rp || 1000} SP</span>
                                       {(r.win_streak || 0) >= 2 && <span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 mt-1">🔥 {r.win_streak} 연승</span>}
                                     </div>
                                   </div>
@@ -1222,10 +1246,10 @@ function App() {
                                         <span className={`group-hover:text-cyan-400 font-bold text-white truncate ${nameSize}`}>{r.display_name}</span>
                                      </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
-                                       <span className={`font-bold text-slate-300 tracking-tight ${statSize}`}>{r.wins}승 {r.losses}패</span>
-                                       {r.rankIndex === 0 && (<span className="font-bold text-base px-4 py-1.5 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50 mt-2 shadow-[0_0_10px_gold]">👑 방어전 스택: {r.defense_stack || 0}</span>)}
-                                     </div>
-                                   </div>
+                                        <span className={`font-black text-yellow-300 tracking-tight ${statSize}`}>{r.regular_rp || 1000} RP</span>
+                                        {r.rankIndex === 0 && (<span className="font-bold text-base px-4 py-1.5 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/50 mt-2 shadow-[0_0_10px_gold]">👑 방어전 스택: {r.defense_stack || 0}</span>)}
+                                      </div>
+                                    </div>
                                 </div>
                              </div>
                            );
@@ -1283,7 +1307,7 @@ function App() {
                                         <span className={`group-hover:text-cyan-400 font-bold text-white truncate ${nameSize}`}>{r.display_name}</span>
                                       </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
-                                       <span className={`font-black text-fuchsia-400 tracking-tight ${statSize}`}>{r.rp || 1000} RP</span>
+                                       <span className={`font-black text-fuchsia-400 tracking-tight ${statSize}`}>{r.rp || 1000} SP</span>
                                        {(r.win_streak || 0) >= 2 && (<span className="font-bold text-base px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 mt-2 shadow-[0_0_10px_emerald]">🔥 {r.win_streak} 연승</span>)}
                                      </div>
                                    </div>
