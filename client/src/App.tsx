@@ -379,50 +379,43 @@ function App() {
       <div
         key={index}
         onMouseEnter={() => playSFX('hover')}
-        className="bg-black/55 border border-white/10 rounded-2xl p-3 hover:border-cyan-500/50 transition-colors shadow-md"
+        className="bg-black/55 border border-white/10 rounded-2xl px-3 py-2.5 hover:border-cyan-500/50 transition-colors shadow-md"
       >
-        <div className="flex items-center justify-center mb-2">
-          <span className={`px-3 py-1 rounded-lg text-[11px] font-black tracking-widest ${log.match_type === 'free' ? 'bg-pink-600 text-white' : 'bg-cyan-600 text-black'}`}>
+        <div className="flex items-center justify-center mb-1.5">
+          <span className={`px-3 py-1 rounded-lg text-[10px] font-black tracking-widest ${log.match_type === 'free' ? 'bg-pink-600 text-white' : 'bg-cyan-600 text-black'}`}>
             {modeLabel}
           </span>
         </div>
 
-        <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-stretch">
-          <button
-            onClick={() => handleProfileClick(leftP)}
-            className={`text-left rounded-xl border p-2.5 transition-colors cursor-pointer ${isLeftWinner ? 'border-cyan-400/50 bg-cyan-500/10' : 'border-white/10 bg-black/45 hover:border-cyan-400/40'}`}
-          >
-            <div className="flex items-center gap-2">
-              <img src={getAvatarFallback(leftP, rankers)} className={`w-7 h-7 rounded-full border shrink-0 ${isLeftWinner ? 'border-cyan-300' : 'border-slate-500'}`} alt="left-player" />
-              <span className="font-bold text-sm text-white truncate">{leftP}</span>
-            </div>
-            <div className="mt-1.5 flex items-center gap-2">
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded ${leftResult === 'WIN' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>{leftResult}</span>
-              <span className="text-base font-black text-yellow-400">{log.score_left ?? 0}</span>
-            </div>
-            <div className="mt-1 text-[11px] font-bold text-pink-400 truncate">레전드: {log.left_legend || '미선택'}</div>
-            <div className="text-[11px] font-bold text-cyan-300 truncate">무기: {log.left_weapons?.[0] || '미선택'} / {log.left_weapons?.[1] || '미선택'}</div>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <button onClick={() => handleProfileClick(leftP)} className="flex items-center gap-2 min-w-0 cursor-pointer text-left">
+            <img src={getAvatarFallback(leftP, rankers)} className="w-7 h-7 rounded-full border border-white/30 shrink-0" alt="left-player" />
+            <span className="font-bold text-sm text-white truncate">{leftP}</span>
           </button>
 
-          <div className="flex items-center justify-center px-1">
-            <span className="text-3xl font-black text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)]">VS</span>
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <span className={`text-[10px] font-black px-2 py-0.5 rounded ${leftResult === 'WIN' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>{leftResult}</span>
+            <span className="text-lg font-black text-yellow-400">{log.score_left ?? 0}</span>
+            <span className="text-2xl font-black text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)]">VS</span>
+            <span className="text-lg font-black text-yellow-400">{log.score_right ?? 0}</span>
+            <span className={`text-[10px] font-black px-2 py-0.5 rounded ${rightResult === 'WIN' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>{rightResult}</span>
           </div>
 
-          <button
-            onClick={() => handleProfileClick(rightP)}
-            className={`text-right rounded-xl border p-2.5 transition-colors cursor-pointer ${!isLeftWinner ? 'border-cyan-400/50 bg-cyan-500/10' : 'border-white/10 bg-black/45 hover:border-cyan-400/40'}`}
-          >
-            <div className="flex items-center justify-end gap-2">
-              <span className="font-bold text-sm text-white truncate">{rightP}</span>
-              <img src={getAvatarFallback(rightP, rankers)} className={`w-7 h-7 rounded-full border shrink-0 ${!isLeftWinner ? 'border-cyan-300' : 'border-slate-500'}`} alt="right-player" />
-            </div>
-            <div className="mt-1.5 flex items-center justify-end gap-2">
-              <span className="text-base font-black text-yellow-400">{log.score_right ?? 0}</span>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded ${rightResult === 'WIN' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>{rightResult}</span>
-            </div>
-            <div className="mt-1 text-[11px] font-bold text-pink-400 truncate">레전드: {log.right_legend || '미선택'}</div>
-            <div className="text-[11px] font-bold text-cyan-300 truncate">무기: {log.right_weapons?.[0] || '미선택'} / {log.right_weapons?.[1] || '미선택'}</div>
+          <button onClick={() => handleProfileClick(rightP)} className="flex items-center justify-end gap-2 min-w-0 cursor-pointer text-right">
+            <span className="font-bold text-sm text-white truncate">{rightP}</span>
+            <img src={getAvatarFallback(rightP, rankers)} className="w-7 h-7 rounded-full border border-white/30 shrink-0" alt="right-player" />
           </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mt-1">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold text-pink-400 truncate">레전드: {log.left_legend || '미선택'}</p>
+            <p className="text-[11px] font-bold text-cyan-300 truncate">무기: {log.left_weapons?.[0] || '미선택'} / {log.left_weapons?.[1] || '미선택'}</p>
+          </div>
+          <div className="min-w-0 text-right">
+            <p className="text-[11px] font-bold text-pink-400 truncate">레전드: {log.right_legend || '미선택'}</p>
+            <p className="text-[11px] font-bold text-cyan-300 truncate">무기: {log.right_weapons?.[0] || '미선택'} / {log.right_weapons?.[1] || '미선택'}</p>
+          </div>
         </div>
       </div>
     );
@@ -505,8 +498,8 @@ function App() {
         </header>
 
         {activeMenu === 'home' && (
-          <main className="flex-1 p-10 grid grid-cols-12 xl:grid-rows-[44vh_40vh] gap-8 items-stretch pb-20 animate-in fade-in duration-500 h-full">
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[44vh] xl:h-full relative order-1 xl:order-1">
+          <main className="flex-1 p-10 grid grid-cols-12 xl:grid-rows-[36vh_48vh] gap-8 items-stretch pb-20 animate-in fade-in duration-500 h-full">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-[36vh] xl:h-full relative order-1 xl:order-1">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <div className="flex gap-2 p-1.5 bg-black/50 rounded-2xl border border-white/5 mb-4 shrink-0">
                     <div className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-lg font-bold bg-cyan-600 text-black shadow-lg">
@@ -556,7 +549,7 @@ function App() {
                </section>
             </div>
 
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[44vh] xl:h-full relative order-2 xl:order-2">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-[36vh] xl:h-full relative order-2 xl:order-2">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-6 flex flex-col h-full shrink-0 relative z-10 overflow-y-auto custom-scrollbar pr-3">
                   <div className="flex flex-col relative z-10">
                       <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
@@ -699,33 +692,41 @@ function App() {
                         </div>
                       )}
 
-                      {matchPhase === 'scoring' && activeMatch && (
+                       {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-4 mt-2">
-                           <div onMouseEnter={() => playSFX('hover')} className={`p-6 rounded-[2.5rem] border-2 shadow-2xl flex flex-col justify-center gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
-                             <div className="flex items-center justify-between border-b border-white/10 pb-5 gap-4">
-                                <div className="flex flex-col flex-1 min-w-0 items-start text-left">
-                                  <span className={`mb-1.5 text-cyan-400 ${getResponsiveNameClass(currentUserName || '', 'medium')}`}>{currentUserName}</span>
-                                  <span className="text-[11px] font-bold text-slate-500 mb-2">나 (MY PICK)</span>
-                                  <span className="font-bold text-white text-3xl truncate w-full mb-3">{activeMatch.legend}</span>
-                                  
-                                  <div className="flex flex-col gap-1.5 w-full">
-                                    <span className="text-lg font-bold text-cyan-400 truncate w-full text-left tracking-wide">{activeMatch.weapons[0]}</span>
-                                    <span className="text-lg font-bold text-cyan-400 truncate w-full text-left tracking-wide">{activeMatch.weapons[1]}</span>
-                                  </div>
+                           <div onMouseEnter={() => playSFX('hover')} className={`p-5 rounded-[2.5rem] border-2 shadow-2xl flex flex-col gap-3 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
+                             <div className="flex items-center justify-center mb-1">
+                               <span className={`px-3 py-1 rounded-lg text-[11px] font-black tracking-widest ${activeMatch.mode.includes('random') ? 'bg-cyan-600 text-black' : 'bg-pink-600 text-white'}`}>
+                                 {activeMatch.mode.includes('random') ? '랜덤 대전' : '자유 대전'}
+                               </span>
+                             </div>
 
-                                </div>
-                                <span className="font-bold text-3xl text-slate-600 shrink-0 mx-5 mt-10">VS</span>
-                                <div className="flex flex-col flex-1 min-w-0 items-end text-right">
-                                  <span className={`mb-1.5 text-pink-400 ${getResponsiveNameClass(activeMatch.opponent, 'medium')}`}>{activeMatch.opponent}</span>
-                                  <span className="text-[11px] font-bold text-slate-500 mb-2">상대방 (OPPONENT PICK)</span>
-                                  <span className="font-bold text-white text-3xl truncate w-full mb-3 text-right">{activeMatch.oppLegend || '?'}</span>
-                                  
-                                  <div className="flex flex-col gap-1.5 w-full items-end">
-                                    <span className="text-lg font-bold text-pink-400 truncate w-full text-right tracking-wide">{activeMatch.oppWeapons?.[0] || '?'}</span>
-                                    <span className="text-lg font-bold text-pink-400 truncate w-full text-right tracking-wide">{activeMatch.oppWeapons?.[1] || '?'}</span>
-                                  </div>
+                             <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center">
+                               <div className="min-w-0">
+                                 <div className="flex items-center gap-2">
+                                   <img src={currentUserAvatar || getAvatarFallback(currentUserName, rankers)} className="w-9 h-9 rounded-full border border-cyan-300 shrink-0" alt="my-avatar"/>
+                                   <span className={`truncate ${getResponsiveNameClass(currentUserName || '', 'small')}`}>{currentUserName}</span>
+                                 </div>
+                                 <p className="mt-1 text-sm font-bold text-pink-400 truncate">레전드: {activeMatch.legend || '?'}</p>
+                                 <p className="text-sm font-bold text-cyan-300 truncate">무기: {activeMatch.weapons[0] || '?'} / {activeMatch.weapons[1] || '?'}</p>
+                               </div>
 
-                                </div>
+                               <div className="flex items-center gap-2 whitespace-nowrap px-2">
+                                 <span className="text-[10px] font-black px-2 py-0.5 rounded bg-blue-600 text-white">WIN</span>
+                                 <span className="text-2xl font-black text-yellow-400">{myWins ?? '-'}</span>
+                                 <span className="text-3xl font-black text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)]">VS</span>
+                                 <span className="text-2xl font-black text-yellow-400">{myLosses ?? '-'}</span>
+                                 <span className="text-[10px] font-black px-2 py-0.5 rounded bg-red-600 text-white">LOSE</span>
+                               </div>
+
+                               <div className="min-w-0 text-right">
+                                 <div className="flex items-center justify-end gap-2">
+                                   <span className={`truncate ${getResponsiveNameClass(activeMatch.opponent, 'small')}`}>{activeMatch.opponent}</span>
+                                   <img src={getAvatarFallback(activeMatch.opponent, rankers)} className="w-9 h-9 rounded-full border border-pink-300 shrink-0" alt="opponent-avatar"/>
+                                 </div>
+                                 <p className="mt-1 text-sm font-bold text-pink-400 truncate">레전드: {activeMatch.oppLegend || '?'}</p>
+                                 <p className="text-sm font-bold text-cyan-300 truncate">무기: {activeMatch.oppWeapons?.[0] || '?'} / {activeMatch.oppWeapons?.[1] || '?'}</p>
+                               </div>
                              </div>
                            </div>
                            
@@ -756,7 +757,7 @@ function App() {
                </section>
             </div>
 
-            <div className="col-span-12 xl:col-span-8 flex flex-col h-[40vh] xl:h-full relative order-4 xl:order-4">
+            <div className="col-span-12 xl:col-span-8 flex flex-col h-[48vh] xl:h-full relative order-4 xl:order-4">
                <section className="bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2.5rem] p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
                   <div className="flex items-center justify-between gap-3 mb-4 px-1 shrink-0">
                     <div className="flex items-center gap-2">
