@@ -79,7 +79,8 @@ function App() {
   const [rankers, setRankers] = useState<any[]>([]); 
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [discordOnlineUsers, setDiscordOnlineUsers] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState('');
+  const [miniSearchQuery, setMiniSearchQuery] = useState('');
+  const [mainSearchQuery, setMainSearchQuery] = useState('');
   
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [profileTab, setProfileTab] = useState<'overview' | 'details'>('overview');
@@ -224,7 +225,7 @@ function App() {
   useEffect(() => { waitingForScoreRef.current = waitingForScore; }, [waitingForScore]);
   useEffect(() => {
     setShowMoreRegularRanks(false);
-  }, [mainRankTab, searchQuery]);
+  }, [mainRankTab, mainSearchQuery]);
 
   useEffect(() => {
     const onPointerDown = (e: Event) => {
@@ -556,7 +557,7 @@ function App() {
 
     setHomeRankingHeight(null);
     return;
-  }, [activeMenu, matchPhase, logs.length, rankers.length, miniRankMode, searchQuery]);
+  }, [activeMenu, matchPhase, logs.length, rankers.length, miniRankMode, miniSearchQuery]);
 
   useEffect(() => {
     const matchLogChannel = supabase.channel('matches_realtime_sync').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' }, payload => { fetchData(); fetchRankers(); }).subscribe();
@@ -1260,6 +1261,11 @@ function App() {
 
   const rpRankers = [...rankers].sort((a, b) => (b.rp || 0) - (a.rp || 0));
   const normalizeName = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+  const matchesSearch = (displayName: string | undefined | null, query: string) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return (displayName || '').toLowerCase().includes(q);
+  };
   const regularRankMap = new Map(rankers.map((r) => [normalizeName(r.display_name), r]));
 
   const getRegularRankInfoByName = (name?: string | null) => {
@@ -1272,7 +1278,7 @@ function App() {
     const found = regularRankMap.get(normalizeName(name));
     if (!found || typeof found.rankIndex !== 'number') return '미집계';
     const info = getGrandRankInfo(found.rankIndex);
-    return `${info.title} ${found.rankIndex + 1}`;
+    return `${info.title} ${found.rankIndex + 1}위`;
   };
 
   const getSeasonRankInfoByName = (name?: string | null) => {
@@ -1353,14 +1359,15 @@ function App() {
     rankCardRefs.current[key] = el;
   };
   const handleRankSearchEnter = (scope: 'mini' | 'main') => {
-    const query = searchQuery.trim().toLowerCase();
+    const queryRaw = scope === 'mini' ? miniSearchQuery : mainSearchQuery;
+    const query = queryRaw.trim().toLowerCase();
     if (!query) return;
     const mode = scope === 'mini' ? miniRankMode : mainRankTab;
     const source = mode === 'free' ? rankers : rpRankers;
-    const found = source.find((r) => (r.display_name || '').toLowerCase().includes(query));
+    const found = source.find((r) => matchesSearch(r.display_name, queryRaw));
     if (!found) {
       playSFX('error');
-      showStatusPopup('info', '검색 결과 없음', `입력하신 "${searchQuery}"와 일치하는 닉네임이 없습니다.`);
+      showStatusPopup('info', '검색 결과 없음', `입력하신 "${queryRaw}"와 일치하는 닉네임이 없습니다.`);
       return;
     }
     const key = `${scope}:${mode}:${normalizeName(found.display_name)}`;
@@ -1370,6 +1377,9 @@ function App() {
     target.classList.add('rank-jump-highlight');
     window.setTimeout(() => target.classList.remove('rank-jump-highlight'), 1300);
     playSFX('success');
+  };
+  const toggleProfileView = () => {
+    setActiveMenu((prev) => (prev === 'profile' ? 'home' : 'profile'));
   };
 
   // 🌟 V4.6: 전투기록 UI 완벽 분리 구현 (WIN/LOSE 직관적 스티커 형태 도입)
@@ -1554,7 +1564,17 @@ function App() {
         </div>
         <div className="flex flex-col gap-6 sm:gap-8 lg:gap-10 text-slate-500 w-full items-center">
           {MENU_ITEMS.map((item) => (
-            <div key={item.id} title={item.label} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setActiveMenu(item.id); }} className={`cursor-pointer transition-all ${activeMenu === item.id ? 'text-cyan-400 drop-shadow-[0_0_10px_cyan] scale-110' : 'hover:text-slate-300'}`}>
+            <div
+              key={item.id}
+              title={item.label}
+              onMouseEnter={() => playSFX('hover')}
+              onClick={() => {
+                playSFX('click');
+                setActiveMenu(item.id);
+                if (item.id === 'ranking') setMainSearchQuery('');
+              }}
+              className={`cursor-pointer transition-all ${activeMenu === item.id ? 'text-cyan-400 drop-shadow-[0_0_10px_cyan] scale-110' : 'hover:text-slate-300'}`}
+            >
               <item.icon size={20}/>
             </div>
           ))}
@@ -1594,25 +1614,17 @@ function App() {
                       </span>
                     </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 bg-black/45 px-3 py-3 rounded-2xl border border-white/10 shadow-inner w-full sm:w-auto min-w-0 sm:min-w-[280px]">
-                    <div className="col-span-2 bg-black/45 rounded-xl border border-emerald-400/25 px-3 py-2 text-center">
+                <div className="flex flex-col gap-2 bg-black/45 px-3 py-3 rounded-2xl border border-white/10 shadow-inner w-full sm:w-auto min-w-0 sm:min-w-[220px] sm:max-w-[250px]">
+                    <div className="bg-black/45 rounded-xl border border-emerald-400/25 px-3 py-2 text-center">
                       <p className="text-[11px] font-black text-emerald-300 tracking-widest">GC (상점)</p>
                       <p className="text-[1.3rem] sm:text-[1.5rem] lg:text-[1.7rem] font-black text-emerald-300 leading-tight">{profile?.gc || 0}</p>
                     </div>
                     <div className="bg-black/45 rounded-xl border border-fuchsia-400/25 px-3 py-2 text-center">
-                      <p className="text-[11px] font-black text-fuchsia-300 tracking-widest">시즌 포인트</p>
+                      <p className="text-[11px] font-black text-fuchsia-300 tracking-widest">SP (시즌)</p>
                       <p className="text-[1.2rem] sm:text-[1.35rem] lg:text-[1.5rem] font-black text-fuchsia-300 leading-tight">{currentUserSeasonPoints}</p>
                     </div>
-                    <button
-                      onMouseEnter={() => playSFX('hover')}
-                      onClick={() => { playSFX('click'); setActiveMenu('profile'); }}
-                      className="bg-black/45 rounded-xl border border-cyan-400/30 px-3 py-2 text-center cursor-pointer hover:bg-cyan-500/15 transition-all"
-                    >
-                      <p className="text-[11px] font-black text-cyan-300 tracking-widest">내정보</p>
-                      <p className="text-[1rem] sm:text-[1.15rem] font-black text-cyan-200 leading-tight">열기</p>
-                    </button>
                 </div>
-                <div onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setActiveMenu('profile'); }} className="flex items-center gap-3 sm:gap-4 bg-black/60 p-2.5 sm:p-3.5 rounded-full border border-white/10 pr-4 sm:pr-6 border-l-cyan-500 border-l-4 cursor-pointer hover:border-l-pink-500 transition-all w-full sm:w-auto justify-center sm:justify-start">
+                <div onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); toggleProfileView(); }} className="flex items-center gap-3 sm:gap-4 bg-black/60 p-2.5 sm:p-3.5 rounded-full border border-white/10 pr-4 sm:pr-6 border-l-cyan-500 border-l-4 cursor-pointer hover:border-l-pink-500 transition-all w-full sm:w-auto justify-center sm:justify-start">
                   <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest"} className={`w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full border-2 ${equippedBorderFxClass}`} alt="profile"/>
                   <div className="flex flex-col">
                     <span className={`text-[1.2rem] sm:text-[1.45rem] lg:text-[1.9rem] leading-tight font-black ${equippedNameClass}`}>{currentUserName || "GUEST"}</span>
@@ -1949,7 +1961,7 @@ function App() {
                       
                       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar space-y-3 rank-glow-buffer">
                           {miniRankMode === 'free' ? (
-                            rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).map((r) => {
+                            rankers.length > 0 ? rankers.filter(r => matchesSearch(r.display_name, miniSearchQuery)).map((r) => {
                               const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
                               return (
                                 <div ref={setRankCardRef('mini', 'free', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${rankCardFxByTier(r.rankIndex)}`}>
@@ -1961,22 +1973,32 @@ function App() {
                                       {grandRank.icon}
                                     </div>
                                   </div>
+                                  {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 2) && (
+                                    <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex flex-col items-end gap-1.5 z-20">
+                                      {(r.defense_stack || 0) > 0 && (
+                                        <span className="font-black text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full bg-red-500/18 text-red-200 border border-red-400/45 shadow-[0_0_10px_rgba(248,113,113,0.35)]">
+                                          🛡 방어전 {r.defense_stack}
+                                        </span>
+                                      )}
+                                      {(r.win_streak || 0) >= 2 && (
+                                        <span className="font-black text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/16 text-emerald-200 border border-emerald-400/45 shadow-[0_0_10px_rgba(52,211,153,0.35)]">
+                                          🔥 {r.win_streak}연승{getStreakBountyGC(r.win_streak || 0) > 0 ? ` · ${getStreakBountyGC(r.win_streak || 0)}GC` : ''}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
 
                                   <div className="flex items-center justify-between w-full px-1 gap-3 pt-9 sm:pt-10">
                                     <div className="flex items-center gap-4 flex-1 min-w-0 pr-2">
                                       <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${isCurrentUserDisplayName(r.display_name) ? getAvatarBorderFxForUser(r.display_name) : (r.rankIndex === 0 ? 'border-red-400 shadow-[0_0_16px_rgba(248,113,113,0.65)]' : 'border-cyan-200/40')} shrink-0`} alt="p"/>
                                       <span className={`font-bold text-base sm:text-[1.2rem] leading-tight whitespace-normal break-all ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
-                                    <div className="flex flex-col items-end shrink-0">
-                                      {(r.defense_stack || 0) > 0 && (<span className="font-bold text-[9px] px-2 py-1 rounded-full bg-red-500/15 text-red-300 mb-1 border border-red-400/35">방어전 {r.defense_stack}</span>)}
-                                      {(r.win_streak || 0) >= 2 && (<span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 mb-1">🔥 {r.win_streak}연승{getStreakBountyGC(r.win_streak || 0) > 0 ? ` · ${getStreakBountyGC(r.win_streak || 0)}GC` : ''}</span>)}
-                                    </div>
                                   </div>
                                 </div>
                               );
                             }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400 mt-10 text-lg">랭커가 없습니다</div>)
                           ) : (
-                            rpRankers.length > 0 ? rpRankers.filter(r => r.display_name?.includes(searchQuery)).slice(0, 10).map((r, i) => {
+                            rpRankers.length > 0 ? rpRankers.filter(r => matchesSearch(r.display_name, miniSearchQuery)).slice(0, 10).map((r, i) => {
                               const tier = getRPTierInfo(i);
                               return (
                                 <div ref={setRankCardRef('mini', 'random', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${seasonCardFxByTier(i)}`}>
@@ -1988,17 +2010,27 @@ function App() {
                                       {tier.icon}
                                     </div>
                                   </div>
+                                  {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 2) && (
+                                    <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex flex-col items-end gap-1.5 z-20">
+                                      {(r.defense_stack || 0) > 0 && (
+                                        <span className="font-black text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full bg-red-500/18 text-red-200 border border-red-400/45 shadow-[0_0_10px_rgba(248,113,113,0.35)]">
+                                          🛡 방어전 {r.defense_stack}
+                                        </span>
+                                      )}
+                                      {(r.win_streak || 0) >= 2 && (
+                                        <span className="font-black text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/16 text-emerald-200 border border-emerald-400/45 shadow-[0_0_10px_rgba(52,211,153,0.35)]">
+                                          🔥 {r.win_streak}연승{getStreakBountyGC(r.win_streak || 0) > 0 ? ` · ${getStreakBountyGC(r.win_streak || 0)}GC` : ''}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
 
                                   <div className="flex items-center justify-between w-full px-1 gap-3 pt-9 sm:pt-10">
                                     <div className="flex items-center gap-4 flex-1 min-w-0">
                                       <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${isCurrentUserDisplayName(r.display_name) ? getAvatarBorderFxForUser(r.display_name) : (i < 3 ? 'border-red-500 shadow-[0_0_10px_red]' : 'border-cyan-200/40')} shrink-0`} alt="p"/>
                                       <span className={`font-bold text-base sm:text-[1.2rem] leading-tight whitespace-normal break-all ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
-                                    <div className="flex flex-col items-end shrink-0">
-                                      {(r.defense_stack || 0) > 0 && <span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 mb-1 border border-red-400/35">방어전 {r.defense_stack}</span>}
-                                      {(r.win_streak || 0) >= 2 && <span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 mb-1">🔥 {r.win_streak}연승{getStreakBountyGC(r.win_streak || 0) > 0 ? ` · ${getStreakBountyGC(r.win_streak || 0)}GC` : ''}</span>}
-                                      <span className="font-black text-fuchsia-400 text-[1.15rem] sm:text-[1.5rem]">{r.rp || 1000}</span>
-                                    </div>
+                                    <span className="font-black text-fuchsia-400 text-[1.15rem] sm:text-[1.5rem] shrink-0">{r.rp || 1000}</span>
                                   </div>
                                 </div>
                               );
@@ -2008,7 +2040,7 @@ function App() {
 
                       <div className="relative px-2 mt-4 shrink-0">
                         <Search className="absolute left-6 top-4 text-slate-500" size={20}/>
-                        <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRankSearchEnter('mini'); } }} placeholder="검색..." className="w-full bg-white/5 border border-white/10 pl-14 pr-8 py-4 rounded-full text-base font-bold outline-none focus:border-cyan-400 text-white select-text"/>
+                        <input value={miniSearchQuery} onChange={(e) => setMiniSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRankSearchEnter('mini'); } }} placeholder="검색..." className="w-full bg-white/5 border border-white/10 pl-14 pr-8 py-4 rounded-full text-base font-bold outline-none focus:border-cyan-400 text-white select-text"/>
                       </div>
                   </div>
                </section>
@@ -2156,12 +2188,12 @@ function App() {
                    <div className="flex justify-end mb-8 max-w-7xl mx-auto w-full px-4">
                      <div className="relative w-96">
                        <Search className="absolute left-6 top-4.5 text-slate-500" size={24}/>
-                       <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRankSearchEnter('main'); } }} placeholder="랭커 검색..." className="w-full bg-black/40 border border-white/10 pl-16 pr-8 py-5 rounded-full text-lg font-bold outline-none focus:border-cyan-400 text-white select-text shadow-inner"/>
+                       <input value={mainSearchQuery} onChange={(e) => setMainSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRankSearchEnter('main'); } }} placeholder="랭커 검색..." className="w-full bg-black/40 border border-white/10 pl-16 pr-8 py-5 rounded-full text-lg font-bold outline-none focus:border-cyan-400 text-white select-text shadow-inner"/>
                      </div>
                    </div>
 
                    {(() => {
-                     const regularFiltered = rankers.length > 0 ? rankers.filter((r) => r.display_name?.includes(searchQuery)) : [];
+                     const regularFiltered = rankers.length > 0 ? rankers.filter((r) => matchesSearch(r.display_name, mainSearchQuery)) : [];
                      const featured = regularFiltered.slice(0, 9);
                      const row1 = featured.slice(0, 1);
                      const row2 = featured.slice(1, 4);
@@ -2213,7 +2245,7 @@ function App() {
                            </div>
 
                            {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 2) && (
-                             <div className="absolute right-3 sm:right-4 top-3 flex flex-col items-end gap-1.5 z-20">
+                              <div className="absolute right-3 sm:right-4 top-1 sm:top-2 flex flex-col items-end gap-1.5 z-20">
                                {(r.defense_stack || 0) > 0 && (
                                  <span className="font-black text-sm sm:text-base px-3.5 py-1.5 rounded-full bg-red-500/18 text-red-200 border border-red-400/45 shadow-[0_0_12px_rgba(248,113,113,0.35)]">
                                    🛡 방어전 {r.defense_stack} · +{defenseBonus}GC
@@ -2290,12 +2322,12 @@ function App() {
                    <div className="flex justify-end mb-8 max-w-7xl mx-auto w-full px-4 mt-8">
                      <div className="relative w-96">
                        <Search className="absolute left-6 top-4.5 text-slate-500" size={24}/>
-                       <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRankSearchEnter('main'); } }} placeholder="랭커 검색..." className="w-full bg-black/40 border border-white/10 pl-16 pr-8 py-5 rounded-full text-lg font-bold outline-none focus:border-cyan-400 text-white select-text shadow-inner"/>
+                       <input value={mainSearchQuery} onChange={(e) => setMainSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRankSearchEnter('main'); } }} placeholder="랭커 검색..." className="w-full bg-black/40 border border-white/10 pl-16 pr-8 py-5 rounded-full text-lg font-bold outline-none focus:border-cyan-400 text-white select-text shadow-inner"/>
                      </div>
                    </div>
                    
                    <div className="grid grid-cols-12 gap-10 pb-20 justify-center px-4 grid-glow-fix">
-                      {rpRankers.length > 0 ? rpRankers.filter(r => r.display_name?.includes(searchQuery)).map((r, i) => {
+                      {rpRankers.length > 0 ? rpRankers.filter(r => matchesSearch(r.display_name, mainSearchQuery)).map((r, i) => {
                            const tier = getRPTierInfo(i);
                            const move = getRankMoveValue(r.display_name, 'season');
                            const streakBounty = getStreakBountyGC(r.win_streak || 0);
@@ -2341,7 +2373,7 @@ function App() {
                                     </div>
 
                                     {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 2) && (
-                                      <div className="absolute right-3 sm:right-4 top-3 flex flex-col items-end gap-1.5 z-20">
+                                      <div className="absolute right-3 sm:right-4 top-1 sm:top-2 flex flex-col items-end gap-1.5 z-20">
                                         {(r.defense_stack || 0) > 0 && (
                                           <span className="font-black text-sm sm:text-base px-3.5 py-1.5 rounded-full bg-red-500/18 text-red-200 border border-red-400/45 shadow-[0_0_12px_rgba(248,113,113,0.35)]">
                                             🛡 방어전 {r.defense_stack} · +{defenseBonus}GC
@@ -2362,7 +2394,7 @@ function App() {
                                       </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
                                        <span className={`font-black text-fuchsia-400 tracking-tight ${statSize}`}>{r.rp || 1000}</span>
-                                       <span className="text-[10px] font-black text-slate-400 tracking-wider">시즌 포인트</span>
+                                       <span className="text-[10px] font-black text-slate-400 tracking-wider">SP (시즌)</span>
                                      </div>
                                    </div>
                                 </div>
@@ -2419,8 +2451,8 @@ function App() {
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">최고 연승</p><p className="text-2xl font-black text-amber-300">{myStats.longestStreak}</p></div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">정규 경기</p><p className="text-2xl font-black text-cyan-300">{myStats.freeMatches}</p></div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">시즌 경기</p><p className="text-2xl font-black text-violet-300">{myStats.randomMatches}</p></div>
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">SEASON SP</p><p className="text-2xl font-black text-fuchsia-400">{profile?.rp || 1000}</p></div>
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">GALAXY CREDITS</p><p className="text-2xl font-black text-emerald-400">{profile?.gc || 0}</p></div>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">SP (시즌)</p><p className="text-2xl font-black text-fuchsia-400">{profile?.rp || 1000}</p></div>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-400 text-[10px] tracking-widest font-bold mb-1">GC (상점)</p><p className="text-2xl font-black text-emerald-400">{profile?.gc || 0}</p></div>
                       </div>
                     </div>
                   </div>
@@ -2615,11 +2647,11 @@ function App() {
                           <p className="text-3xl font-black text-pink-400">{selectedPlayer.win_rate || "0.0%"}</p>
                         </div>
                         <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center">
-                          <p className="text-xs font-bold text-slate-400 mb-2">SEASON POINTS (SP)</p>
+                          <p className="text-xs font-bold text-slate-400 mb-2">SP (시즌)</p>
                           <p className="text-3xl font-black text-fuchsia-400">{selectedPlayer.rp || 1000}</p>
                         </div>
                         <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center col-span-1">
-                          <p className="text-xs font-bold text-slate-400 mb-2">GALAXY CREDITS</p>
+                          <p className="text-xs font-bold text-slate-400 mb-2">GC (상점)</p>
                           <p className="text-3xl font-black text-emerald-400">{selectedPlayer.gc || 0}</p>
                         </div>
                         <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center">
