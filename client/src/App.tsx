@@ -932,6 +932,7 @@ function App() {
                         const tRankNow = typeof tProfile.rank_index === 'number' ? tProfile.rank_index : rankers.findIndex((r) => r.display_name === targetName);
                         const cRegular = typeof cProfile.regular_rp === 'number' ? cProfile.regular_rp : calculateRegularPoints(cProfile.wins || 0, cProfile.losses || 0);
                         const tRegular = typeof tProfile.regular_rp === 'number' ? tProfile.regular_rp : calculateRegularPoints(tProfile.wins || 0, tProfile.losses || 0);
+                        const targetIsTopRegular = tRankNow === 0;
 
                         if (challengerWon) {
                           cUpdates.defense_stack = 0;
@@ -939,7 +940,7 @@ function App() {
                           cUpdates.gc = (cProfile.gc || 0) + bet;
                           tUpdates.gc = (tProfile.gc || 0) - bet;
                         } else {
-                          tUpdates.defense_stack = (tProfile.defense_stack || 0) + 1;
+                          tUpdates.defense_stack = targetIsTopRegular ? (tProfile.defense_stack || 0) + 1 : 0;
                           cUpdates.defense_stack = 0;
                           cUpdates.gc = (cProfile.gc || 0) - bet;
                           tUpdates.gc = (tProfile.gc || 0) + bet;
@@ -966,6 +967,8 @@ function App() {
                           if (tRankNow >= 0) tUpdates.rank_index = tRankNow;
                         }
                     } else {
+                        const targetSeasonRankNow = rpRankers.findIndex((r) => normalizeName(r.display_name) === normalizeName(targetName));
+                        const targetIsTopSeason = targetSeasonRankNow === 0;
                         const calcRP = (prof: any, won: boolean, oppProf: any) => {
                             let rpChg = won ? 50 : -20; let nStreak = won ? (prof.win_streak || 0) + 1 : 0;
                             if (won) { if (nStreak === 2) rpChg = 60; else if (nStreak === 3) rpChg = 75; else if (nStreak >= 4) rpChg = 100; if ((oppProf.rp || 1000) - (prof.rp || 1000) > 300) rpChg += 100; }
@@ -975,6 +978,8 @@ function App() {
                         const cRes = calcRP(cProfile, challengerWon, tProfile); const tRes = calcRP(tProfile, !challengerWon, cProfile);
                         cUpdates.rp = cRes.rp; cUpdates.win_streak = cRes.streak; cUpdates.gc = cRes.gc;
                         tUpdates.rp = tRes.rp; tUpdates.win_streak = tRes.streak; tUpdates.gc = tRes.gc;
+                        cUpdates.defense_stack = 0;
+                        tUpdates.defense_stack = !challengerWon && targetIsTopSeason ? (tProfile.defense_stack || 0) + 1 : 0;
                     }
                     await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id); await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
                 }
@@ -1339,7 +1344,84 @@ function App() {
     if (safe < 3) return 0;
     return 100 + (safe - 3) * 50;
   };
-  const getDefenseBonusGC = (stack?: number) => (stack || 0) * 100;
+  const getDefenseBonusGC = (stack?: number) => (stack || 0) * 200;
+  const getRegularInnerGlowStyle = (idx: number): React.CSSProperties => {
+    if (idx === 0) {
+      return {
+        background:
+          'radial-gradient(circle at 18% 20%, rgba(248,113,113,0.2) 0%, transparent 42%), radial-gradient(circle at 82% 80%, rgba(248,113,113,0.12) 0%, transparent 50%)',
+        boxShadow: 'inset 0 0 36px rgba(248,113,113,0.2), inset 0 0 14px rgba(248,113,113,0.24)',
+      };
+    }
+    if (idx < 4) {
+      return {
+        background:
+          'radial-gradient(circle at 20% 20%, rgba(167,139,250,0.18) 0%, transparent 44%), radial-gradient(circle at 82% 80%, rgba(167,139,250,0.1) 0%, transparent 52%)',
+        boxShadow: 'inset 0 0 32px rgba(167,139,250,0.18), inset 0 0 12px rgba(167,139,250,0.2)',
+      };
+    }
+    if (idx < 9) {
+      return {
+        background:
+          'radial-gradient(circle at 20% 20%, rgba(34,211,238,0.17) 0%, transparent 45%), radial-gradient(circle at 82% 80%, rgba(34,211,238,0.09) 0%, transparent 54%)',
+        boxShadow: 'inset 0 0 30px rgba(34,211,238,0.16), inset 0 0 11px rgba(34,211,238,0.18)',
+      };
+    }
+    if (idx < 16) {
+      return {
+        background:
+          'radial-gradient(circle at 20% 20%, rgba(52,211,153,0.16) 0%, transparent 45%), radial-gradient(circle at 82% 80%, rgba(52,211,153,0.08) 0%, transparent 54%)',
+        boxShadow: 'inset 0 0 28px rgba(52,211,153,0.15), inset 0 0 10px rgba(52,211,153,0.16)',
+      };
+    }
+    if (idx < 25) {
+      return {
+        background:
+          'radial-gradient(circle at 20% 20%, rgba(250,204,21,0.14) 0%, transparent 46%), radial-gradient(circle at 82% 80%, rgba(250,204,21,0.08) 0%, transparent 55%)',
+        boxShadow: 'inset 0 0 26px rgba(250,204,21,0.13), inset 0 0 10px rgba(250,204,21,0.15)',
+      };
+    }
+    return {
+      background:
+        'radial-gradient(circle at 20% 20%, rgba(148,163,184,0.12) 0%, transparent 46%), radial-gradient(circle at 82% 80%, rgba(148,163,184,0.07) 0%, transparent 55%)',
+      boxShadow: 'inset 0 0 22px rgba(148,163,184,0.12), inset 0 0 8px rgba(148,163,184,0.12)',
+    };
+  };
+  const getSeasonInnerGlowStyle = (idx: number): React.CSSProperties => {
+    if (idx === 0) {
+      return {
+        background:
+          'radial-gradient(circle at 18% 20%, rgba(248,113,113,0.2) 0%, transparent 42%), radial-gradient(circle at 82% 80%, rgba(248,113,113,0.12) 0%, transparent 50%)',
+        boxShadow: 'inset 0 0 36px rgba(248,113,113,0.2), inset 0 0 14px rgba(248,113,113,0.24)',
+      };
+    }
+    if (idx < 6) {
+      return {
+        background:
+          'radial-gradient(circle at 20% 20%, rgba(232,121,249,0.18) 0%, transparent 44%), radial-gradient(circle at 82% 80%, rgba(232,121,249,0.1) 0%, transparent 52%)',
+        boxShadow: 'inset 0 0 32px rgba(232,121,249,0.18), inset 0 0 12px rgba(232,121,249,0.2)',
+      };
+    }
+    if (idx < 12) {
+      return {
+        background:
+          'radial-gradient(circle at 20% 20%, rgba(34,211,238,0.17) 0%, transparent 45%), radial-gradient(circle at 82% 80%, rgba(34,211,238,0.09) 0%, transparent 54%)',
+        boxShadow: 'inset 0 0 30px rgba(34,211,238,0.16), inset 0 0 11px rgba(34,211,238,0.18)',
+      };
+    }
+    if (idx < 20) {
+      return {
+        background:
+          'radial-gradient(circle at 20% 20%, rgba(125,211,252,0.15) 0%, transparent 46%), radial-gradient(circle at 82% 80%, rgba(125,211,252,0.09) 0%, transparent 55%)',
+        boxShadow: 'inset 0 0 28px rgba(125,211,252,0.15), inset 0 0 10px rgba(125,211,252,0.16)',
+      };
+    }
+    return {
+      background:
+        'radial-gradient(circle at 20% 20%, rgba(165,180,252,0.12) 0%, transparent 46%), radial-gradient(circle at 82% 80%, rgba(165,180,252,0.07) 0%, transparent 55%)',
+      boxShadow: 'inset 0 0 24px rgba(165,180,252,0.12), inset 0 0 8px rgba(165,180,252,0.13)',
+    };
+  };
   const getRankMoveValue = (name?: string | null, mode: 'regular' | 'season' = 'regular') => {
     const key = normalizeName(name);
     if (!key) return 0;
@@ -1628,7 +1710,7 @@ function App() {
                     <div className="flex items-center gap-3 w-full">
                       <span className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 flex items-center justify-center shrink-0">{currentUserRegularInfo?.icon || <Shield size={34} className="text-slate-300" />}</span>
                       <span className={`text-[1.1rem] sm:text-[1.35rem] lg:text-[1.95rem] font-black leading-tight whitespace-nowrap drop-shadow-[0_0_10px_rgba(250,204,21,0.4)] ${currentUserRegularInfo?.color || 'text-yellow-300'}`}>
-                        {currentUserRegularIndex !== null ? `${currentUserRegularIndex + 1}위 ${currentUserRegularInfo?.title || '미집계'}` : '미집계'}
+                        {currentUserRegularIndex !== null ? `${currentUserRegularInfo?.title || '미집계'} ${currentUserRegularIndex + 1}위` : '미집계'}
                       </span>
                     </div>
                     <div className="flex items-center gap-3 w-full mt-1.5">
@@ -1653,16 +1735,6 @@ function App() {
                   <div className="flex flex-col min-w-0">
                     <span className={`text-[1.2rem] sm:text-[1.45rem] lg:text-[1.9rem] leading-tight font-black ${equippedNameClass}`}>{currentUserName || "GUEST"}</span>
                     <span className="text-[10px] sm:text-xs font-bold text-cyan-400 uppercase tracking-wider">Profile</span>
-                  </div>
-                  <div className="hidden sm:flex flex-col gap-1 items-start border-l border-white/10 pl-3 ml-1 min-w-[126px]">
-                    <span className={`inline-flex items-center gap-1.5 text-[11px] lg:text-xs font-black leading-none ${currentUserRegularInfo?.color || 'text-slate-300'}`}>
-                      <span className="w-5 h-5 lg:w-6 lg:h-6 flex items-center justify-center">{currentUserRegularInfo?.icon || <Shield size={12} className="text-slate-300" />}</span>
-                      {currentUserRegularIndex !== null ? `${currentUserRegularIndex + 1}위` : '미집계'}
-                    </span>
-                    <span className={`inline-flex items-center gap-1.5 text-[11px] lg:text-xs font-black leading-none ${currentUserSeasonInfo?.color || 'text-slate-300'}`}>
-                      <span className="w-5 h-5 lg:w-6 lg:h-6 flex items-center justify-center leading-none">{currentUserSeasonInfo?.icon || '🪐'}</span>
-                      {currentUserSeasonInfo ? `${currentUserSeasonInfo.index + 1}위` : '미집계'}
-                    </span>
                   </div>
                 </div>
                 <button
@@ -2480,8 +2552,30 @@ function App() {
                   <div className="flex flex-col lg:flex-row items-center gap-6 lg:gap-10">
                     <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest&backgroundColor=b6e3f4"} className={`w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 rounded-full border-4 shrink-0 ${equippedBorderFxClass}`} alt="profile"/>
                     <div className="flex-1 min-w-0 w-full">
-                      <h3 className={`italic uppercase mb-2 font-black text-3xl sm:text-4xl lg:text-5xl whitespace-normal break-all leading-tight ${equippedNameClass}`}>{currentUserName || "GUEST PILOT"}</h3>
+                      <div className="flex items-start justify-between gap-4">
+                        <h3 className={`italic uppercase mb-2 font-black text-3xl sm:text-4xl lg:text-5xl whitespace-normal break-all leading-tight ${equippedNameClass}`}>{currentUserName || "GUEST PILOT"}</h3>
+                        <div className="hidden sm:flex flex-col items-end gap-2 shrink-0">
+                          <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${currentUserRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
+                            {currentUserRegularInfo?.icon || <Shield size={14} className="text-slate-300" />}
+                            {currentUserRegularIndex !== null ? `${currentUserRegularInfo?.title || '미집계'} ${currentUserRegularIndex + 1}위` : '미집계'}
+                          </span>
+                          <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${currentUserSeasonInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
+                            <span>{currentUserSeasonInfo?.icon || '🪐'}</span>
+                            {currentUserSeasonInfo ? `${currentUserSeasonInfo.name} ${currentUserSeasonInfo.index + 1}위` : '미집계'}
+                          </span>
+                        </div>
+                      </div>
                       <p className="text-cyan-400 font-bold text-sm sm:text-base lg:text-lg mb-5 tracking-wide whitespace-normal break-all">{user?.email || "로그인이 필요합니다"}</p>
+                      <div className="sm:hidden flex flex-col gap-2 mb-5">
+                        <span className={`inline-flex items-center gap-2 text-sm font-bold px-3 py-1.5 rounded-full border border-white/20 ${currentUserRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
+                          {currentUserRegularInfo?.icon || <Shield size={14} className="text-slate-300" />}
+                          {currentUserRegularIndex !== null ? `${currentUserRegularInfo?.title || '미집계'} ${currentUserRegularIndex + 1}위` : '미집계'}
+                        </span>
+                        <span className={`inline-flex items-center gap-2 text-sm font-bold px-3 py-1.5 rounded-full border border-white/20 ${currentUserSeasonInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
+                          <span>{currentUserSeasonInfo?.icon || '🪐'}</span>
+                          {currentUserSeasonInfo ? `${currentUserSeasonInfo.name} ${currentUserSeasonInfo.index + 1}위` : '미집계'}
+                        </span>
+                      </div>
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">전체 경기</p><p className="text-2xl font-black text-white">{myStats.matches.length}</p></div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">승/패</p><p className="text-2xl font-black text-white">{myStats.wins} / {myStats.losses}</p></div>
