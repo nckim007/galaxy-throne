@@ -95,6 +95,10 @@ function App() {
   
   const [miniRankMode, setMiniRankMode] = useState<'free' | 'random'>('free');
   const [mainRankTab, setMainRankTab] = useState<'free' | 'random'>('free');
+  const [showMoreRegularRanks, setShowMoreRegularRanks] = useState(false);
+  const [regularRankMoves, setRegularRankMoves] = useState<Record<string, number>>({});
+  const [seasonRankMoves, setSeasonRankMoves] = useState<Record<string, number>>({});
+  const [resultFx, setResultFx] = useState<{ type: 'win' | 'lose'; message: string } | null>(null);
 
   const [bgmEnabled, setBgmEnabled] = useState(localStorage.getItem('bgmEnabled') !== 'false');
   const [sfxEnabled, setSfxEnabled] = useState(localStorage.getItem('sfxEnabled') !== 'false');
@@ -137,7 +141,7 @@ function App() {
     border_void: 'border-slate-300 shadow-[0_0_18px_rgba(148,163,184,0.58)]',
   };
   const rankCardFxByTier = (idx: number) => {
-    if (idx === 0) return 'border border-yellow-300/85 shadow-[0_0_32px_rgba(250,204,21,0.3)] bg-[linear-gradient(140deg,rgba(250,204,21,0.09),rgba(0,0,0,0.58)_45%,rgba(0,0,0,0.8))]';
+    if (idx === 0) return 'border border-red-400/85 shadow-[0_0_32px_rgba(248,113,113,0.35)] bg-[linear-gradient(140deg,rgba(248,113,113,0.12),rgba(0,0,0,0.58)_45%,rgba(0,0,0,0.8))]';
     if (idx < 4) return 'border border-violet-300/80 shadow-[0_0_26px_rgba(167,139,250,0.28)] bg-[linear-gradient(140deg,rgba(167,139,250,0.08),rgba(0,0,0,0.58)_45%,rgba(0,0,0,0.8))]';
     if (idx < 9) return 'border border-cyan-300/75 shadow-[0_0_22px_rgba(34,211,238,0.25)] bg-[linear-gradient(140deg,rgba(34,211,238,0.08),rgba(0,0,0,0.58)_45%,rgba(0,0,0,0.8))]';
     if (idx < 16) return 'border border-emerald-300/70 shadow-[0_0_20px_rgba(110,231,183,0.22)] bg-[linear-gradient(140deg,rgba(110,231,183,0.07),rgba(0,0,0,0.6)_45%,rgba(0,0,0,0.82))]';
@@ -145,11 +149,22 @@ function App() {
     return 'border border-slate-300/50 shadow-[0_0_16px_rgba(148,163,184,0.16)] bg-[linear-gradient(140deg,rgba(148,163,184,0.06),rgba(0,0,0,0.64)_45%,rgba(0,0,0,0.84))]';
   };
   const seasonCardFxByTier = (idx: number) => {
-    if (idx === 0) return 'border border-yellow-300/80 shadow-[0_0_30px_rgba(250,204,21,0.28)] bg-[linear-gradient(140deg,rgba(250,204,21,0.08),rgba(0,0,0,0.6)_45%,rgba(0,0,0,0.84))]';
+    if (idx === 0) return 'border border-red-400/82 shadow-[0_0_30px_rgba(248,113,113,0.3)] bg-[linear-gradient(140deg,rgba(248,113,113,0.12),rgba(0,0,0,0.6)_45%,rgba(0,0,0,0.84))]';
     if (idx < 6) return 'border border-fuchsia-300/75 shadow-[0_0_24px_rgba(232,121,249,0.25)] bg-[linear-gradient(140deg,rgba(232,121,249,0.08),rgba(0,0,0,0.62)_45%,rgba(0,0,0,0.84))]';
     if (idx < 12) return 'border border-cyan-300/72 shadow-[0_0_21px_rgba(34,211,238,0.23)] bg-[linear-gradient(140deg,rgba(34,211,238,0.08),rgba(0,0,0,0.62)_45%,rgba(0,0,0,0.84))]';
     if (idx < 20) return 'border border-sky-300/68 shadow-[0_0_18px_rgba(125,211,252,0.2)] bg-[linear-gradient(140deg,rgba(125,211,252,0.07),rgba(0,0,0,0.62)_45%,rgba(0,0,0,0.84))]';
     return 'border border-indigo-300/62 shadow-[0_0_16px_rgba(165,180,252,0.18)] bg-[linear-gradient(140deg,rgba(165,180,252,0.07),rgba(0,0,0,0.62)_45%,rgba(0,0,0,0.84))]';
+  };
+  const getSeasonTierBorderClass = (idx?: number | null) => {
+    if (idx === null || idx === undefined || idx < 0) return 'border-slate-300/40 shadow-[0_0_8px_rgba(148,163,184,0.25)]';
+    if (idx === 0) return 'border-red-400 shadow-[0_0_14px_rgba(248,113,113,0.55)]';
+    if (idx < 4) return 'border-violet-400 shadow-[0_0_12px_rgba(167,139,250,0.48)]';
+    if (idx < 9) return 'border-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.48)]';
+    if (idx < 16) return 'border-sky-300 shadow-[0_0_10px_rgba(125,211,252,0.45)]';
+    if (idx < 25) return 'border-yellow-300 shadow-[0_0_10px_rgba(250,204,21,0.42)]';
+    if (idx < 36) return 'border-slate-300 shadow-[0_0_10px_rgba(203,213,225,0.35)]';
+    if (idx < 50) return 'border-orange-300 shadow-[0_0_10px_rgba(253,186,116,0.35)]';
+    return 'border-zinc-400 shadow-[0_0_8px_rgba(161,161,170,0.3)]';
   };
 
   const equippedNameColorClass = nameColorClassMap[equippedItems.nameColor] || nameColorClassMap.name_default;
@@ -190,10 +205,17 @@ function App() {
   const recentLogsBoardRef = useRef<HTMLDivElement | null>(null);
   const rankingBoardRef = useRef<HTMLDivElement | null>(null);
   const cosmeticSyncWarnedRef = useRef(false);
+  const rankHistoryRef = useRef<{ regular: Record<string, number>; season: Record<string, number> }>({
+    regular: {},
+    season: {},
+  });
 
   useEffect(() => { activeMatchRef.current = activeMatch; }, [activeMatch]);
   useEffect(() => { matchPhaseRef.current = matchPhase; }, [matchPhase]);
   useEffect(() => { waitingForScoreRef.current = waitingForScore; }, [waitingForScore]);
+  useEffect(() => {
+    setShowMoreRegularRanks(false);
+  }, [mainRankTab, searchQuery]);
 
   useEffect(() => {
     localStorage.setItem('bgmEnabled', bgmEnabled.toString());
@@ -507,8 +529,12 @@ function App() {
   const fetchRankers = async () => {
     const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: true });
     if (profiles) {
-      const processed = profiles.map((r, i) => ({
-        ...r, rankIndex: i, display_name: r.display_name || 'GUEST', wins: r.wins || 0, losses: r.losses || 0,
+      const normalize = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+      const base = profiles.map((r) => ({
+        ...r,
+        display_name: r.display_name || 'GUEST',
+        wins: r.wins || 0,
+        losses: r.losses || 0,
         win_rate: (r.wins + r.losses) > 0 ? (((r.wins) / (r.wins + r.losses)) * 100).toFixed(1) + '%' : '0.0%',
         avatar_url: r.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.id}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
         defense_stack: r.defense_stack || 0,
@@ -524,7 +550,41 @@ function App() {
         equipped_name_style: r.equipped_name_style || 'style_default',
         equipped_border_fx: r.equipped_border_fx || 'border_default',
       }));
-      setRankers(processed);
+
+      const regularSorted = [...base].sort((a, b) => (b.regular_rp || 1000) - (a.regular_rp || 1000));
+      regularSorted.forEach((r, i) => {
+        (r as any).rankIndex = i;
+      });
+
+      const seasonSorted = [...base].sort((a, b) => (b.rp || 1000) - (a.rp || 1000));
+      const regularNow: Record<string, number> = {};
+      const seasonNow: Record<string, number> = {};
+      regularSorted.forEach((r, i) => {
+        const key = normalize(r.display_name);
+        if (key) regularNow[key] = i;
+      });
+      seasonSorted.forEach((r, i) => {
+        const key = normalize(r.display_name);
+        if (key) seasonNow[key] = i;
+      });
+
+      const prevRegular = rankHistoryRef.current.regular;
+      const prevSeason = rankHistoryRef.current.season;
+      const regularDelta: Record<string, number> = {};
+      const seasonDelta: Record<string, number> = {};
+      Object.keys(regularNow).forEach((key) => {
+        regularDelta[key] =
+          typeof prevRegular[key] === 'number' ? prevRegular[key] - regularNow[key] : 0;
+      });
+      Object.keys(seasonNow).forEach((key) => {
+        seasonDelta[key] =
+          typeof prevSeason[key] === 'number' ? prevSeason[key] - seasonNow[key] : 0;
+      });
+
+      rankHistoryRef.current = { regular: regularNow, season: seasonNow };
+      setRegularRankMoves(regularDelta);
+      setSeasonRankMoves(seasonDelta);
+      setRankers(regularSorted);
     }
   };
 
@@ -632,6 +692,10 @@ function App() {
 
   const handleStartMatch = async () => {
     if (entryMode === 'free' && betAmount < 100) { playSFX('error'); return alert("자유대전 배팅 금액은 최소 100 GC 이상이어야 합니다."); }
+    if (entryMode === 'free' && !canChallengeTargetByRegularRule(entryOpponent.trim())) {
+      playSFX('error');
+      return alert("정규 랭킹은 자신보다 최대 5단계 높은 상대에게만 도전할 수 있습니다.");
+    }
     if (betAmount > 0 && (!profile || profile.gc < betAmount)) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc || 0} GC)`); }
 
     playSFX('click');
@@ -770,38 +834,41 @@ function App() {
     `${import.meta.env.BASE_URL}ranks/${name}.${ext}?v=${rankAssetVersion}`;
 
   const getGrandRankInfo = (idx: number) => {
-    const badgeImage = (name: string, alt: string, fallbackName?: string) => (
-      <img
-        src={getRankAssetPath(name, 'png')}
-        alt={alt}
-        className="w-10 h-10 object-contain shrink-0"
-        loading="lazy"
-        onError={(e) => {
-          const target = e.currentTarget as HTMLImageElement;
-          const current = target.getAttribute('data-fallback-step') || 'png';
-          if (current === 'png') {
-            target.src = getRankAssetPath(name, 'webp');
-            target.setAttribute('data-fallback-step', 'webp');
-            return;
-          }
-          if (fallbackName && current !== 'fallback') {
-            target.src = getRankAssetPath(fallbackName, 'png');
-            target.setAttribute('data-fallback-step', 'fallback');
-            return;
-          }
-          target.style.display = 'none';
-        }}
-      />
+    const badgeImage = (name: string, alt: string, fallbackName?: string, glowClass = 'bg-cyan-400/45') => (
+      <span className="relative inline-flex items-center justify-center w-12 h-12">
+        <span className={`absolute inset-0 blur-[10px] opacity-65 ${glowClass}`}></span>
+        <img
+          src={getRankAssetPath(name, 'png')}
+          alt={alt}
+          className="relative w-11 h-11 object-contain shrink-0"
+          loading="lazy"
+          onError={(e) => {
+            const target = e.currentTarget as HTMLImageElement;
+            const current = target.getAttribute('data-fallback-step') || 'png';
+            if (current === 'png') {
+              target.src = getRankAssetPath(name, 'webp');
+              target.setAttribute('data-fallback-step', 'webp');
+              return;
+            }
+            if (fallbackName && current !== 'fallback') {
+              target.src = getRankAssetPath(fallbackName, 'png');
+              target.setAttribute('data-fallback-step', 'fallback');
+              return;
+            }
+            target.style.display = 'none';
+          }}
+        />
+      </span>
     );
 
-    if (idx === 0) return { title: "프레데터", num: 1, color: "text-[#ff5a5a]", glow: "shadow-[0_0_18px_rgba(255,90,90,0.45)]", bg: "bg-[#ff5a5a]/20", icon: badgeImage('predator', 'predator badge') };
-    if (idx < 4) return { title: "마스터", num: idx + 1, color: "text-[#c67cff]", glow: "shadow-[0_0_14px_rgba(198,124,255,0.4)]", bg: "bg-[#c67cff]/20", icon: badgeImage('master', 'master badge') };
-    if (idx < 9) return { title: "다이아몬드", num: idx + 1, color: "text-[#4fd8ff]", glow: "shadow-[0_0_12px_rgba(79,216,255,0.35)]", bg: "bg-[#4fd8ff]/20", icon: badgeImage('diamond', 'diamond badge') };
-    if (idx < 16) return { title: "플래티넘", num: idx + 1, color: "text-[#61ff90]", glow: "shadow-[0_0_10px_rgba(97,255,144,0.3)]", bg: "bg-[#61ff90]/20", icon: badgeImage('platinum', 'platinum badge') };
-    if (idx < 25) return { title: "골드", num: idx + 1, color: "text-[#ffd84d]", glow: "shadow-[0_0_8px_rgba(255,216,77,0.28)]", bg: "bg-[#ffd84d]/20", icon: badgeImage('gold', 'gold badge') };
-    if (idx < 36) return { title: "실버", num: idx + 1, color: "text-[#d0d8e6]", glow: "", bg: "bg-[#d0d8e6]/18", icon: badgeImage('silver', 'silver badge') };
-    if (idx < 50) return { title: "브론즈", num: idx + 1, color: "text-[#d39a6a]", glow: "", bg: "bg-[#d39a6a]/18", icon: badgeImage('bronze', 'bronze badge') };
-    return { title: "루키", num: idx + 1, color: "text-[#a3acb9]", glow: "", bg: "bg-[#a3acb9]/18", icon: badgeImage('rookie', 'rookie badge', 'bronze') };
+    if (idx === 0) return { title: "프레데터", num: 1, color: "text-[#ff5a5a]", glow: "shadow-[0_0_18px_rgba(255,90,90,0.45)]", bg: "bg-[#ff5a5a]/20", icon: badgeImage('predator', 'predator badge', undefined, 'bg-red-500/55') };
+    if (idx < 4) return { title: "마스터", num: idx + 1, color: "text-[#c67cff]", glow: "shadow-[0_0_14px_rgba(198,124,255,0.4)]", bg: "bg-[#c67cff]/20", icon: badgeImage('master', 'master badge', undefined, 'bg-violet-500/45') };
+    if (idx < 9) return { title: "다이아몬드", num: idx + 1, color: "text-[#4fd8ff]", glow: "shadow-[0_0_12px_rgba(79,216,255,0.35)]", bg: "bg-[#4fd8ff]/20", icon: badgeImage('diamond', 'diamond badge', undefined, 'bg-sky-500/45') };
+    if (idx < 16) return { title: "플래티넘", num: idx + 1, color: "text-[#61ff90]", glow: "shadow-[0_0_10px_rgba(97,255,144,0.3)]", bg: "bg-[#61ff90]/20", icon: badgeImage('platinum', 'platinum badge', undefined, 'bg-emerald-500/45') };
+    if (idx < 25) return { title: "골드", num: idx + 1, color: "text-[#ffd84d]", glow: "shadow-[0_0_8px_rgba(255,216,77,0.28)]", bg: "bg-[#ffd84d]/20", icon: badgeImage('gold', 'gold badge', undefined, 'bg-yellow-500/45') };
+    if (idx < 36) return { title: "실버", num: idx + 1, color: "text-[#d0d8e6]", glow: "", bg: "bg-[#d0d8e6]/18", icon: badgeImage('silver', 'silver badge', undefined, 'bg-slate-400/40') };
+    if (idx < 50) return { title: "브론즈", num: idx + 1, color: "text-[#d39a6a]", glow: "", bg: "bg-[#d39a6a]/18", icon: badgeImage('bronze', 'bronze badge', undefined, 'bg-orange-500/35') };
+    return { title: "루키", num: idx + 1, color: "text-[#a3acb9]", glow: "", bg: "bg-[#a3acb9]/18", icon: badgeImage('rookie', 'rookie badge', 'bronze', 'bg-slate-500/35') };
   };
 
   const seasonBadgeIcon = (fileName: string, alt: string, glowClass: string) => (
@@ -987,6 +1054,25 @@ function App() {
       ? profile.regular_rp
       : calculateRegularPoints(profile?.wins || 0, profile?.losses || 0);
   const currentUserSeasonPoints = profile?.rp || 1000;
+  const getStreakBountyGC = (streak?: number) => {
+    const safe = streak || 0;
+    if (safe < 3) return 0;
+    return 100 + (safe - 3) * 50;
+  };
+  const getDefenseBonusGC = (stack?: number) => (stack || 0) * 100;
+  const getRankMoveValue = (name?: string | null, mode: 'regular' | 'season' = 'regular') => {
+    const key = normalizeName(name);
+    if (!key) return 0;
+    return (mode === 'regular' ? regularRankMoves[key] : seasonRankMoves[key]) || 0;
+  };
+  const canChallengeTargetByRegularRule = (targetName?: string | null) => {
+    if (!targetName || !currentUserName) return false;
+    if (targetName.trim() === currentUserName.trim()) return false;
+    const myRank = getRegularRankIndexByName(currentUserName);
+    const targetRank = getRegularRankIndexByName(targetName);
+    if (myRank === null || targetRank === null) return false;
+    return targetRank < myRank && myRank - targetRank <= 5;
+  };
 
   const onlineRankers = rankers.filter((r) => {
     if (DISCORD_GUILD_ID) {
@@ -1153,19 +1239,7 @@ function App() {
       <div className="flex-1 flex flex-col z-10 relative ml-14 sm:ml-16 lg:ml-20 h-screen overflow-y-auto custom-scrollbar">
         <header className="px-3 sm:px-4 lg:px-10 py-3 sm:py-4 lg:py-6 flex justify-between items-center flex-wrap gap-3 sm:gap-4 shrink-0 border-b border-cyan-500/30 bg-black/20 backdrop-blur-md">
           <div onMouseEnter={() => playSFX('hover')} className="min-w-0 flex-1 cursor-pointer" onClick={() => setActiveMenu('home')}>
-            <div className="flex items-end gap-2 sm:gap-3 lg:gap-6 min-w-0 flex-wrap sm:flex-nowrap">
-              <div className="flex flex-col min-w-0 shrink-0">
-                <p className="text-[10px] sm:text-[11px] lg:text-[13px] font-bold text-white/90 italic tracking-tight leading-tight mb-1 max-w-[200px] sm:max-w-[260px] lg:max-w-[340px]">
-                  "우주 먼지(Dust)로 시작해 별을 지우는 그림자(Eclipse)가 되십시오."
-                </p>
-                <h1 className="text-3xl sm:text-4xl lg:text-6xl font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple] leading-none">은하단</h1>
-              </div>
-              <div className="h-8 sm:h-10 lg:h-12 w-[2px] sm:w-[3px] bg-gradient-to-b from-cyan-400 to-purple-400 mx-1 sm:mx-2 lg:mx-3 shadow-lg"></div>
-              <div className="flex flex-col justify-end min-w-0">
-                <p className="text-lg sm:text-2xl lg:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 uppercase tracking-wider sm:tracking-widest whitespace-nowrap">별들의 전쟁 : 시즌 1</p>
-                <p className="hidden sm:block text-[10px] lg:text-[12px] font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-purple-300 tracking-[0.25em] lg:tracking-[0.4em] mt-1 uppercase italic">SEASON 01 BATTLE FOR THE STAR THRONE</p>
-              </div>
-            </div>
+            <h1 className="text-3xl sm:text-4xl lg:text-6xl font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple] leading-none">은하단</h1>
           </div>
           {user ? (
             <div className="flex items-center gap-3 sm:gap-4 w-full lg:w-auto justify-end flex-wrap">
@@ -1189,11 +1263,11 @@ function App() {
                       <p className="text-[1.3rem] sm:text-[1.5rem] lg:text-[1.7rem] font-black text-emerald-300 leading-tight">{profile?.gc || 0}</p>
                     </div>
                     <div className="bg-black/45 rounded-xl border border-yellow-400/25 px-3 py-2 text-center">
-                      <p className="text-[11px] font-black text-yellow-300 tracking-widest">RP (명예)</p>
+                      <p className="text-[11px] font-black text-yellow-300 tracking-widest">명예 포인트</p>
                       <p className="text-[1.2rem] sm:text-[1.35rem] lg:text-[1.5rem] font-black text-yellow-300 leading-tight">{currentUserRegularPoints}</p>
                     </div>
                     <div className="bg-black/45 rounded-xl border border-fuchsia-400/25 px-3 py-2 text-center">
-                      <p className="text-[11px] font-black text-fuchsia-300 tracking-widest">SP (시즌)</p>
+                      <p className="text-[11px] font-black text-fuchsia-300 tracking-widest">시즌 포인트</p>
                       <p className="text-[1.2rem] sm:text-[1.35rem] lg:text-[1.5rem] font-black text-fuchsia-300 leading-tight">{currentUserSeasonPoints}</p>
                     </div>
                 </div>
@@ -1223,14 +1297,19 @@ function App() {
                   </h3>
 
                     <div className="flex-1 overflow-y-auto space-y-3 sm:space-y-4 custom-scrollbar pr-1 sm:pr-2 pt-2 animate-in fade-in">
-                       {onlineRankers.length > 0 ? onlineRankers.map((ou, i) => {
+                        {onlineRankers.length > 0 ? onlineRankers.map((ou, i) => {
                           const rankInfo = getGrandRankInfo(ou.rankIndex);
                           const seasonInfo = getSeasonRankInfoByName(ou.display_name);
+                          const challengeAllowed = canChallengeTargetByRegularRule(ou.display_name);
                           return (
                             <div key={i} onMouseEnter={() => playSFX('hover')} className="bg-black/60 border border-white/10 p-3 sm:p-4 rounded-[1.2rem] sm:rounded-[1.5rem] flex items-center justify-between hover:border-cyan-400/50 transition-all group gap-2">
                                <div className="flex items-center gap-2 sm:gap-4 cursor-pointer group/profile flex-1 min-w-0 mr-1 sm:mr-2" onClick={() => handleProfileClick(ou.display_name)}>
                                   <div className="relative shrink-0">
-                                     <img src={ou.avatar_url} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border transition-colors group-hover/profile:border-cyan-400 ${getAvatarBorderFxForUser(ou.display_name)}`} alt="profile"/>
+                                     <img
+                                       src={ou.avatar_url}
+                                       className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 transition-colors group-hover/profile:border-cyan-300 ${getSeasonTierBorderClass(seasonInfo?.index)}`}
+                                       alt="profile"
+                                     />
                                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-black rounded-full"></div>
                                   </div>
                                   <div className="flex flex-col flex-1 min-w-0">
@@ -1239,18 +1318,24 @@ function App() {
                                      <span className={`text-[11px] font-bold mt-0.5 ${seasonInfo?.color || 'text-slate-400'}`}>{seasonInfo ? `${seasonInfo.name} ${seasonInfo.index + 1}위` : '미집계'}</span>
                                   </div>
                                </div>
-                               {ou.display_name.trim() === currentUserName?.trim() ? (
-                                   <div className="px-3 sm:px-4 py-2 rounded-xl text-xs font-bold bg-blue-600/20 border border-blue-500/50 text-blue-400 shrink-0">나</div>
-                               ) : (
-                                  <button 
-                                    onMouseEnter={() => playSFX('hover')} 
-                                    onClick={() => { playSFX('click'); handleTargetLock(ou.display_name); }} 
-                                    disabled={matchPhase !== 'idle'} 
-                                     className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all shrink-0 cursor-pointer ${matchPhase === 'idle' ? 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-500 hover:text-black' : 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'}`}
-                                  >
-                                    {matchPhase === 'idle' ? '도전' : '대전 중'}
-                                  </button>
-                               )}
+                                {ou.display_name.trim() === currentUserName?.trim() ? (
+                                    <div className="px-3 sm:px-4 py-2 rounded-xl text-xs font-bold bg-blue-600/20 border border-blue-500/50 text-blue-400 shrink-0">나</div>
+                                ) : (
+                                   <button 
+                                     onMouseEnter={() => playSFX('hover')} 
+                                     onClick={() => { playSFX('click'); handleTargetLock(ou.display_name); }} 
+                                     disabled={matchPhase !== 'idle' || !challengeAllowed} 
+                                      className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all shrink-0 cursor-pointer ${
+                                        matchPhase !== 'idle'
+                                          ? 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'
+                                          : challengeAllowed
+                                            ? 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-500 hover:text-black'
+                                            : 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'
+                                      }`}
+                                   >
+                                     {matchPhase !== 'idle' ? '대전 중' : challengeAllowed ? '도전가능' : '도전불가'}
+                                   </button>
+                                )}
                             </div>
                           )
                        }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">{onlineBoardEmptyText}</div>)}
@@ -1520,12 +1605,13 @@ function App() {
 
                                   <div className="flex items-center justify-between w-full px-1 gap-3 pt-9 sm:pt-10">
                                     <div className="flex items-center gap-4 flex-1 min-w-0 pr-2">
-                                      <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${isCurrentUserDisplayName(r.display_name) ? getAvatarBorderFxForUser(r.display_name) : (r.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_14px_gold]' : 'border-cyan-200/40')} shrink-0`} alt="p"/>
+                                      <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${isCurrentUserDisplayName(r.display_name) ? getAvatarBorderFxForUser(r.display_name) : (r.rankIndex === 0 ? 'border-red-400 shadow-[0_0_16px_rgba(248,113,113,0.65)]' : 'border-cyan-200/40')} shrink-0`} alt="p"/>
                                       <span className={`font-bold text-base sm:text-[1.2rem] leading-tight whitespace-normal break-all ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
                                     <div className="flex flex-col items-end shrink-0">
-                                      {r.rankIndex === 0 && (<span className="font-bold text-[9px] px-2 py-1 rounded-full bg-yellow-400/20 text-yellow-400 mb-1">방어전: {r.defense_stack || 0}</span>)}
-                                      <span className="font-black text-yellow-300 text-[1.15rem] sm:text-[1.5rem] tracking-tight drop-shadow-[0_0_8px_rgba(250,204,21,0.38)]">{r.regular_rp || 1000} RP</span>
+                                      {(r.defense_stack || 0) > 0 && (<span className="font-bold text-[9px] px-2 py-1 rounded-full bg-red-500/15 text-red-300 mb-1 border border-red-400/35">방어전 {r.defense_stack}</span>)}
+                                      {(r.win_streak || 0) >= 2 && (<span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 mb-1">🔥 {r.win_streak}연승{getStreakBountyGC(r.win_streak || 0) > 0 ? ` · ${getStreakBountyGC(r.win_streak || 0)}GC` : ''}</span>)}
+                                      <span className="font-black text-yellow-300 text-[1.15rem] sm:text-[1.5rem] tracking-tight drop-shadow-[0_0_8px_rgba(250,204,21,0.38)]">{r.regular_rp || 1000}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -1551,8 +1637,9 @@ function App() {
                                       <span className={`font-bold text-base sm:text-[1.2rem] leading-tight whitespace-normal break-all ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
                                     <div className="flex flex-col items-end shrink-0">
-                                      {(r.win_streak || 0) >= 2 && <span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 mb-1">🔥 {r.win_streak} 연승</span>}
-                                      <span className="font-black text-fuchsia-400 text-[1.15rem] sm:text-[1.5rem]">{r.rp || 1000} SP</span>
+                                      {(r.defense_stack || 0) > 0 && <span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 mb-1 border border-red-400/35">방어전 {r.defense_stack}</span>}
+                                      {(r.win_streak || 0) >= 2 && <span className="font-bold text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 mb-1">🔥 {r.win_streak}연승{getStreakBountyGC(r.win_streak || 0) > 0 ? ` · ${getStreakBountyGC(r.win_streak || 0)}GC` : ''}</span>}
+                                      <span className="font-black text-fuchsia-400 text-[1.15rem] sm:text-[1.5rem]">{r.rp || 1000}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -1715,84 +1802,121 @@ function App() {
                      </div>
                    </div>
 
-                   <div className="grid grid-cols-12 gap-10 pb-20 justify-center px-4 grid-glow-fix">
-                       {rankers.length > 0 ? rankers.filter(r => r.display_name?.includes(searchQuery)).map((r) => {
-                            const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
-                           const idx = r.rankIndex;
+                   {(() => {
+                     const regularFiltered = rankers.length > 0 ? rankers.filter((r) => r.display_name?.includes(searchQuery)) : [];
+                     const featured = regularFiltered.slice(0, 9);
+                     const row1 = featured.slice(0, 1);
+                     const row2 = featured.slice(1, 4);
+                     const row3 = featured.slice(4, 9);
+                     const rest = regularFiltered.slice(9);
 
-                           const regularPyramidPattern = [
-                             "col-span-12 flex justify-center",
-                             "col-span-6", "col-span-6",
-                             "col-span-4", "col-span-4", "col-span-4",
-                             "col-span-3", "col-span-3", "col-span-3", "col-span-3",
-                             "col-span-4", "col-span-4", "col-span-4",
-                             "col-span-6", "col-span-6",
-                           ];
+                     const renderRegularCard = (r: any, tone: 'hero' | 'mid' | 'small' = 'small') => {
+                       const grandRank = getGrandRankInfo(r.rankIndex);
+                       if (!grandRank) return null;
+                       const move = getRankMoveValue(r.display_name, 'regular');
+                       const streakBounty = getStreakBountyGC(r.win_streak || 0);
+                       const defenseBonus = getDefenseBonusGC(r.defense_stack || 0);
 
-                           let spanClass = regularPyramidPattern[idx] || "col-span-3";
-                           let cardClass = "h-[172px] p-5 pt-9 pb-5 rounded-[1.3rem]";
-                           let badgeClass = "px-7 py-2 text-[15px] -top-5";
-                           let avatarClass = "w-14 h-14";
-                           let nameSize = "text-lg";
-                           let statSize = "text-xl";
+                       const cardClass =
+                         tone === 'hero'
+                           ? 'p-12 pt-16 pb-12 rounded-[3.2rem]'
+                           : tone === 'mid'
+                             ? 'p-7 pt-11 pb-7 rounded-[2rem]'
+                             : 'p-5 pt-9 pb-5 rounded-[1.35rem]';
+                       const avatarClass = tone === 'hero' ? 'w-28 h-28' : tone === 'mid' ? 'w-20 h-20' : 'w-14 h-14';
+                       const nameClass = tone === 'hero' ? 'text-5xl' : tone === 'mid' ? 'text-2xl' : 'text-lg';
+                       const pointClass = tone === 'hero' ? 'text-5xl' : tone === 'mid' ? 'text-3xl' : 'text-xl';
+                       const badgeClass = tone === 'hero' ? 'px-12 py-4 text-[26px] -top-10' : tone === 'mid' ? 'px-10 py-3 text-[20px] -top-7' : 'px-7 py-2 text-[15px] -top-5';
 
-                           if (idx === 0) {
-                             spanClass = "col-span-12 flex justify-center";
-                             cardClass = "w-full max-w-5xl p-12 pt-16 pb-12 rounded-[3.5rem] shadow-[0_0_30px_rgba(250,204,21,0.5)] hover:shadow-[0_0_50px_rgba(250,204,21,0.7)] hover:scale-[1.03]";
-                             badgeClass = "px-12 py-4 text-[26px] -top-10";
-                             avatarClass = "w-32 h-32";
-                             statSize = "text-5xl";
-                             nameSize = "text-5xl";
-                           } else if (idx <= 2) {
-                             spanClass = "col-span-6";
-                             cardClass = "p-8 pt-12 pb-8 rounded-[2rem]";
-                             badgeClass = "px-10 py-3 text-[20px] -top-7";
-                             avatarClass = "w-20 h-20";
-                             statSize = "text-3xl";
-                             nameSize = "text-2xl";
-                           } else if (idx <= 5) {
-                             spanClass = "col-span-4";
-                             cardClass = "h-[178px] p-6 pt-10 pb-6 rounded-[1.6rem]";
-                             badgeClass = "px-8 py-2.5 text-[18px] -top-6";
-                             avatarClass = "w-16 h-16";
-                             statSize = "text-2xl";
-                             nameSize = "text-xl";
-                           } else if (idx <= 9) {
-                             spanClass = "col-span-3";
-                           } else if (idx <= 15) {
-                             spanClass = regularPyramidPattern[idx] || "col-span-4";
-                             cardClass = "h-[168px] p-5 pt-9 pb-5 rounded-[1.2rem]";
-                           }
+                       return (
+                         <div
+                           key={r.id}
+                           onMouseEnter={() => playSFX('hover')}
+                           onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }}
+                           className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${rankCardFxByTier(r.rankIndex)} hover:brightness-110 mt-10`}
+                         >
+                           <div className="absolute w-full flex justify-center z-20 pointer-events-none" style={{ top: 0 }}>
+                             <div className={`${badgeClass} absolute flex items-center justify-center`}>{grandRank.icon}</div>
+                           </div>
+                           <div className="absolute left-3 sm:left-4 top-3 flex items-center gap-2 z-20">
+                             <span className="text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)]">
+                               {r.rankIndex + 1}위
+                             </span>
+                             {move > 0 && <span className="text-sm font-black text-emerald-300">▲{move}</span>}
+                             {move < 0 && <span className="text-sm font-black text-red-300">▼{Math.abs(move)}</span>}
+                           </div>
 
-                           return (
-                             <div key={r.id} className={spanClass}>
-                                <div onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${rankCardFxByTier(r.rankIndex)} hover:brightness-110 mt-10`}>
-                                   {r.rankIndex === 0 && <div className="absolute inset-0 bg-yellow-400/5 animate-pulse rounded-[3rem] pointer-events-none"></div>}
-
-                                   <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)] z-20">
-                                     {r.rankIndex + 1}위
-                                   </span>
-                                   <div className="absolute w-full flex justify-center z-20 pointer-events-none" style={{top: 0}}>
-                                      <div className={`${badgeClass} absolute flex items-center justify-center`}>
-                                        {grandRank.icon}
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
-                                      <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
-                                        <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${r.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_20px_gold]' : 'border-white/20'} shrink-0`} alt="p"/>
-                                        <span className={`group-hover:text-cyan-400 font-bold text-white truncate ${nameSize}`}>{r.display_name}</span>
-                                     </div>
-                                     <div className="flex flex-col items-end shrink-0 ml-2">
-                                        {(r.defense_stack || 0) > 0 && (<span className="font-bold text-xs px-3 py-1 rounded-full bg-yellow-400/15 text-yellow-300 border border-yellow-400/40 mb-1">방어전: {r.defense_stack}</span>)}
-                                        <span className={`font-black text-yellow-300 tracking-tight ${statSize}`}>{r.regular_rp || 1000} RP</span>
-                                      </div>
-                                    </div>
-                                </div>
+                           <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
+                             <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
+                               <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${r.rankIndex === 0 ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.65)]' : 'border-white/20'} shrink-0`} alt="p"/>
+                               <span className={`group-hover:text-cyan-400 font-bold text-white truncate ${nameClass}`}>{r.display_name}</span>
                              </div>
-                           );
-                        }) : (<div className="col-span-12 flex items-center justify-center h-[300px] opacity-50 text-2xl font-bold text-cyan-400 tracking-widest">해당하는 랭커가 없습니다.</div>)}
-                   </div>
+                             <div className="flex flex-col items-end shrink-0 ml-2">
+                               {(r.defense_stack || 0) > 0 && (
+                                 <span className="font-bold text-xs px-3 py-1 rounded-full bg-red-500/15 text-red-300 border border-red-400/40 mb-1">
+                                   방어전 {r.defense_stack} · +{defenseBonus}GC
+                                 </span>
+                               )}
+                               {(r.win_streak || 0) >= 2 && (
+                                 <span className="font-bold text-xs px-3 py-1 rounded-full bg-emerald-500/12 text-emerald-300 border border-emerald-400/35 mb-1">
+                                   🔥 {r.win_streak}연승{streakBounty > 0 ? ` · 현상금 ${streakBounty}GC` : ''}
+                                 </span>
+                               )}
+                               <span className={`font-black text-yellow-300 tracking-tight ${pointClass}`}>{r.regular_rp || 1000}</span>
+                               <span className="text-[10px] font-black text-slate-400 tracking-wider">정규 포인트</span>
+                             </div>
+                           </div>
+                         </div>
+                       );
+                     };
+
+                     if (regularFiltered.length === 0) {
+                       return <div className="col-span-12 flex items-center justify-center h-[300px] opacity-50 text-2xl font-bold text-cyan-400 tracking-widest">해당하는 랭커가 없습니다.</div>;
+                     }
+
+                     return (
+                       <div className="pb-20 px-4 space-y-6">
+                         <div className="grid grid-cols-1 gap-6">
+                           {row1.map((r) => renderRegularCard(r, 'hero'))}
+                         </div>
+                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                           {row2.map((r) => renderRegularCard(r, 'mid'))}
+                         </div>
+                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+                           {row3.map((r) => renderRegularCard(r, 'small'))}
+                         </div>
+
+                         {rest.length > 0 && !showMoreRegularRanks && (
+                           <div className="flex justify-center">
+                             <button
+                               onMouseEnter={() => playSFX('hover')}
+                               onClick={() => { playSFX('click'); setShowMoreRegularRanks(true); }}
+                               className="px-8 py-3 rounded-full bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 font-bold hover:bg-cyan-500 hover:text-black transition-all cursor-pointer"
+                             >
+                               더보기 ({rest.length})
+                             </button>
+                           </div>
+                         )}
+
+                         {showMoreRegularRanks && rest.length > 0 && (
+                           <div className="space-y-4">
+                             <div className="flex justify-center">
+                               <button
+                                 onMouseEnter={() => playSFX('hover')}
+                                 onClick={() => { playSFX('click'); setShowMoreRegularRanks(false); }}
+                                 className="px-8 py-3 rounded-full bg-pink-500/15 border border-pink-400/40 text-pink-300 font-bold hover:bg-pink-500 hover:text-white transition-all cursor-pointer"
+                               >
+                                 접기
+                               </button>
+                             </div>
+                             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                               {rest.map((r) => renderRegularCard(r, 'small'))}
+                             </div>
+                           </div>
+                         )}
+                       </div>
+                     );
+                   })()}
                  </>
                ) : (
                  <>
@@ -1806,6 +1930,9 @@ function App() {
                    <div className="grid grid-cols-12 gap-10 pb-20 justify-center px-4 grid-glow-fix">
                       {rpRankers.length > 0 ? rpRankers.filter(r => r.display_name?.includes(searchQuery)).map((r, i) => {
                            const tier = getRPTierInfo(i);
+                           const move = getRankMoveValue(r.display_name, 'season');
+                           const streakBounty = getStreakBountyGC(r.win_streak || 0);
+                           const defenseBonus = getDefenseBonusGC(r.defense_stack || 0);
                            const isRank1 = i === 0;
                            const isRank2_3 = i === 1 || i === 2;
                            const isRank4_6 = i >= 3 && i <= 5;
@@ -1827,12 +1954,14 @@ function App() {
                                 <div onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${seasonCardFxByTier(i)} hover:brightness-110 mt-10`}>
                                    {i === 0 && <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-[3rem] pointer-events-none"></div>}
                                    
-                                   <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)] z-20">
-                                     {i + 1}위
-                                   </span>
-                                   <div className="absolute w-full flex justify-center z-20 pointer-events-none" style={{top: 0}}>
-                                      <div className={`${badgeClass} absolute flex items-center justify-center`}>
-                                        {tier.icon}
+                                    <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)] z-20">
+                                      {i + 1}위
+                                    </span>
+                                    {move > 0 && <span className="absolute left-20 sm:left-24 top-4 text-sm font-black text-emerald-300 z-20">▲{move}</span>}
+                                    {move < 0 && <span className="absolute left-20 sm:left-24 top-4 text-sm font-black text-red-300 z-20">▼{Math.abs(move)}</span>}
+                                    <div className="absolute w-full flex justify-center z-20 pointer-events-none" style={{top: 0}}>
+                                       <div className={`${badgeClass} absolute flex items-center justify-center`}>
+                                         {tier.icon}
                                       </div>
                                     </div>
 
@@ -1842,8 +1971,18 @@ function App() {
                                         <span className={`group-hover:text-cyan-400 font-bold text-white truncate ${nameSize}`}>{r.display_name}</span>
                                       </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
-                                       <span className={`font-black text-fuchsia-400 tracking-tight ${statSize}`}>{r.rp || 1000} SP</span>
-                                       {(r.win_streak || 0) >= 2 && (<span className="font-bold text-base px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 mt-2 shadow-[0_0_10px_emerald]">🔥 {r.win_streak} 연승</span>)}
+                                       {(r.defense_stack || 0) > 0 && (
+                                         <span className="font-bold text-xs px-3 py-1 rounded-full bg-red-500/15 text-red-300 border border-red-400/40 mb-1">
+                                           방어전 {r.defense_stack} · +{defenseBonus}GC
+                                         </span>
+                                       )}
+                                       {(r.win_streak || 0) >= 2 && (
+                                         <span className="font-bold text-xs px-3 py-1 rounded-full bg-emerald-500/12 text-emerald-300 border border-emerald-400/35 mb-1">
+                                           🔥 {r.win_streak}연승{streakBounty > 0 ? ` · 현상금 ${streakBounty}GC` : ''}
+                                         </span>
+                                       )}
+                                       <span className={`font-black text-fuchsia-400 tracking-tight ${statSize}`}>{r.rp || 1000}</span>
+                                       <span className="text-[10px] font-black text-slate-400 tracking-wider">시즌 포인트</span>
                                      </div>
                                    </div>
                                 </div>
@@ -2016,11 +2155,11 @@ function App() {
              </button>
               
              <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-8 lg:gap-10 mb-6 sm:mb-8 mt-2">
-                <img src={selectedPlayer.avatar_url} className={`w-24 h-24 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-[2rem] sm:rounded-[2.5rem] lg:rounded-[3rem] border-4 ${isCurrentUserDisplayName(selectedPlayer.display_name) ? equippedBorderFxClass : (selectedPlayer.rankIndex === 0 ? 'border-yellow-400 shadow-[0_0_20px_gold]' : 'border-cyan-400 shadow-[0_0_20px_cyan]')} shrink-0`} alt="p" />
+                <img src={selectedPlayer.avatar_url} className={`w-24 h-24 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-[2rem] sm:rounded-[2.5rem] lg:rounded-[3rem] border-4 ${isCurrentUserDisplayName(selectedPlayer.display_name) ? equippedBorderFxClass : (selectedPlayer.rankIndex === 0 ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.65)]' : 'border-cyan-400 shadow-[0_0_20px_cyan]')} shrink-0`} alt="p" />
                  <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <div className="flex flex-col items-center sm:items-start gap-2 pb-2 min-w-0">
+                    <div className="flex items-start justify-between gap-4 pb-2 min-w-0">
                       <h2 className={`italic font-black text-3xl sm:text-4xl lg:text-5xl truncate ${getNameClassForUser(selectedPlayer.display_name)}`}>{selectedPlayer.display_name}</h2>
-                      <div className="flex flex-col gap-2 w-full sm:w-auto">
+                      <div className="flex flex-col gap-2 items-end shrink-0">
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                           {selectedPlayerRegularInfo?.icon}
                           정규랭킹 {selectedPlayerRegularLabel}
