@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { 
   Calendar, Users, Target, Swords, Zap, Crown, Activity, LogIn, LogOut, 
   Search, ChevronDown, ChevronUp, Copy, Check, Shield, RefreshCw, Flame, 
@@ -9,9 +9,123 @@ import { supabase } from './supabase';
 
 // @ts-ignore
 import bgImage from './assets/bg.png'; 
-import { ALL_LEGENDS, ALL_WEAPONS, LEGEND_CATEGORIES, WEAPON_CATEGORIES, getLegendCategoryColorHex, getWeaponCategoryColorHex } from './config/gameMeta';
-import { getAvatarFallback, getResponsiveNameClass } from './utils/profile';
-import { applyAudioSettings, playSFX, setMatchPhaseAudio } from './lib/audioManager';
+// @ts-ignore
+import bgmSfx from './assets/sounds/bgm.mp3';
+// @ts-ignore
+import hoverSfx from './assets/sounds/hover.mp3';
+// @ts-ignore
+import clickSfx from './assets/sounds/click.mp3';
+// @ts-ignore
+import matchStartSfx from './assets/sounds/match_start.mp3';
+// @ts-ignore
+import waitingSfx from './assets/sounds/waiting.mp3';
+// @ts-ignore
+import successSfx from './assets/sounds/success.mp3';
+// @ts-ignore
+import errorSfx from './assets/sounds/error.mp3';
+
+const LEGEND_CATEGORIES = {
+  "어설트": ["방갈로르", "레버넌트", "퓨즈", "매드 매기", "발리스틱"],
+  "스커미셔": ["패스파인더", "레이스", "옥테인", "호라이즌", "애쉬", "알터"],
+  "리콘": ["블러드하운드", "크립토", "발키리", "시어", "밴티지", "스패로우"],
+  "서포트": ["지브롤터", "라이프 라인", "미라지", "로바", "뉴캐슬", "콘딧"],
+  "컨트롤러": ["코스틱", "왓슨", "렘파트", "카탈리스트"]
+};
+
+const getLegendCategoryColorHex = (cat: string) => {
+  switch (cat) {
+    case "어설트": return "#ff4d4d"; case "스커미셔": return "#ffcc00";
+    case "리콘": return "#b14fff"; case "서포트": return "#00d2ff";
+    case "컨트롤러": return "#3aff00"; default: return "#ffffff";
+  }
+};
+
+const WEAPON_CATEGORIES = {
+  "에너지": ["RE-45 버스트", "하복 라이플", "네메시스 버스트 AR", "볼트 SMG", "L-STAR EMG", "디보션", "트리플 테이크"],
+  "경량": ["p2020 x 1", "p2020 x 2", "R-301 카빈", "R-99 SMG", "얼터네이터 SMG", "M600 스핏파이어", "G7 스카우트"],
+  "중량": ["VK-47 플랫라인", "햄록 버스트 AR", "프라울러 PDW", "C.A.R. SMG", "램페이지 LMG", "30-30 리피터"],
+  "샷건 쉘": ["모잠비크 x 1", "모잠비크 x 2", "EVA-8 자동", "마스티프", "피스키퍼"],
+  "스나이퍼": ["윙맨", "보섹 컴파운드 보우", "롱보우 DMR", "센티넬", "차지 라이플"],
+  "특수 무기": ["투척 나이프", "크레이버 .50구경 저격총"]
+};
+
+const ALL_LEGENDS = Object.values(LEGEND_CATEGORIES).flat();
+const ALL_WEAPONS = Object.values(WEAPON_CATEGORIES).flat();
+
+const getWeaponCategoryColorHex = (cat: string) => {
+  switch (cat) {
+    case "에너지": return "#94b11f"; case "경량": return "#ff8a00";   
+    case "중량": return "#1e7e6e"; case "샷건 쉘": return "#da2115"; 
+    case "스나이퍼": return "#4e4fb1"; case "특수 무기": return "#ffcc00"; 
+    default: return "#ffffff";
+  }
+};
+
+const getAvatarFallback = (name: string | undefined | null, rankers: any[]) => {
+  const safeName = name || 'GUEST';
+  const ranker = rankers.find((r: any) => r.display_name === safeName);
+  return ranker?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeName}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+};
+
+const getResponsiveNameClass = (name: string, sizeType: 'small' | 'medium' | 'large') => {
+  const len = name?.length || 0;
+  const baseClass = 'font-bold text-white transition-colors whitespace-nowrap tracking-normal';
+  if (sizeType === 'small') {
+    if (len > 12) return `${baseClass} text-xs`;
+    if (len > 8) return `${baseClass} text-sm`;
+    return `${baseClass} text-base`;
+  }
+  if (sizeType === 'medium') {
+    if (len > 12) return `${baseClass} text-sm`;
+    if (len > 8) return `${baseClass} text-base`;
+    return `${baseClass} text-xl`;
+  }
+  if (sizeType === 'large') {
+    if (len > 12) return `${baseClass} text-lg`;
+    if (len > 8) return `${baseClass} text-2xl`;
+    return `${baseClass} text-3xl`;
+  }
+  return baseClass;
+};
+
+let globalBgmEnabled = true; let globalSfxEnabled = true;
+let globalBgmVolume = 0.10; let globalSfxVolume = 0.60;
+
+const audioCache: Record<string, HTMLAudioElement> = {};
+let isAudioUnlocked = false; let currentMatchPhase = 'idle'; 
+
+if (typeof window !== 'undefined') {
+  globalBgmVolume = parseFloat(localStorage.getItem('bgmVolume') || '0.10');
+  globalSfxVolume = parseFloat(localStorage.getItem('sfxVolume') || '0.60');
+  globalBgmEnabled = localStorage.getItem('bgmEnabled') !== 'false';
+
+  const files: Record<string, string> = { bgm: bgmSfx, hover: hoverSfx, click: clickSfx, matchStart: matchStartSfx, waiting: waitingSfx, success: successSfx, error: errorSfx };
+  Object.entries(files).forEach(([key, src]) => {
+    const audio = new Audio(src); audio.preload = 'auto'; 
+    if (key === 'bgm' || key === 'waiting') { audio.loop = true; audio.volume = globalBgmVolume; } else { audio.volume = globalSfxVolume; }
+    audioCache[key] = audio;
+  });
+
+  const unlockAudio = () => {
+    if (isAudioUnlocked) return; isAudioUnlocked = true;
+    Object.values(audioCache).forEach(audio => { audio.muted = false; });
+    if (currentMatchPhase === 'idle' && globalBgmEnabled) audioCache['bgm']?.play().catch(() => {});
+    else if (currentMatchPhase === 'waiting' && globalBgmEnabled) audioCache['waiting']?.play().catch(() => {});
+    window.removeEventListener('click', unlockAudio);
+  };
+  window.addEventListener('click', unlockAudio);
+  window.addEventListener('focus', () => { Object.values(audioCache).forEach(a => { a.muted = false; }); });
+  window.addEventListener('blur', () => { Object.values(audioCache).forEach(a => { a.muted = true; }); });
+}
+
+const playSFX = (type: string) => {
+  if (!isAudioUnlocked || !audioCache[type]) return;
+  if ((type === 'bgm' || type === 'waiting') && !globalBgmEnabled) return;
+  if (type !== 'bgm' && type !== 'waiting' && !globalSfxEnabled) return;
+  if (type !== 'bgm' && type !== 'waiting') audioCache[type].currentTime = 0;
+  audioCache[type].play().catch(() => {});
+};
+
 const MENU_ITEMS = [
   { id: 'home', icon: Home, label: '대시보드' },
   { id: 'profile', icon: User, label: '내 정보' },
@@ -68,16 +182,25 @@ function App() {
   useEffect(() => { waitingForScoreRef.current = waitingForScore; }, [waitingForScore]);
 
   useEffect(() => {
-    localStorage.setItem('bgmEnabled', bgmEnabled.toString());
-    localStorage.setItem('sfxEnabled', sfxEnabled.toString());
-    localStorage.setItem('bgmVolume', bgmVolume.toString());
-    localStorage.setItem('sfxVolume', sfxVolume.toString());
-
-    applyAudioSettings({ bgmEnabled, sfxEnabled, bgmVolume, sfxVolume });
+    globalBgmEnabled = bgmEnabled; globalSfxEnabled = sfxEnabled; globalBgmVolume = bgmVolume; globalSfxVolume = sfxVolume;
+    localStorage.setItem('bgmEnabled', bgmEnabled.toString()); localStorage.setItem('sfxEnabled', sfxEnabled.toString());
+    localStorage.setItem('bgmVolume', bgmVolume.toString()); localStorage.setItem('sfxVolume', sfxVolume.toString());
+    
+    if (audioCache['bgm']) { audioCache['bgm'].muted = !bgmEnabled; audioCache['bgm'].volume = bgmVolume; }
+    if (audioCache['waiting']) { audioCache['waiting'].muted = !bgmEnabled; audioCache['waiting'].volume = bgmVolume; }
+    ['hover', 'click', 'matchStart', 'success', 'error'].forEach(k => { if (audioCache[k]) { audioCache[k].muted = !sfxEnabled; audioCache[k].volume = sfxVolume; } });
   }, [bgmEnabled, sfxEnabled, bgmVolume, sfxVolume]);
 
   useEffect(() => {
-    setMatchPhaseAudio(matchPhase);
+    currentMatchPhase = matchPhase;
+    if (!isAudioUnlocked) return;
+    if (matchPhase === 'idle' || matchPhase === 'setup_mode') {
+      audioCache['waiting']?.pause(); if (globalBgmEnabled) audioCache['bgm']?.play().catch(()=>{});
+    } else if (matchPhase === 'waiting_sync' || matchPhase === 'waiting_ready') {
+      audioCache['bgm']?.pause(); if (globalBgmEnabled) { audioCache['waiting'].currentTime = 0; audioCache['waiting']?.play().catch(()=>{}); }
+    } else if (matchPhase === 'picking' || matchPhase === 'scoring') {
+      audioCache['bgm']?.pause(); audioCache['waiting']?.pause();
+    }
   }, [matchPhase]);
 
   const checkActiveChallenge = async (username: string) => {
