@@ -497,8 +497,8 @@ function App() {
         </header>
 
         {activeMenu === 'home' && (
-          <main className="flex-1 p-10 grid grid-cols-12 xl:grid-rows-[56vh_82vh] gap-8 items-stretch pb-20 animate-in fade-in duration-500 h-full">
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[56vh] xl:h-full relative order-1 xl:order-1">
+          <main className="flex-1 p-10 grid grid-cols-12 xl:grid-rows-[auto_auto] gap-8 items-stretch pb-20 animate-in fade-in duration-500 h-full">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-auto xl:h-full relative order-1 xl:order-1">
                <section className="bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2.5rem] p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
                     접속 현황 (Online Board)
@@ -546,7 +546,7 @@ function App() {
                </section>
             </div>
 
-            <div className="col-span-12 xl:col-span-4 flex flex-col h-[56vh] xl:h-[92vh] relative order-2 xl:order-2 z-20">
+            <div className="col-span-12 xl:col-span-4 flex flex-col h-auto xl:h-full relative order-2 xl:order-2">
                <section className="bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[3rem] p-5 flex flex-col h-full shrink-0 relative z-10 overflow-hidden">
                   <div className="flex flex-col relative z-10 h-full">
                       <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3">
@@ -759,7 +759,7 @@ function App() {
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-6 border-b border-white/5 pb-4">
                     최근 기록 (Battle Logs)
                   </h3>
-                  <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar pr-2 space-y-2">
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar pr-2 space-y-1.5">
                     {logs.length > 0 ? logs.slice(0, 20).map((log, i) => renderCombatLogItem(log, i)) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">전투 기록이 없습니다</div>)}
                   </div>
                </section>
