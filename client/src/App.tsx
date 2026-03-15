@@ -178,32 +178,20 @@ function App() {
     border_void: 'border-slate-300 shadow-[0_0_18px_rgba(148,163,184,0.58)]',
   };
   const rankCardFxByTier = (idx: number) => {
-    if (idx === 0) return 'border border-red-300/70 shadow-[0_0_18px_rgba(248,113,113,0.2)] bg-[linear-gradient(140deg,rgba(248,113,113,0.07),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
-    if (idx < 4) return 'border border-violet-300/65 shadow-[0_0_16px_rgba(167,139,250,0.18)] bg-[linear-gradient(140deg,rgba(167,139,250,0.06),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
-    if (idx < 9) return 'border border-cyan-300/60 shadow-[0_0_14px_rgba(34,211,238,0.16)] bg-[linear-gradient(140deg,rgba(34,211,238,0.06),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
-    if (idx < 16) return 'border border-emerald-300/55 shadow-[0_0_13px_rgba(110,231,183,0.14)] bg-[linear-gradient(140deg,rgba(110,231,183,0.05),rgba(0,0,0,0.65)_50%,rgba(0,0,0,0.84))]';
-    if (idx < 25) return 'border border-amber-300/55 shadow-[0_0_12px_rgba(252,211,77,0.13)] bg-[linear-gradient(140deg,rgba(252,211,77,0.05),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
-    return 'border border-slate-300/45 shadow-[0_0_10px_rgba(148,163,184,0.12)] bg-[linear-gradient(140deg,rgba(148,163,184,0.04),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
+    if (idx === 0) return 'border border-red-300/75 shadow-[0_0_24px_rgba(248,113,113,0.28)] bg-[linear-gradient(140deg,rgba(248,113,113,0.08),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 4) return 'border border-violet-300/70 shadow-[0_0_20px_rgba(167,139,250,0.24)] bg-[linear-gradient(140deg,rgba(167,139,250,0.07),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 9) return 'border border-cyan-300/65 shadow-[0_0_18px_rgba(34,211,238,0.22)] bg-[linear-gradient(140deg,rgba(34,211,238,0.07),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 16) return 'border border-emerald-300/60 shadow-[0_0_16px_rgba(110,231,183,0.2)] bg-[linear-gradient(140deg,rgba(110,231,183,0.06),rgba(0,0,0,0.65)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 25) return 'border border-amber-300/58 shadow-[0_0_14px_rgba(252,211,77,0.18)] bg-[linear-gradient(140deg,rgba(252,211,77,0.06),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
+    return 'border border-slate-300/50 shadow-[0_0_12px_rgba(148,163,184,0.16)] bg-[linear-gradient(140deg,rgba(148,163,184,0.05),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
   };
   const seasonCardFxByTier = (idx: number) => {
-    if (idx === 0) return 'border border-red-300/68 shadow-[0_0_18px_rgba(248,113,113,0.2)] bg-[linear-gradient(140deg,rgba(248,113,113,0.08),rgba(0,0,0,0.65)_50%,rgba(0,0,0,0.84))]';
-    if (idx < 6) return 'border border-fuchsia-300/62 shadow-[0_0_15px_rgba(232,121,249,0.17)] bg-[linear-gradient(140deg,rgba(232,121,249,0.06),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
-    if (idx < 12) return 'border border-cyan-300/58 shadow-[0_0_14px_rgba(34,211,238,0.15)] bg-[linear-gradient(140deg,rgba(34,211,238,0.06),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
-    if (idx < 20) return 'border border-sky-300/54 shadow-[0_0_12px_rgba(125,211,252,0.13)] bg-[linear-gradient(140deg,rgba(125,211,252,0.05),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
-    return 'border border-indigo-300/50 shadow-[0_0_10px_rgba(165,180,252,0.12)] bg-[linear-gradient(140deg,rgba(165,180,252,0.05),rgba(0,0,0,0.67)_50%,rgba(0,0,0,0.84))]';
+    if (idx === 0) return 'border border-red-300/72 shadow-[0_0_24px_rgba(248,113,113,0.28)] bg-[linear-gradient(140deg,rgba(248,113,113,0.09),rgba(0,0,0,0.65)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 6) return 'border border-fuchsia-300/66 shadow-[0_0_20px_rgba(232,121,249,0.22)] bg-[linear-gradient(140deg,rgba(232,121,249,0.07),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 12) return 'border border-cyan-300/62 shadow-[0_0_18px_rgba(34,211,238,0.2)] bg-[linear-gradient(140deg,rgba(34,211,238,0.07),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 20) return 'border border-sky-300/58 shadow-[0_0_16px_rgba(125,211,252,0.18)] bg-[linear-gradient(140deg,rgba(125,211,252,0.06),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
+    return 'border border-indigo-300/54 shadow-[0_0_14px_rgba(165,180,252,0.16)] bg-[linear-gradient(140deg,rgba(165,180,252,0.06),rgba(0,0,0,0.67)_50%,rgba(0,0,0,0.84))]';
   };
-  const getSeasonTierBorderClass = (idx?: number | null) => {
-    if (idx === null || idx === undefined || idx < 0) return 'border-orange-300/55 shadow-[0_0_10px_rgba(253,186,116,0.35)]';
-    if (idx === 0) return 'border-red-400 shadow-[0_0_14px_rgba(248,113,113,0.55)]';
-    if (idx < 4) return 'border-violet-400 shadow-[0_0_12px_rgba(167,139,250,0.48)]';
-    if (idx < 9) return 'border-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.48)]';
-    if (idx < 16) return 'border-sky-300 shadow-[0_0_10px_rgba(125,211,252,0.45)]';
-    if (idx < 25) return 'border-yellow-300 shadow-[0_0_10px_rgba(250,204,21,0.42)]';
-    if (idx < 36) return 'border-slate-300 shadow-[0_0_10px_rgba(203,213,225,0.35)]';
-    if (idx < 50) return 'border-orange-300 shadow-[0_0_10px_rgba(253,186,116,0.35)]';
-    return 'border-zinc-400 shadow-[0_0_8px_rgba(161,161,170,0.3)]';
-  };
-
   const equippedNameColorClass = nameColorClassMap[equippedItems.nameColor] || nameColorClassMap.name_default;
   const equippedNameStyleClass = nameStyleClassMap[equippedItems.nameStyle] || nameStyleClassMap.style_default;
   const equippedNameClass = `${equippedNameColorClass} ${equippedNameStyleClass}`.trim();
@@ -232,6 +220,11 @@ function App() {
   const getAvatarBorderFxForUser = (name?: string | null) => {
     const cosmetic = getCosmeticStateForUser(name);
     return borderFxClassMap[cosmetic.borderFx] || borderFxClassMap.border_default;
+  };
+  const getCardAvatarBorderFxForUser = (name?: string | null) => {
+    const cosmetic = getCosmeticStateForUser(name);
+    if (!cosmetic || cosmetic.borderFx === 'border_default') return 'border-transparent shadow-none';
+    return borderFxClassMap[cosmetic.borderFx] || 'border-transparent shadow-none';
   };
   const getKstDateKeyFromInput = (input?: string | number | Date) => {
     const baseDate = input ? new Date(input) : new Date();
@@ -2264,7 +2257,7 @@ function App() {
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-2 sm:gap-3 items-start">
           <button onClick={() => handleProfileClick(leftP)} className={`text-left min-w-0 cursor-pointer ${isLeftWinner ? 'opacity-100' : 'opacity-55'}`}>
             <div className="flex items-center gap-2 mb-0.5 min-w-0">
-              <img src={getAvatarFallback(leftP, rankers)} className={`w-8 h-8 rounded-full border shrink-0 ${getAvatarBorderFxForUser(leftP)}`} alt="left-player" />
+              <img src={getAvatarFallback(leftP, rankers)} className={`w-8 h-8 rounded-full border shrink-0 ${getCardAvatarBorderFxForUser(leftP)}`} alt="left-player" />
               <span className={`font-bold text-lg sm:text-xl whitespace-normal break-all leading-tight ${getNameClassForUser(leftP)}`}>{leftP}</span>
               <span title={`정규 ${leftRegularLabel}`} className="w-10 h-10 rounded-full bg-black/70 flex items-center justify-center shrink-0">
                 {leftRegularInfo?.icon || <Shield size={11} className="text-slate-300" />}
@@ -2300,7 +2293,7 @@ function App() {
                 {rightRegularInfo?.icon || <Shield size={11} className="text-slate-300" />}
               </span>
               <span className={`font-bold text-lg sm:text-xl whitespace-normal break-all leading-tight ${getNameClassForUser(rightP)}`}>{rightP}</span>
-              <img src={getAvatarFallback(rightP, rankers)} className={`w-8 h-8 rounded-full border shrink-0 ${getAvatarBorderFxForUser(rightP)}`} alt="right-player" />
+              <img src={getAvatarFallback(rightP, rankers)} className={`w-8 h-8 rounded-full border shrink-0 ${getCardAvatarBorderFxForUser(rightP)}`} alt="right-player" />
             </div>
             <p className="text-sm font-bold text-pink-400 truncate">{log.right_legend || '미선택'}</p>
             <p className="text-sm font-bold text-cyan-300 leading-tight">{log.right_weapons?.[0] || '미선택'}</p>
@@ -2552,11 +2545,11 @@ function App() {
                             <div key={i} onMouseEnter={() => playSFX('hover')} className="bg-black/60 border border-white/10 p-3 sm:p-4 rounded-[1.2rem] sm:rounded-[1.5rem] flex items-center justify-between hover:border-cyan-400/50 transition-all group gap-2">
                                <div className="flex items-center gap-2 sm:gap-4 cursor-pointer group/profile flex-1 min-w-0 mr-1 sm:mr-2" onClick={() => handleProfileClick(ou.display_name)}>
                                   <div className="relative shrink-0">
-                                     <img
-                                       src={ou.avatar_url}
-                                       className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 transition-colors group-hover/profile:border-cyan-300 ${getSeasonTierBorderClass(seasonInfo?.index)}`}
-                                       alt="profile"
-                                     />
+                                      <img
+                                        src={ou.avatar_url}
+                                        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 transition-colors ${getCardAvatarBorderFxForUser(ou.display_name)}`}
+                                        alt="profile"
+                                      />
                                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-black rounded-full"></div>
                                   </div>
                                   <div className="flex flex-col flex-1 min-w-0">
@@ -2765,7 +2758,7 @@ function App() {
                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
                                <div className="min-w-0 bg-black/55 rounded-2xl border border-white/10 px-4 py-3">
                                  <div className="flex items-center gap-3 min-w-0 mb-2">
-                                   <img src={currentUserAvatar || getAvatarFallback(currentUserName, rankers)} className="w-10 h-10 rounded-full border border-cyan-300 shrink-0" alt="my-avatar"/>
+                                   <img src={currentUserAvatar || getAvatarFallback(currentUserName, rankers)} className={`w-10 h-10 rounded-full border shrink-0 ${getCardAvatarBorderFxForUser(currentUserName)}`} alt="my-avatar"/>
                                    <p className={`${getResponsiveNameClass(currentUserName || 'GUEST', 'medium')} leading-none`}>{currentUserName || 'GUEST'}</p>
                                  </div>
                                  <div className="space-y-1">
@@ -2778,7 +2771,7 @@ function App() {
                                <div className="min-w-0 bg-black/55 rounded-2xl border border-white/10 px-4 py-3">
                                  <div className="flex items-center justify-end gap-3 min-w-0 mb-2">
                                    <p className={`${getResponsiveNameClass(activeMatch.opponent || 'OPPONENT', 'medium')} leading-none`}>{activeMatch.opponent || 'OPPONENT'}</p>
-                                   <img src={getAvatarFallback(activeMatch.opponent, rankers)} className="w-10 h-10 rounded-full border border-pink-300 shrink-0" alt="opponent-avatar"/>
+                                   <img src={getAvatarFallback(activeMatch.opponent, rankers)} className={`w-10 h-10 rounded-full border shrink-0 ${getCardAvatarBorderFxForUser(activeMatch.opponent)}`} alt="opponent-avatar"/>
                                  </div>
                                  <div className="space-y-1 text-right">
                                    <p className="text-sm font-bold text-pink-400 leading-snug whitespace-normal break-words">{activeMatch.oppLegend || '?'}</p>
@@ -2865,6 +2858,13 @@ function App() {
                                       {grandRank.icon}
                                     </div>
                                   </div>
+                                  {regularIdx === null && (
+                                    <div className="absolute inset-x-0 top-[3.05rem] flex justify-center pointer-events-none">
+                                      <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black text-slate-200 bg-slate-500/22 border border-slate-300/30">
+                                        루키
+                                      </span>
+                                    </div>
+                                  )}
                                   {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 3) && (
                                     <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex flex-col items-end gap-1.5 z-20">
                                       {(r.defense_stack || 0) > 0 && (
@@ -2882,7 +2882,7 @@ function App() {
 
                                   <div className="flex items-center justify-between w-full px-1 gap-3 pt-9 sm:pt-10">
                                     <div className="flex items-center gap-4 flex-1 min-w-0 pr-2">
-                                      <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${isCurrentUserDisplayName(r.display_name) ? getAvatarBorderFxForUser(r.display_name) : (regularIdx === 0 ? 'border-red-400 shadow-[0_0_16px_rgba(248,113,113,0.65)]' : 'border-cyan-200/40')} shrink-0`} alt="p"/>
+                                      <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${getCardAvatarBorderFxForUser(r.display_name)} shrink-0`} alt="p"/>
                                       <span className={`font-bold text-base sm:text-[1.2rem] leading-tight whitespace-normal break-all ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
                                     <button
@@ -2918,6 +2918,13 @@ function App() {
                                       {tier.icon}
                                     </div>
                                   </div>
+                                  {seasonIdx === null && (
+                                    <div className="absolute inset-x-0 top-[3.05rem] flex justify-center pointer-events-none">
+                                      <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black text-orange-200 bg-orange-500/18 border border-orange-300/35">
+                                        더스트
+                                      </span>
+                                    </div>
+                                  )}
                                   {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 3) && (
                                     <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex flex-col items-end gap-1.5 z-20">
                                       {(r.defense_stack || 0) > 0 && (
@@ -2935,7 +2942,7 @@ function App() {
 
                                   <div className="flex items-center justify-between w-full px-1 gap-3 pt-9 sm:pt-10">
                                     <div className="flex items-center gap-4 flex-1 min-w-0">
-                                      <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${isCurrentUserDisplayName(r.display_name) ? getAvatarBorderFxForUser(r.display_name) : (seasonIdx === 0 ? 'border-red-500 shadow-[0_0_10px_red]' : 'border-cyan-200/40')} shrink-0`} alt="p"/>
+                                      <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${getCardAvatarBorderFxForUser(r.display_name)} shrink-0`} alt="p"/>
                                       <span className={`font-bold text-base sm:text-[1.2rem] leading-tight whitespace-normal break-all ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
                                     <span className="font-black text-fuchsia-400 text-[1.15rem] sm:text-[1.5rem] shrink-0">{r.rp ?? 0}</span>
@@ -3110,6 +3117,7 @@ function App() {
 
                       const renderRegularCard = (r: any, tone: 'hero' | 'mid' | 'small' = 'small') => {
                         const regularIdx = typeof r.regular_display_index === 'number' ? r.regular_display_index : null;
+                        const isRookieTier = regularIdx === null;
                         const grandRank = getGrandRankInfo(regularIdx ?? 9999);
                         if (!grandRank) return null;
                         const move = getRankMoveValue(r.display_name, 'regular');
@@ -3141,6 +3149,13 @@ function App() {
                                 <span className="inline-flex scale-[1.45] sm:scale-[1.65]">{grandRank.icon}</span>
                               </div>
                             </div>
+                            {isRookieTier && (
+                              <div className="absolute inset-x-0 top-12 sm:top-14 lg:top-16 flex justify-center pointer-events-none z-20">
+                                <span className="px-3.5 py-1 rounded-full text-xs sm:text-sm font-black text-slate-200 bg-slate-500/24 border border-slate-300/35">
+                                  루키
+                                </span>
+                              </div>
+                            )}
                             <div className="absolute left-3 sm:left-4 top-3 flex items-center gap-2 z-20">
                               <span className="text-[2.2rem] sm:text-[2.8rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_14px_rgba(34,211,238,0.5)]">
                                 {regularIdx === null ? '-' : `${regularIdx + 1}위`}
@@ -3170,7 +3185,7 @@ function App() {
 
                            <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
                              <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
-                               <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${regularIdx === 0 ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.65)]' : 'border-white/20'} shrink-0`} alt="p"/>
+                               <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${getCardAvatarBorderFxForUser(r.display_name)} shrink-0`} alt="p"/>
                                <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameClass}`}>{r.display_name}</span>
                              </div>
                              <button
@@ -3253,6 +3268,7 @@ function App() {
                    <div className="grid grid-cols-12 gap-10 pb-20 justify-center px-4 grid-glow-fix">
                       {rpRankers.length > 0 ? rpRankers.filter(r => matchesSearch(r.display_name, mainSearchQuery)).map((r, i) => {
                            const seasonIdx = typeof (r as any).season_display_index === 'number' ? (r as any).season_display_index : null;
+                           const isDustTier = seasonIdx === null;
                            const tier = getRPTierInfo(seasonIdx ?? 49);
                            const move = getRankMoveValue(r.display_name, 'season');
                            const isTopSeason = seasonIdx === 0;
@@ -3297,6 +3313,13 @@ function App() {
                                          <span className="inline-flex scale-[1.45] sm:scale-[1.65]">{tier.icon}</span>
                                        </div>
                                     </div>
+                                    {isDustTier && (
+                                      <div className="absolute inset-x-0 top-12 sm:top-14 lg:top-16 flex justify-center pointer-events-none z-20">
+                                        <span className="px-3.5 py-1 rounded-full text-xs sm:text-sm font-black text-orange-200 bg-orange-500/20 border border-orange-300/35">
+                                          더스트
+                                        </span>
+                                      </div>
+                                    )}
 
                                     {isTopSeason && (throneDefenseStack > 0 || throneBounty > 0) && (
                                       <div className="absolute right-3 sm:right-4 top-1 sm:top-2 flex flex-col items-end gap-2 z-20">
@@ -3311,7 +3334,7 @@ function App() {
 
                                     <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
                                       <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
-                                        <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${seasonIdx === 0 ? 'border-red-500 shadow-[0_0_20px_red]' : 'border-white/20'} shrink-0`} alt="p"/>
+                                        <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${getCardAvatarBorderFxForUser(r.display_name)} shrink-0`} alt="p"/>
                                         <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameSize}`}>{r.display_name}</span>
                                       </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
@@ -3564,7 +3587,7 @@ function App() {
              </button>
               
              <div className="flex flex-col sm:flex-row items-center sm:items-center gap-5 sm:gap-8 lg:gap-10 mb-6 sm:mb-8 mt-2">
-                <img src={selectedPlayer.avatar_url} className={`w-24 h-24 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-[2rem] sm:rounded-[2.5rem] lg:rounded-[3rem] border-4 ${isCurrentUserDisplayName(selectedPlayer.display_name) ? equippedBorderFxClass : (selectedPlayer.rankIndex === 0 ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.65)]' : 'border-cyan-400 shadow-[0_0_20px_cyan]')} shrink-0`} alt="p" />
+                <img src={selectedPlayer.avatar_url} className={`w-24 h-24 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-[2rem] sm:rounded-[2.5rem] lg:rounded-[3rem] border-4 ${getCardAvatarBorderFxForUser(selectedPlayer.display_name)} shrink-0`} alt="p" />
                  <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <div className="flex items-center justify-between gap-4 min-w-0">
                       <h2 className={`italic font-black text-3xl sm:text-4xl lg:text-5xl whitespace-normal break-all leading-tight ${getNameClassForUser(selectedPlayer.display_name)}`}>{selectedPlayer.display_name}</h2>
