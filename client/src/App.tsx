@@ -157,22 +157,22 @@ function App() {
     border_void: 'border-slate-300 shadow-[0_0_18px_rgba(148,163,184,0.58)]',
   };
   const rankCardFxByTier = (idx: number) => {
-    if (idx === 0) return 'border border-red-400/85 shadow-[0_0_32px_rgba(248,113,113,0.35)] bg-[linear-gradient(140deg,rgba(248,113,113,0.12),rgba(0,0,0,0.58)_45%,rgba(0,0,0,0.8))]';
-    if (idx < 4) return 'border border-violet-300/80 shadow-[0_0_26px_rgba(167,139,250,0.28)] bg-[linear-gradient(140deg,rgba(167,139,250,0.08),rgba(0,0,0,0.58)_45%,rgba(0,0,0,0.8))]';
-    if (idx < 9) return 'border border-cyan-300/75 shadow-[0_0_22px_rgba(34,211,238,0.25)] bg-[linear-gradient(140deg,rgba(34,211,238,0.08),rgba(0,0,0,0.58)_45%,rgba(0,0,0,0.8))]';
-    if (idx < 16) return 'border border-emerald-300/70 shadow-[0_0_20px_rgba(110,231,183,0.22)] bg-[linear-gradient(140deg,rgba(110,231,183,0.07),rgba(0,0,0,0.6)_45%,rgba(0,0,0,0.82))]';
-    if (idx < 25) return 'border border-amber-300/70 shadow-[0_0_18px_rgba(252,211,77,0.2)] bg-[linear-gradient(140deg,rgba(252,211,77,0.07),rgba(0,0,0,0.62)_45%,rgba(0,0,0,0.82))]';
-    return 'border border-slate-300/50 shadow-[0_0_16px_rgba(148,163,184,0.16)] bg-[linear-gradient(140deg,rgba(148,163,184,0.06),rgba(0,0,0,0.64)_45%,rgba(0,0,0,0.84))]';
+    if (idx === 0) return 'border border-red-300/70 shadow-[0_0_18px_rgba(248,113,113,0.2)] bg-[linear-gradient(140deg,rgba(248,113,113,0.07),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 4) return 'border border-violet-300/65 shadow-[0_0_16px_rgba(167,139,250,0.18)] bg-[linear-gradient(140deg,rgba(167,139,250,0.06),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 9) return 'border border-cyan-300/60 shadow-[0_0_14px_rgba(34,211,238,0.16)] bg-[linear-gradient(140deg,rgba(34,211,238,0.06),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 16) return 'border border-emerald-300/55 shadow-[0_0_13px_rgba(110,231,183,0.14)] bg-[linear-gradient(140deg,rgba(110,231,183,0.05),rgba(0,0,0,0.65)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 25) return 'border border-amber-300/55 shadow-[0_0_12px_rgba(252,211,77,0.13)] bg-[linear-gradient(140deg,rgba(252,211,77,0.05),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
+    return 'border border-slate-300/45 shadow-[0_0_10px_rgba(148,163,184,0.12)] bg-[linear-gradient(140deg,rgba(148,163,184,0.04),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
   };
   const seasonCardFxByTier = (idx: number) => {
-    if (idx === 0) return 'border border-red-400/82 shadow-[0_0_30px_rgba(248,113,113,0.3)] bg-[linear-gradient(140deg,rgba(248,113,113,0.12),rgba(0,0,0,0.6)_45%,rgba(0,0,0,0.84))]';
-    if (idx < 6) return 'border border-fuchsia-300/75 shadow-[0_0_24px_rgba(232,121,249,0.25)] bg-[linear-gradient(140deg,rgba(232,121,249,0.08),rgba(0,0,0,0.62)_45%,rgba(0,0,0,0.84))]';
-    if (idx < 12) return 'border border-cyan-300/72 shadow-[0_0_21px_rgba(34,211,238,0.23)] bg-[linear-gradient(140deg,rgba(34,211,238,0.08),rgba(0,0,0,0.62)_45%,rgba(0,0,0,0.84))]';
-    if (idx < 20) return 'border border-sky-300/68 shadow-[0_0_18px_rgba(125,211,252,0.2)] bg-[linear-gradient(140deg,rgba(125,211,252,0.07),rgba(0,0,0,0.62)_45%,rgba(0,0,0,0.84))]';
-    return 'border border-indigo-300/62 shadow-[0_0_16px_rgba(165,180,252,0.18)] bg-[linear-gradient(140deg,rgba(165,180,252,0.07),rgba(0,0,0,0.62)_45%,rgba(0,0,0,0.84))]';
+    if (idx === 0) return 'border border-red-300/68 shadow-[0_0_18px_rgba(248,113,113,0.2)] bg-[linear-gradient(140deg,rgba(248,113,113,0.08),rgba(0,0,0,0.65)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 6) return 'border border-fuchsia-300/62 shadow-[0_0_15px_rgba(232,121,249,0.17)] bg-[linear-gradient(140deg,rgba(232,121,249,0.06),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 12) return 'border border-cyan-300/58 shadow-[0_0_14px_rgba(34,211,238,0.15)] bg-[linear-gradient(140deg,rgba(34,211,238,0.06),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 20) return 'border border-sky-300/54 shadow-[0_0_12px_rgba(125,211,252,0.13)] bg-[linear-gradient(140deg,rgba(125,211,252,0.05),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
+    return 'border border-indigo-300/50 shadow-[0_0_10px_rgba(165,180,252,0.12)] bg-[linear-gradient(140deg,rgba(165,180,252,0.05),rgba(0,0,0,0.67)_50%,rgba(0,0,0,0.84))]';
   };
   const getSeasonTierBorderClass = (idx?: number | null) => {
-    if (idx === null || idx === undefined || idx < 0) return 'border-slate-300/40 shadow-[0_0_8px_rgba(148,163,184,0.25)]';
+    if (idx === null || idx === undefined || idx < 0) return 'border-orange-300/55 shadow-[0_0_10px_rgba(253,186,116,0.35)]';
     if (idx === 0) return 'border-red-400 shadow-[0_0_14px_rgba(248,113,113,0.55)]';
     if (idx < 4) return 'border-violet-400 shadow-[0_0_12px_rgba(167,139,250,0.48)]';
     if (idx < 9) return 'border-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.48)]';
@@ -800,8 +800,31 @@ function App() {
 
   const fetchRankers = async () => {
     const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: true });
+    const { data: matchRows } = await supabase
+      .from('matches')
+      .select('match_type,winner_name,left_player_name,left_player,right_player_name,right_player');
     if (profiles) {
       const normalize = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+      const modeStats: Record<string, { regularMatches: number; regularWins: number; seasonMatches: number }> = {};
+      (matchRows || []).forEach((m: any) => {
+        const mode = String(m?.match_type || '').toLowerCase();
+        const left = normalize(m?.left_player_name || m?.left_player || '');
+        const right = normalize(m?.right_player_name || m?.right_player || '');
+        const winner = normalize(m?.winner_name || '');
+        const participants = [left, right].filter(Boolean);
+        if (participants.length === 0) return;
+        participants.forEach((name) => {
+          if (!modeStats[name]) modeStats[name] = { regularMatches: 0, regularWins: 0, seasonMatches: 0 };
+          if (mode.includes('free')) {
+            modeStats[name].regularMatches += 1;
+          } else if (mode.includes('random')) {
+            modeStats[name].seasonMatches += 1;
+          }
+          if (mode.includes('free') && winner && winner === name) {
+            modeStats[name].regularWins += 1;
+          }
+        });
+      });
       const base = profiles.map((r) => ({
         ...r,
         display_name: r.display_name || 'GUEST',
@@ -822,29 +845,67 @@ function App() {
         equipped_name_color: r.equipped_name_color || 'name_default',
         equipped_name_style: r.equipped_name_style || 'style_default',
         equipped_border_fx: r.equipped_border_fx || 'border_default',
+        regular_matches: modeStats[normalize(r.display_name)]?.regularMatches || 0,
+        regular_wins: modeStats[normalize(r.display_name)]?.regularWins || 0,
+        season_matches: modeStats[normalize(r.display_name)]?.seasonMatches || 0,
       }));
 
-      const hasPersistedRankIndex = base.length > 0 && base.every((r) => typeof r.rank_index === 'number');
-      const regularSorted = hasPersistedRankIndex
-        ? [...base].sort((a, b) => (a.rank_index ?? Number.MAX_SAFE_INTEGER) - (b.rank_index ?? Number.MAX_SAFE_INTEGER))
-        : [...base];
+      const regularSorted = [...base].sort((a, b) => {
+        const aPlayed = (a.regular_matches || 0) > 0;
+        const bPlayed = (b.regular_matches || 0) > 0;
+        if (aPlayed !== bPlayed) return aPlayed ? -1 : 1;
+        if (!aPlayed && !bPlayed) {
+          return normalize(a.display_name).localeCompare(normalize(b.display_name));
+        }
+        if ((b.regular_wins || 0) !== (a.regular_wins || 0)) return (b.regular_wins || 0) - (a.regular_wins || 0);
+        const aWr = (a.regular_matches || 0) > 0 ? (a.regular_wins || 0) / (a.regular_matches || 0) : 0;
+        const bWr = (b.regular_matches || 0) > 0 ? (b.regular_wins || 0) / (b.regular_matches || 0) : 0;
+        if (bWr !== aWr) return bWr - aWr;
+        if ((b.regular_matches || 0) !== (a.regular_matches || 0)) return (b.regular_matches || 0) - (a.regular_matches || 0);
+        return normalize(a.display_name).localeCompare(normalize(b.display_name));
+      });
+      let regularDisplayIdx = 0;
       regularSorted.forEach((r, i) => {
         (r as any).rankIndex = i;
-        if (typeof (r as any).rank_index !== 'number') {
-          (r as any).rank_index = i;
-        }
+        (r as any).regular_display_index = (r.regular_matches || 0) > 0 ? regularDisplayIdx++ : null;
       });
 
-      const seasonSorted = [...base].sort((a, b) => (b.rp ?? 0) - (a.rp ?? 0));
+      const seasonSorted = [...base].sort((a, b) => {
+        const aPlayed = (a.season_matches || 0) > 0;
+        const bPlayed = (b.season_matches || 0) > 0;
+        if (aPlayed !== bPlayed) return aPlayed ? -1 : 1;
+        if (!aPlayed && !bPlayed) return normalize(a.display_name).localeCompare(normalize(b.display_name));
+        if ((b.rp || 0) !== (a.rp || 0)) return (b.rp || 0) - (a.rp || 0);
+        if ((b.season_matches || 0) !== (a.season_matches || 0)) return (b.season_matches || 0) - (a.season_matches || 0);
+        return normalize(a.display_name).localeCompare(normalize(b.display_name));
+      });
+      let seasonDisplayIdx = 0;
+      seasonSorted.forEach((r, i) => {
+        (r as any).seasonRankIndex = i;
+        (r as any).season_display_index = (r.season_matches || 0) > 0 ? seasonDisplayIdx++ : null;
+      });
+      const seasonMetaMap = new Map<string, { seasonRankIndex: number; season_display_index: number | null }>();
+      seasonSorted.forEach((r: any) => {
+        seasonMetaMap.set(normalize(r.display_name), {
+          seasonRankIndex: r.seasonRankIndex,
+          season_display_index: r.season_display_index,
+        });
+      });
+      regularSorted.forEach((r: any) => {
+        const key = normalize(r.display_name);
+        const seasonMeta = seasonMetaMap.get(key);
+        r.seasonRankIndex = seasonMeta?.seasonRankIndex ?? Number.MAX_SAFE_INTEGER;
+        r.season_display_index = seasonMeta?.season_display_index ?? null;
+      });
       const regularNow: Record<string, number> = {};
       const seasonNow: Record<string, number> = {};
-      regularSorted.forEach((r, i) => {
+      regularSorted.forEach((r: any, i) => {
         const key = normalize(r.display_name);
-        if (key) regularNow[key] = i;
+        if (key && typeof r.regular_display_index === 'number') regularNow[key] = i;
       });
-      seasonSorted.forEach((r, i) => {
+      seasonSorted.forEach((r: any, i) => {
         const key = normalize(r.display_name);
-        if (key) seasonNow[key] = i;
+        if (key && typeof r.season_display_index === 'number') seasonNow[key] = i;
       });
 
       const prevRegular = rankHistoryRef.current.regular;
@@ -1002,11 +1063,6 @@ function App() {
     }
 
     const baseMode = existing.mode.replace('_accepted', '').trim() as 'free' | 'random';
-    if (baseMode === 'free' && !canAcceptIncomingByRegularRule(existing.challenger_name)) {
-      playSFX('error');
-      showStatusPopup('error', '수락 불가', '정규 랭킹은 나보다 최대 5단계 낮은 도전자까지만 수락할 수 있습니다.');
-      return;
-    }
     if (baseMode === 'free') {
       const remainMs = getRegularCooldownRemainingMs(existing.challenger_name);
       if (remainMs > 0) {
@@ -1115,10 +1171,6 @@ function App() {
     const { data: existing } = await supabase.from('challenges').select('*').eq('challenger_name', entryOpponent.trim()).eq('target_name', currentUserName.trim()).limit(1).maybeSingle();
     
     if (existing) {
-      if (entryMode === 'free' && !canAcceptIncomingByRegularRule(entryOpponent.trim())) {
-        playSFX('error');
-        return alert("정규 랭킹 수락은 나보다 최대 5단계 낮은 도전자까지만 가능합니다.");
-      }
       if (entryMode === 'free') {
         const remainMs = getRegularCooldownRemainingMs(entryOpponent.trim());
         if (remainMs > 0) {
@@ -1148,10 +1200,6 @@ function App() {
       }
       await supabase.from('challenges').update(updatePayload).eq('id', existing.id); setIncomingChallenge(null); setMatchPhase('picking');
     } else {
-      if (entryMode === 'free' && !canChallengeTargetByRegularRule(entryOpponent.trim())) {
-        playSFX('error');
-        return alert("정규 랭킹은 하위 티어(루키~골드)는 상위 누구에게나, 플래티넘 이상은 최대 3단계 위까지만 도전할 수 있습니다.");
-      }
       if (entryMode === 'free') {
         const remainMs = getRegularCooldownRemainingMs(entryOpponent.trim());
         if (remainMs > 0) {
@@ -1245,10 +1293,8 @@ function App() {
 
                     if (updatedData.mode.includes('free')) {
                         const bet = updatedData.bet_gc || 0;
-                        const cRankNow = typeof cProfile.rank_index === 'number' ? cProfile.rank_index : rankers.findIndex((r) => r.display_name === challengerName);
-                        const tRankNow = typeof tProfile.rank_index === 'number' ? tProfile.rank_index : rankers.findIndex((r) => r.display_name === targetName);
-                        const cRegular = typeof cProfile.regular_rp === 'number' ? cProfile.regular_rp : calculateRegularPoints(cProfile.wins || 0, cProfile.losses || 0);
-                        const tRegular = typeof tProfile.regular_rp === 'number' ? tProfile.regular_rp : calculateRegularPoints(tProfile.wins || 0, tProfile.losses || 0);
+                        const cRankNow = getRegularRankIndexByName(challengerName);
+                        const tRankNow = getRegularRankIndexByName(targetName);
                         const targetIsTopRegular = tRankNow === 0;
                         const topRegularDefenseSucceeded = !challengerWon && targetIsTopRegular;
                         const cPrevStreak = cProfile.win_streak || 0;
@@ -1268,27 +1314,6 @@ function App() {
                           tUpdates.gc = (tProfile.gc ?? 1000) + bet;
                           tUpdates.win_streak = tRankNow === 0 ? tPrevStreak : tPrevStreak + 1;
                           cUpdates.win_streak = 0;
-                        }
-
-                        const winnerRank = challengerWon ? cRankNow : tRankNow;
-                        const loserRank = challengerWon ? tRankNow : cRankNow;
-                        const winnerIsBelow = winnerRank >= 0 && loserRank >= 0 && winnerRank > loserRank;
-
-                        if (winnerIsBelow) {
-                          if (challengerWon) {
-                            cUpdates.rank_index = tRankNow;
-                            tUpdates.rank_index = cRankNow;
-                            cUpdates.regular_rp = tRegular;
-                            tUpdates.regular_rp = cRegular;
-                          } else {
-                            cUpdates.rank_index = tRankNow;
-                            tUpdates.rank_index = cRankNow;
-                            cUpdates.regular_rp = tRegular;
-                            tUpdates.regular_rp = cRegular;
-                          }
-                        } else {
-                          if (cRankNow >= 0) cUpdates.rank_index = cRankNow;
-                          if (tRankNow >= 0) tUpdates.rank_index = tRankNow;
                         }
                     } else {
                         const targetSeasonRankNow = rpRankers.findIndex((r) => normalizeName(r.display_name) === normalizeName(targetName));
@@ -1619,17 +1644,19 @@ function App() {
       );
     }
     return makeTier(
-      '보이드',
-      idx - 49,
-      'text-[#a3acb9]',
-      'shadow-[0_0_8px_rgba(163,172,185,0.24)]',
-      'bg-[#a3acb9]/20',
-      'void',
-      'bg-slate-500/30'
+      '더스트',
+      idx - 35,
+      'text-[#c47a4a]',
+      'shadow-[0_0_9px_rgba(196,122,74,0.28)]',
+      'bg-[#c47a4a]/20',
+      'dust',
+      'bg-orange-600/35'
     );
   };
 
-  const rpRankers = [...rankers].sort((a, b) => (b.rp || 0) - (a.rp || 0));
+  const rpRankers = [...rankers].sort(
+    (a: any, b: any) => (a.seasonRankIndex ?? Number.MAX_SAFE_INTEGER) - (b.seasonRankIndex ?? Number.MAX_SAFE_INTEGER)
+  );
   const normalizeName = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
   const matchesSearch = (displayName: string | undefined | null, query: string) => {
     const q = query.trim().toLowerCase();
@@ -1639,46 +1666,58 @@ function App() {
   const regularRankMap = new Map(rankers.map((r) => [normalizeName(r.display_name), r]));
 
   const getRegularRankInfoByName = (name?: string | null) => {
-    const found = regularRankMap.get(normalizeName(name));
-    if (!found || typeof found.rankIndex !== 'number') return null;
-    return getGrandRankInfo(found.rankIndex);
+    const found: any = regularRankMap.get(normalizeName(name));
+    if (!found) return null;
+    const played = (found.regular_matches || 0) > 0;
+    if (!played) return getGrandRankInfo(9999);
+    const idx = typeof found.regular_display_index === 'number' ? found.regular_display_index : found.rankIndex;
+    if (typeof idx !== 'number') return getGrandRankInfo(9999);
+    return getGrandRankInfo(idx);
   };
 
   const getRegularRankLabelByName = (name?: string | null) => {
-    const found = regularRankMap.get(normalizeName(name));
-    if (!found || typeof found.rankIndex !== 'number') return '미집계';
-    const info = getGrandRankInfo(found.rankIndex);
-    return `${info.title} ${found.rankIndex + 1}위`;
+    const found: any = regularRankMap.get(normalizeName(name));
+    if (!found) return '루키 -위';
+    const played = (found.regular_matches || 0) > 0;
+    if (!played) return '루키 -위';
+    const idx = typeof found.regular_display_index === 'number' ? found.regular_display_index : found.rankIndex;
+    if (typeof idx !== 'number') return '루키 -위';
+    const info = getGrandRankInfo(idx);
+    return `${info.title} ${idx + 1}위`;
   };
 
   const getSeasonRankInfoByName = (name?: string | null) => {
     const normalized = normalizeName(name);
     if (!normalized) return null;
-    const idx = rpRankers.findIndex((r) => normalizeName(r.display_name) === normalized);
-    if (idx < 0) return null;
+    const found: any = regularRankMap.get(normalized);
+    if (!found) return null;
+    const played = (found.season_matches || 0) > 0;
+    if (!played) {
+      return { index: null as number | null, ...getRPTierInfo(49) };
+    }
+    const idx = typeof found.season_display_index === 'number' ? found.season_display_index : null;
+    if (idx === null) return { index: null as number | null, ...getRPTierInfo(49) };
     return { index: idx, ...getRPTierInfo(idx) };
   };
 
   const getSeasonRankLabelByName = (name?: string | null) => {
     const info = getSeasonRankInfoByName(name);
-    return info ? `${info.name} ${info.index + 1}위` : '미집계';
+    if (!info) return '더스트 -위';
+    if (typeof info.index !== 'number') return `${info.name} -위`;
+    return `${info.name} ${info.index + 1}위`;
   };
 
   const getRegularRankIndexByName = (name?: string | null) => {
-    const found = regularRankMap.get(normalizeName(name));
-    if (!found || typeof found.rankIndex !== 'number') return null;
-    return found.rankIndex;
+    const found: any = regularRankMap.get(normalizeName(name));
+    if (!found || (found.regular_matches || 0) <= 0) return null;
+    if (typeof found.regular_display_index === 'number') return found.regular_display_index;
+    if (typeof found.rankIndex === 'number') return found.rankIndex;
+    return null;
   };
 
   const currentUserRegularInfo = getRegularRankInfoByName(currentUserName);
   const currentUserRegularIndex = getRegularRankIndexByName(currentUserName);
-  const currentUserSeasonIndex = rpRankers.findIndex(
-    (r) =>
-      (user?.id && r.id === user.id) ||
-      normalizeName(r.display_name) === normalizeName(currentUserName)
-  );
-  const currentUserSeasonInfo =
-    currentUserSeasonIndex >= 0 ? { index: currentUserSeasonIndex, ...getRPTierInfo(currentUserSeasonIndex) } : null;
+  const currentUserSeasonInfo = getSeasonRankInfoByName(currentUserName);
   const currentUserSeasonPoints = profile?.rp ?? 0;
   const getStreakBountyGC = (streak?: number) => {
     const safe = streak || 0;
@@ -1795,28 +1834,15 @@ function App() {
     const mm = totalMinutes % 60;
     return `${hh}시간 ${mm}분`;
   };
-  const isRegularUnlimitedTier = (rankIndex: number) => {
-    const tier = getGrandRankInfo(rankIndex)?.title || '';
-    return tier === '루키' || tier === '브론즈' || tier === '실버' || tier === '골드';
-  };
   const canChallengeTargetByRegularRule = (targetName?: string | null) => {
     if (!targetName || !currentUserName) return false;
     if (targetName.trim() === currentUserName.trim()) return false;
-    const myRank = getRegularRankIndexByName(currentUserName);
-    const targetRank = getRegularRankIndexByName(targetName);
-    if (myRank === null || targetRank === null) return false;
-    if (targetRank >= myRank) return false;
-    if (isRegularUnlimitedTier(myRank)) return true;
-    return myRank - targetRank <= 3;
+    return true;
   };
   const canAcceptIncomingByRegularRule = (challengerName?: string | null) => {
     if (!challengerName || !currentUserName) return false;
     if (challengerName.trim() === currentUserName.trim()) return false;
-    const myRank = getRegularRankIndexByName(currentUserName);
-    const challengerRank = getRegularRankIndexByName(challengerName);
-    if (myRank === null || challengerRank === null) return false;
-    // 도전 받은 사람은 자기보다 최대 5단계 낮은 도전자까지 수락 가능합니다.
-    return challengerRank > myRank && challengerRank - myRank <= 5;
+    return true;
   };
   const getRegularChallengeUiState = (targetName?: string | null) => {
     if (!targetName || !currentUserName) {
@@ -1865,7 +1891,7 @@ function App() {
     : '현재 접속 중인 클랜원이 없습니다.';
 
   const selectedPlayerRegularInfo = selectedPlayer ? getRegularRankInfoByName(selectedPlayer.display_name) : null;
-  const selectedPlayerRegularLabel = selectedPlayer ? getRegularRankLabelByName(selectedPlayer.display_name) : '미집계';
+  const selectedPlayerRegularLabel = selectedPlayer ? getRegularRankLabelByName(selectedPlayer.display_name) : '루키 -위';
   const selectedPlayerSeasonInfo = selectedPlayer ? getSeasonRankInfoByName(selectedPlayer.display_name) : null;
   const setRankCardRef = (scope: 'mini' | 'main', mode: 'free' | 'random', name: string) => (el: HTMLDivElement | null) => {
     const key = `${scope}:${mode}:${normalizeName(name)}`;
@@ -2117,24 +2143,16 @@ function App() {
                     <div className="flex items-center gap-3 w-full">
                       <span className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 flex items-center justify-center shrink-0">{currentUserRegularInfo?.icon || <Shield size={34} className="text-slate-300" />}</span>
                       <span className={`text-[1.1rem] sm:text-[1.35rem] lg:text-[1.95rem] font-black leading-tight whitespace-nowrap drop-shadow-[0_0_10px_rgba(250,204,21,0.4)] ${currentUserRegularInfo?.color || 'text-yellow-300'}`}>
-                        {currentUserRegularIndex !== null ? `${currentUserRegularInfo?.title || '미집계'} ${currentUserRegularIndex + 1}위` : '미집계'}
+                        {currentUserRegularIndex !== null ? `${currentUserRegularInfo?.title || '루키'} ${currentUserRegularIndex + 1}위` : '루키 -위'}
                       </span>
                     </div>
                     <div className="flex items-center gap-3 w-full mt-1.5">
                       <span className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 flex items-center justify-center leading-none shrink-0">{currentUserSeasonInfo?.icon || '🪐'}</span>
                       <span className={`text-[1.1rem] sm:text-[1.35rem] lg:text-[1.95rem] font-black leading-tight whitespace-nowrap drop-shadow-[0_0_10px_rgba(34,211,238,0.35)] ${currentUserSeasonInfo?.color || 'text-slate-300'}`}>
-                        {currentUserSeasonInfo ? `${currentUserSeasonInfo.name} ${currentUserSeasonInfo.index + 1}위` : '미집계'}
+                        {currentUserSeasonInfo
+                          ? `${currentUserSeasonInfo.name} ${typeof currentUserSeasonInfo.index === 'number' ? `${currentUserSeasonInfo.index + 1}위` : '-위'}`
+                          : '더스트 -위'}
                       </span>
-                    </div>
-                </div>
-                <div className="flex flex-col gap-2 bg-black/45 px-3 py-3 rounded-2xl border border-white/10 shadow-inner w-full sm:w-auto min-w-0 sm:min-w-[220px] sm:max-w-[250px]">
-                    <div className="bg-black/45 rounded-xl border border-emerald-400/25 px-3 py-2 text-center">
-                      <p className="text-[11px] font-black text-emerald-300 tracking-widest">GC (상점)</p>
-                      <p className="text-[1.3rem] sm:text-[1.5rem] lg:text-[1.7rem] font-black text-emerald-300 leading-tight">{profile?.gc ?? 1000}</p>
-                    </div>
-                    <div className="bg-black/45 rounded-xl border border-fuchsia-400/25 px-3 py-2 text-center">
-                      <p className="text-[11px] font-black text-fuchsia-300 tracking-widest">SP (시즌)</p>
-                      <p className="text-[1.2rem] sm:text-[1.35rem] lg:text-[1.5rem] font-black text-fuchsia-300 leading-tight">{currentUserSeasonPoints}</p>
                     </div>
                 </div>
                 <div onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); toggleProfileView(); }} className="flex items-center gap-3 sm:gap-4 bg-black/60 p-2.5 sm:p-3.5 rounded-full border border-white/10 pr-4 sm:pr-5 border-l-cyan-500 border-l-4 cursor-pointer hover:border-l-pink-500 transition-all w-full sm:w-auto justify-center sm:justify-start">
@@ -2171,7 +2189,8 @@ function App() {
 
                     <div className="flex-1 overflow-y-auto space-y-3 sm:space-y-4 custom-scrollbar pr-1 sm:pr-2 pt-2 animate-in fade-in">
                         {onlineRankers.length > 0 ? onlineRankers.map((ou, i) => {
-                          const rankInfo = getGrandRankInfo(ou.rankIndex);
+                          const regularIdx = typeof ou.regular_display_index === 'number' ? ou.regular_display_index : null;
+                          const rankInfo = getGrandRankInfo(regularIdx ?? 9999);
                           const seasonInfo = getSeasonRankInfoByName(ou.display_name);
                           const challengeUi = getRegularChallengeUiState(ou.display_name);
                           return (
@@ -2187,8 +2206,12 @@ function App() {
                                   </div>
                                   <div className="flex flex-col flex-1 min-w-0">
                                      <span className={`group-hover/profile:text-cyan-400 text-base sm:text-lg font-bold whitespace-normal break-all leading-tight ${getNameClassForUser(ou.display_name)}`}>{ou.display_name}</span>
-                                     <span className={`text-[11px] font-bold mt-1 ${rankInfo?.color || ''}`}>{rankInfo ? `${rankInfo.title} ${rankInfo.num}위` : '미집계'}</span>
-                                     <span className={`text-[11px] font-bold mt-0.5 ${seasonInfo?.color || 'text-slate-400'}`}>{seasonInfo ? `${seasonInfo.name} ${seasonInfo.index + 1}위` : '미집계'}</span>
+                                     <span className={`text-[11px] font-bold mt-1 ${rankInfo?.color || ''}`}>{rankInfo ? `${rankInfo.title} ${regularIdx === null ? '-위' : `${regularIdx + 1}위`}` : '루키 -위'}</span>
+                                    <span className={`text-[11px] font-bold mt-0.5 ${seasonInfo?.color || 'text-slate-400'}`}>
+                                      {seasonInfo
+                                        ? `${seasonInfo.name} ${typeof seasonInfo.index === 'number' ? `${seasonInfo.index + 1}위` : '-위'}`
+                                        : '더스트 -위'}
+                                    </span>
                                   </div>
                                </div>
                                 {ou.display_name.trim() === currentUserName?.trim() ? (
@@ -2474,12 +2497,13 @@ function App() {
                       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar space-y-3 rank-glow-buffer">
                           {miniRankMode === 'free' ? (
                             rankers.length > 0 ? rankers.filter(r => matchesSearch(r.display_name, miniSearchQuery)).map((r) => {
-                              const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
+                              const regularIdx = typeof (r as any).regular_display_index === 'number' ? (r as any).regular_display_index : null;
+                              const grandRank = getGrandRankInfo(regularIdx ?? 9999); if (!grandRank) return null;
                               const challengeUi = getRegularChallengeUiState(r.display_name);
                               return (
-                                <div ref={setRankCardRef('mini', 'free', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${rankCardFxByTier(r.rankIndex)}`}>
+                                <div ref={setRankCardRef('mini', 'free', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${rankCardFxByTier(regularIdx ?? 9999)}`}>
                                   <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)]">
-                                    {r.rankIndex + 1}위
+                                    {regularIdx === null ? '-' : `${regularIdx + 1}위`}
                                   </span>
                                   <div className="absolute inset-x-0 top-2 flex justify-center pointer-events-none">
                                     <div className="flex items-center justify-center min-w-[68px] h-[46px]">
@@ -2503,7 +2527,7 @@ function App() {
 
                                   <div className="flex items-center justify-between w-full px-1 gap-3 pt-9 sm:pt-10">
                                     <div className="flex items-center gap-4 flex-1 min-w-0 pr-2">
-                                      <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${isCurrentUserDisplayName(r.display_name) ? getAvatarBorderFxForUser(r.display_name) : (r.rankIndex === 0 ? 'border-red-400 shadow-[0_0_16px_rgba(248,113,113,0.65)]' : 'border-cyan-200/40')} shrink-0`} alt="p"/>
+                                      <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${isCurrentUserDisplayName(r.display_name) ? getAvatarBorderFxForUser(r.display_name) : (regularIdx === 0 ? 'border-red-400 shadow-[0_0_16px_rgba(248,113,113,0.65)]' : 'border-cyan-200/40')} shrink-0`} alt="p"/>
                                       <span className={`font-bold text-base sm:text-[1.2rem] leading-tight whitespace-normal break-all ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
                                     <button
@@ -2527,11 +2551,12 @@ function App() {
                             }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400 mt-10 text-lg">랭커가 없습니다</div>)
                           ) : (
                             rpRankers.length > 0 ? rpRankers.filter(r => matchesSearch(r.display_name, miniSearchQuery)).slice(0, 10).map((r, i) => {
-                              const tier = getRPTierInfo(i);
+                              const seasonIdx = typeof (r as any).season_display_index === 'number' ? (r as any).season_display_index : null;
+                              const tier = getRPTierInfo(seasonIdx ?? 49);
                               return (
-                                <div ref={setRankCardRef('mini', 'random', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${seasonCardFxByTier(i)}`}>
+                                <div ref={setRankCardRef('mini', 'random', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${seasonCardFxByTier(seasonIdx ?? 49)}`}>
                                   <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)]">
-                                    {i + 1}위
+                                    {seasonIdx === null ? '-' : `${seasonIdx + 1}위`}
                                   </span>
                                   <div className="absolute inset-x-0 top-2 flex justify-center pointer-events-none">
                                     <div className="flex items-center justify-center min-w-[68px] h-[46px]">
@@ -2555,7 +2580,7 @@ function App() {
 
                                   <div className="flex items-center justify-between w-full px-1 gap-3 pt-9 sm:pt-10">
                                     <div className="flex items-center gap-4 flex-1 min-w-0">
-                                      <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${isCurrentUserDisplayName(r.display_name) ? getAvatarBorderFxForUser(r.display_name) : (i < 3 ? 'border-red-500 shadow-[0_0_10px_red]' : 'border-cyan-200/40')} shrink-0`} alt="p"/>
+                                      <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${isCurrentUserDisplayName(r.display_name) ? getAvatarBorderFxForUser(r.display_name) : (seasonIdx === 0 ? 'border-red-500 shadow-[0_0_10px_red]' : 'border-cyan-200/40')} shrink-0`} alt="p"/>
                                       <span className={`font-bold text-base sm:text-[1.2rem] leading-tight whitespace-normal break-all ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
                                     <span className="font-black text-fuchsia-400 text-[1.15rem] sm:text-[1.5rem] shrink-0">{r.rp ?? 0}</span>
@@ -2729,10 +2754,11 @@ function App() {
                      const rest = regularFiltered.slice(9);
 
                       const renderRegularCard = (r: any, tone: 'hero' | 'mid' | 'small' = 'small') => {
-                        const grandRank = getGrandRankInfo(r.rankIndex);
+                        const regularIdx = typeof r.regular_display_index === 'number' ? r.regular_display_index : null;
+                        const grandRank = getGrandRankInfo(regularIdx ?? 9999);
                         if (!grandRank) return null;
                         const move = getRankMoveValue(r.display_name, 'regular');
-                        const isTopRegular = r.rankIndex === 0;
+                        const isTopRegular = regularIdx === 0;
                         const throneDefenseStack = r.defense_stack || 0;
                         const throneBounty = getDefenseBonusGC(throneDefenseStack);
                         const challengeUi = getRegularChallengeUiState(r.display_name);
@@ -2753,7 +2779,7 @@ function App() {
                            key={r.id}
                            onMouseEnter={() => playSFX('hover')}
                            onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }}
-                           className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${rankCardFxByTier(r.rankIndex)} hover:brightness-110 mt-10`}
+                           className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${rankCardFxByTier(regularIdx ?? 9999)} hover:brightness-110 mt-10`}
                          >
                             <div className="absolute w-full flex justify-center z-20 pointer-events-none" style={{ top: 0 }}>
                               <div className={`${badgeClass} absolute flex items-center justify-center`}>
@@ -2762,7 +2788,7 @@ function App() {
                             </div>
                             <div className="absolute left-3 sm:left-4 top-3 flex items-center gap-2 z-20">
                               <span className="text-[2.2rem] sm:text-[2.8rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_14px_rgba(34,211,238,0.5)]">
-                                {r.rankIndex + 1}위
+                                {regularIdx === null ? '-' : `${regularIdx + 1}위`}
                               </span>
                              {move > 0 && (
                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm sm:text-base font-black text-emerald-200 bg-emerald-500/18 border border-emerald-400/45 shadow-[0_0_10px_rgba(16,185,129,0.35)]">
@@ -2789,7 +2815,7 @@ function App() {
 
                            <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
                              <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
-                               <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${r.rankIndex === 0 ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.65)]' : 'border-white/20'} shrink-0`} alt="p"/>
+                               <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${regularIdx === 0 ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.65)]' : 'border-white/20'} shrink-0`} alt="p"/>
                                <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameClass}`}>{r.display_name}</span>
                              </div>
                              <button
@@ -2871,14 +2897,15 @@ function App() {
                    
                    <div className="grid grid-cols-12 gap-10 pb-20 justify-center px-4 grid-glow-fix">
                       {rpRankers.length > 0 ? rpRankers.filter(r => matchesSearch(r.display_name, mainSearchQuery)).map((r, i) => {
-                           const tier = getRPTierInfo(i);
+                           const seasonIdx = typeof (r as any).season_display_index === 'number' ? (r as any).season_display_index : null;
+                           const tier = getRPTierInfo(seasonIdx ?? 49);
                            const move = getRankMoveValue(r.display_name, 'season');
-                           const isTopSeason = i === 0;
+                           const isTopSeason = seasonIdx === 0;
                            const throneDefenseStack = r.defense_stack || 0;
                            const throneBounty = getDefenseBonusGC(throneDefenseStack);
-                           const isRank1 = i === 0;
-                           const isRank2_3 = i === 1 || i === 2;
-                           const isRank4_6 = i >= 3 && i <= 5;
+                           const isRank1 = seasonIdx === 0;
+                           const isRank2_3 = seasonIdx === 1 || seasonIdx === 2;
+                           const isRank4_6 = seasonIdx !== null && seasonIdx >= 3 && seasonIdx <= 5;
                            
                            let spanClass = "col-span-6";
                            let cardClass = "p-8 pt-12 pb-8 rounded-[2rem]";
@@ -2894,11 +2921,11 @@ function App() {
 
                            return (
                              <div key={r.id} className={spanClass}>
-                                <div ref={setRankCardRef('main', 'random', r.display_name)} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${seasonCardFxByTier(i)} hover:brightness-110 mt-10`}>
-                                   {i === 0 && <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-[3rem] pointer-events-none"></div>}
+                                <div ref={setRankCardRef('main', 'random', r.display_name)} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${seasonCardFxByTier(seasonIdx ?? 49)} hover:brightness-110 mt-10`}>
+                                   {seasonIdx === 0 && <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-[3rem] pointer-events-none"></div>}
                                    
                                     <span className="absolute left-3 sm:left-4 top-3 text-[2.2rem] sm:text-[2.8rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_14px_rgba(34,211,238,0.5)] z-20">
-                                      {i + 1}위
+                                      {seasonIdx === null ? '-' : `${seasonIdx + 1}위`}
                                     </span>
                                     {move > 0 && (
                                       <span className="absolute left-20 sm:left-24 top-3.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm sm:text-base font-black text-emerald-200 bg-emerald-500/18 border border-emerald-400/45 shadow-[0_0_10px_rgba(16,185,129,0.35)] z-20">
@@ -2929,7 +2956,7 @@ function App() {
 
                                     <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
                                       <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
-                                        <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${i < 3 ? 'border-red-500 shadow-[0_0_20px_red]' : 'border-white/20'} shrink-0`} alt="p"/>
+                                        <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${seasonIdx === 0 ? 'border-red-500 shadow-[0_0_20px_red]' : 'border-white/20'} shrink-0`} alt="p"/>
                                         <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameSize}`}>{r.display_name}</span>
                                       </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
@@ -2995,11 +3022,13 @@ function App() {
                         <div className="hidden sm:flex flex-col items-end gap-2 shrink-0">
                           <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${currentUserRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                             {currentUserRegularInfo?.icon || <Shield size={14} className="text-slate-300" />}
-                            {currentUserRegularIndex !== null ? `${currentUserRegularInfo?.title || '미집계'} ${currentUserRegularIndex + 1}위` : '미집계'}
+                            {currentUserRegularIndex !== null ? `${currentUserRegularInfo?.title || '루키'} ${currentUserRegularIndex + 1}위` : '루키 -위'}
                           </span>
                           <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${currentUserSeasonInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                             <span>{currentUserSeasonInfo?.icon || '🪐'}</span>
-                            {currentUserSeasonInfo ? `${currentUserSeasonInfo.name} ${currentUserSeasonInfo.index + 1}위` : '미집계'}
+                            {currentUserSeasonInfo
+                              ? `${currentUserSeasonInfo.name} ${typeof currentUserSeasonInfo.index === 'number' ? `${currentUserSeasonInfo.index + 1}위` : '-위'}`
+                              : '더스트 -위'}
                           </span>
                         </div>
                       </div>
@@ -3007,11 +3036,13 @@ function App() {
                       <div className="sm:hidden flex flex-col gap-2 mb-5">
                         <span className={`inline-flex items-center gap-2 text-sm font-bold px-3 py-1.5 rounded-full border border-white/20 ${currentUserRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                           {currentUserRegularInfo?.icon || <Shield size={14} className="text-slate-300" />}
-                          {currentUserRegularIndex !== null ? `${currentUserRegularInfo?.title || '미집계'} ${currentUserRegularIndex + 1}위` : '미집계'}
+                          {currentUserRegularIndex !== null ? `${currentUserRegularInfo?.title || '루키'} ${currentUserRegularIndex + 1}위` : '루키 -위'}
                         </span>
                         <span className={`inline-flex items-center gap-2 text-sm font-bold px-3 py-1.5 rounded-full border border-white/20 ${currentUserSeasonInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                           <span>{currentUserSeasonInfo?.icon || '🪐'}</span>
-                          {currentUserSeasonInfo ? `${currentUserSeasonInfo.name} ${currentUserSeasonInfo.index + 1}위` : '미집계'}
+                          {currentUserSeasonInfo
+                            ? `${currentUserSeasonInfo.name} ${typeof currentUserSeasonInfo.index === 'number' ? `${currentUserSeasonInfo.index + 1}위` : '-위'}`
+                            : '더스트 -위'}
                         </span>
                       </div>
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -3189,7 +3220,9 @@ function App() {
                         </span>
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerSeasonInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                            <span>{selectedPlayerSeasonInfo?.icon || '🪐'}</span>
-                           {selectedPlayerSeasonInfo ? `${selectedPlayerSeasonInfo.name} ${selectedPlayerSeasonInfo.index + 1}위` : '미집계'}
+                           {selectedPlayerSeasonInfo
+                             ? `${selectedPlayerSeasonInfo.name} ${typeof selectedPlayerSeasonInfo.index === 'number' ? `${selectedPlayerSeasonInfo.index + 1}위` : '-위'}`
+                             : '더스트 -위'}
                         </span>
                       </div>
                     </div>
