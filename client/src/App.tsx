@@ -212,6 +212,18 @@ function App() {
     const cosmetic = getCosmeticStateForUser(name);
     return borderFxClassMap[cosmetic.borderFx] || borderFxClassMap.border_default;
   };
+  const getKstDateKey = () => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const y = parts.find((p) => p.type === 'year')?.value ?? '0000';
+    const m = parts.find((p) => p.type === 'month')?.value ?? '00';
+    const d = parts.find((p) => p.type === 'day')?.value ?? '00';
+    return `${y}-${m}-${d}`;
+  };
 
   const isOwnedItem = (itemId: string) => defaultOwnedIds.includes(itemId) || ownedItemIds.includes(itemId);
   type SavedRandomDraft = {
@@ -293,6 +305,8 @@ function App() {
     regular: {},
     season: {},
   });
+  const dailyRewardCheckingRef = useRef(false);
+  const dailyRewardSessionCheckedRef = useRef('');
   const rankCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const activeScrollTargetRef = useRef<HTMLElement | null>(null);
@@ -492,6 +506,11 @@ function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { setUser(session?.user ?? null); if (session?.user) fetchProfile(session.user.id); });
     fetchData(); fetchRankers(); return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user?.id || !profile) return;
+    void grantDailyLoginRewardIfNeeded();
+  }, [user?.id, profile]);
 
   useEffect(() => {
     if (!cosmeticsStorageKey) {
@@ -935,6 +954,60 @@ function App() {
 
   const handleLogin = async () => { playSFX('click'); await supabase.auth.signInWithOAuth({ provider: 'discord' }); };
   const handleLogout = async () => { playSFX('click'); await supabase.auth.signOut(); setProfile(null); };
+
+  const grantDailyLoginRewardIfNeeded = async () => {
+    if (!user?.id || !profile) return;
+    const todayKst = getKstDateKey();
+    const checkKey = `${user.id}:${todayKst}`;
+    const localDailyKey = `gt_daily_reward_kst_${user.id}`;
+    if (dailyRewardSessionCheckedRef.current === checkKey) return;
+    if (localStorage.getItem(localDailyKey) === todayKst) {
+      dailyRewardSessionCheckedRef.current = checkKey;
+      return;
+    }
+    if (dailyRewardCheckingRef.current) return;
+    dailyRewardCheckingRef.current = true;
+    try {
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      const freshUser = authData?.user;
+      if (authErr || !freshUser) return;
+
+      const lastClaimKst = String(freshUser.user_metadata?.last_daily_reward_kst || '');
+      if (lastClaimKst === todayKst) {
+        dailyRewardSessionCheckedRef.current = checkKey;
+        return;
+      }
+
+      const currentGc = typeof profile.gc === 'number' ? profile.gc : 1000;
+      const nextGc = currentGc + 100;
+      const { error: gcErr } = await supabase.from('profiles').update({ gc: nextGc }).eq('id', user.id);
+      if (gcErr) {
+        console.warn('[daily-reward] gc update failed:', gcErr.message);
+        return;
+      }
+
+      const nextMetadata = { ...(freshUser.user_metadata || {}), last_daily_reward_kst: todayKst };
+      const { error: metaErr } = await supabase.auth.updateUser({ data: nextMetadata });
+      if (metaErr) {
+        console.warn('[daily-reward] metadata update failed:', metaErr.message);
+      } else {
+        setUser((prev: any) => (prev ? { ...prev, user_metadata: nextMetadata } : prev));
+      }
+
+      setProfile((prev: any) => (prev ? { ...prev, gc: nextGc } : prev));
+      setRankers((prev) => prev.map((r) => (r.id === user.id ? { ...r, gc: nextGc } : r)));
+      playSFX('success');
+      showStatusPopup(
+        'success',
+        '출석 보상 획득!',
+        '매일 첫 접속 보상 +100 GC가 지급되었습니다.\n다음 초기화: 매일 00:00 (KST)'
+      );
+      localStorage.setItem(localDailyKey, todayKst);
+      dailyRewardSessionCheckedRef.current = checkKey;
+    } finally {
+      dailyRewardCheckingRef.current = false;
+    }
+  };
 
   const equipCosmeticItem = (item: ShopItem) => {
     if (item.category === 'nameColor') {
