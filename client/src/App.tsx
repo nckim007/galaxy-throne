@@ -30,6 +30,13 @@ type ShopItem = {
   accentClass: string;
 };
 
+type IncomingChallengeRequest = {
+  id: string;
+  challengerName: string;
+  mode: 'free' | 'random';
+  betGc: number;
+};
+
 const SHOP_ITEMS: ShopItem[] = [
   { id: 'name_default', category: 'nameColor', name: '기본 화이트', description: '클래식 화이트 닉네임', cost: 0, preview: 'A', accentClass: 'text-white' },
   { id: 'name_cyan', category: 'nameColor', name: '네온 시안', description: '시원한 시안 계열 닉네임', cost: 1500, preview: 'A', accentClass: 'text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.6)]' },
@@ -105,6 +112,7 @@ function App() {
   const [statusPopup, setStatusPopup] = useState<
     { type: 'success' | 'error' | 'info'; title: string; message: string } | null
   >(null);
+  const [incomingChallenge, setIncomingChallenge] = useState<IncomingChallengeRequest | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonPos, setScrollTopButtonPos] = useState<{ left: number; top: number } | null>(null);
 
@@ -210,6 +218,7 @@ function App() {
   const activeMatchRef = useRef(activeMatch);
   const matchPhaseRef = useRef(matchPhase);
   const waitingForScoreRef = useRef(waitingForScore);
+  const incomingChallengeRef = useRef(incomingChallenge);
   const recentLogsBoardRef = useRef<HTMLDivElement | null>(null);
   const rankingBoardRef = useRef<HTMLDivElement | null>(null);
   const cosmeticSyncWarnedRef = useRef(false);
@@ -243,6 +252,7 @@ function App() {
   useEffect(() => { activeMatchRef.current = activeMatch; }, [activeMatch]);
   useEffect(() => { matchPhaseRef.current = matchPhase; }, [matchPhase]);
   useEffect(() => { waitingForScoreRef.current = waitingForScore; }, [waitingForScore]);
+  useEffect(() => { incomingChallengeRef.current = incomingChallenge; }, [incomingChallenge]);
   useEffect(() => {
     setShowMoreRegularRanks(false);
   }, [mainRankTab, mainSearchQuery]);
@@ -362,10 +372,28 @@ function App() {
       setActiveMatch({ id: data.id, mode: data.mode, opponent: opp, legend: localLegend, weapons: localWeapons, oppLegend: isC ? data.t_legend : data.legend, oppWeapons: isC ? data.t_weapons : data.weapons, isChallenger: isC });
       setEntryOpponent(opp); setEntryMode(data.mode.replace('_accepted', '') as 'free' | 'random'); setBetAmount(data.bet_gc || 0);
 
-      if (data.c_ready && data.t_ready) { setMatchPhase('scoring'); } 
-      else if (data.mode.includes('_accepted')) { setMatchPhase(amIReady ? 'waiting_ready' : 'picking'); } 
-      else { setMatchPhase(isC ? 'waiting_sync' : 'setup_mode'); }
+      if (data.c_ready && data.t_ready) {
+        setIncomingChallenge(null);
+        setMatchPhase('scoring');
+      } else if (data.mode.includes('_accepted')) {
+        setIncomingChallenge(null);
+        setMatchPhase(amIReady ? 'waiting_ready' : 'picking');
+      } else if (isC) {
+        setIncomingChallenge(null);
+        setMatchPhase('waiting_sync');
+      } else {
+        const baseMode = data.mode.replace('_accepted', '').trim() as 'free' | 'random';
+        setIncomingChallenge({
+          id: data.id,
+          challengerName: data.challenger_name,
+          mode: baseMode,
+          betGc: data.bet_gc || 0,
+        });
+        setMatchPhase('idle');
+        setActiveMatch(null);
+      }
     } else {
+      setIncomingChallenge(null);
       if (matchPhaseRef.current !== 'idle') { setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); }
     }
   };
@@ -596,15 +624,30 @@ function App() {
            if (payload.eventType === 'INSERT') {
               const newChallenge = payload.new;
               if (newChallenge.target_name.trim() === currentUserName.trim()) {
-                 playSFX('matchStart'); setEntryOpponent(newChallenge.challenger_name); setEntryMode(newChallenge.mode.replace('_accepted', '') as 'free' | 'random'); setBetAmount(newChallenge.bet_gc || 0); setMatchPhase('setup_mode');
+                 const baseMode = newChallenge.mode.replace('_accepted', '').trim() as 'free' | 'random';
+                 playSFX('matchStart');
+                 setIncomingChallenge({
+                   id: newChallenge.id,
+                   challengerName: newChallenge.challenger_name,
+                   mode: baseMode,
+                   betGc: newChallenge.bet_gc || 0,
+                 });
+                 setEntryOpponent(newChallenge.challenger_name);
+                 setEntryMode(baseMode);
+                 setBetAmount(newChallenge.bet_gc || 0);
+                 setMatchPhase('idle');
               }
            }
            if (payload.eventType === 'UPDATE') {
                const updated = payload.new;
+               const pendingIncoming = incomingChallengeRef.current;
+               if (pendingIncoming && updated.id === pendingIncoming.id && updated.mode.includes('_accepted')) {
+                 setIncomingChallenge(null);
+               }
                if (currentMatch && updated.id === currentMatch.id) {
-                   if (currentPhase === 'waiting_sync' && updated.mode.includes('_accepted')) {
-                       playSFX('matchStart'); setMatchPhase('picking'); if (updated.mode.includes('random')) handleModeChange('random');
-                   }
+                    if (currentPhase === 'waiting_sync' && updated.mode.includes('_accepted')) {
+                        playSFX('matchStart'); setMatchPhase('picking'); if (updated.mode.includes('random')) handleModeChange('random');
+                    }
                    if ((currentPhase === 'picking' || currentPhase === 'waiting_ready') && updated.c_ready && updated.t_ready) {
                        playSFX('success'); setActiveMatch(prev => prev ? { ...prev, oppLegend: prev.isChallenger ? updated.t_legend : updated.legend, oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons } : prev); setMatchPhase('scoring');
                    }
@@ -623,11 +666,15 @@ function App() {
                checkActiveChallenge(currentUserName);
            }
            if (payload.eventType === 'DELETE') {
-               const deletedRow = payload.old;
-               if (currentMatch && deletedRow.id === currentMatch.id) {
-                   if (currentPhase === 'scoring' || isWaiting) {
-                       playSFX('success');
-                       showStatusPopup('success', '업데이트 완료', '전투 결과가 성공적으로 반영되었습니다.');
+                const deletedRow = payload.old;
+                const pendingIncoming = incomingChallengeRef.current;
+                if (pendingIncoming && deletedRow.id === pendingIncoming.id) {
+                    setIncomingChallenge(null);
+                }
+                if (currentMatch && deletedRow.id === currentMatch.id) {
+                    if (currentPhase === 'scoring' || isWaiting) {
+                        playSFX('success');
+                        showStatusPopup('success', '업데이트 완료', '전투 결과가 성공적으로 반영되었습니다.');
                        setMatchPhase('idle');
                        setActiveMatch(null);
                        setWaitingForScore(false);
@@ -646,9 +693,9 @@ function App() {
                        setActiveMatch(null);
                        setWaitingForScore(false);
                    }
-               }
-           }
-      }).subscribe();
+                }
+            }
+       }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [currentUserName]); 
 
@@ -828,18 +875,113 @@ function App() {
     setRerollCount(r => r + 1); setEntryLegend(ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)]); setEntryWeapons([...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2));
   };
 
+  const handleAcceptIncomingChallenge = async () => {
+    if (!incomingChallenge || !currentUserName) return;
+    playSFX('click');
+    const pending = incomingChallenge;
+    const { data: existing, error } = await supabase.from('challenges').select('*').eq('id', pending.id).maybeSingle();
+    if (error || !existing) {
+      setIncomingChallenge(null);
+      showStatusPopup('error', '신청 정보 없음', '이미 취소되었거나 만료된 대전 신청입니다.');
+      return;
+    }
+
+    const baseMode = existing.mode.replace('_accepted', '').trim() as 'free' | 'random';
+    if (baseMode === 'free' && !canAcceptIncomingByRegularRule(existing.challenger_name)) {
+      playSFX('error');
+      showStatusPopup('error', '수락 불가', '정규 랭킹은 서로 최대 5단계 차이 내에서만 매치할 수 있습니다.');
+      return;
+    }
+
+    const challengerName = existing.challenger_name?.trim();
+    const targetName = existing.target_name?.trim();
+    if (!challengerName || !targetName || targetName !== currentUserName.trim()) {
+      setIncomingChallenge(null);
+      showStatusPopup('error', '수락 실패', '대전 신청 대상 정보가 올바르지 않습니다.');
+      return;
+    }
+
+    let updatePayload: any = { mode: `${baseMode}_accepted` };
+    if (baseMode === 'random') {
+      const challengerLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
+      const challengerWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+      const targetLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
+      const targetWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+      updatePayload = {
+        ...updatePayload,
+        legend: challengerLegend,
+        weapons: challengerWeapons,
+        t_legend: targetLegend,
+        t_weapons: targetWeapons,
+      };
+      setEntryLegend(targetLegend);
+      setEntryWeapons(targetWeapons);
+      setActiveMatch({
+        id: existing.id,
+        mode: baseMode,
+        opponent: challengerName,
+        legend: targetLegend,
+        weapons: targetWeapons,
+        isChallenger: false,
+      });
+    } else {
+      setEntryLegend('');
+      setEntryWeapons(['', '']);
+      setActiveMatch({
+        id: existing.id,
+        mode: baseMode,
+        opponent: challengerName,
+        legend: '',
+        weapons: ['', ''],
+        isChallenger: false,
+      });
+    }
+
+    const { error: updateError } = await supabase.from('challenges').update(updatePayload).eq('id', existing.id);
+    if (updateError) {
+      playSFX('error');
+      showStatusPopup('error', '수락 실패', `대전 수락 처리 중 오류가 발생했습니다: ${updateError.message}`);
+      return;
+    }
+
+    setIncomingChallenge(null);
+    setEntryOpponent(challengerName);
+    setEntryMode(baseMode);
+    setBetAmount(existing.bet_gc || 0);
+    setMatchPhase('picking');
+  };
+
+  const handleDeclineIncomingChallenge = async () => {
+    if (!incomingChallenge) return;
+    playSFX('click');
+    const pending = incomingChallenge;
+    const { error } = await supabase.from('challenges').delete().eq('id', pending.id);
+    if (error) {
+      playSFX('error');
+      showStatusPopup('error', '거절 실패', `대전 거절 처리 중 오류가 발생했습니다: ${error.message}`);
+      return;
+    }
+    setIncomingChallenge(null);
+    setMatchPhase('idle');
+    setActiveMatch(null);
+    setEntryOpponent('');
+    setEntryLegend('');
+    setEntryWeapons(['', '']);
+    showStatusPopup('info', '대전 거절', `${pending.challengerName}님의 대전 신청을 거절했습니다.`);
+  };
+
   const handleStartMatch = async () => {
     if (entryMode === 'free' && betAmount < 100) { playSFX('error'); return alert("자유대전 배팅 금액은 최소 100 GC 이상이어야 합니다."); }
-    if (entryMode === 'free' && !canChallengeTargetByRegularRule(entryOpponent.trim())) {
-      playSFX('error');
-      return alert("정규 랭킹은 자신보다 최대 5단계 높은 상대에게만 도전할 수 있습니다.");
-    }
     if (betAmount > 0 && (!profile || profile.gc < betAmount)) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc || 0} GC)`); }
 
-    playSFX('click');
     const { data: existing } = await supabase.from('challenges').select('*').eq('challenger_name', entryOpponent.trim()).eq('target_name', currentUserName.trim()).limit(1).maybeSingle();
     
     if (existing) {
+      if (entryMode === 'free' && !canAcceptIncomingByRegularRule(entryOpponent.trim())) {
+        playSFX('error');
+        return alert("정규 랭킹 수락은 서로 최대 5단계 차이 내에서만 가능합니다.");
+      }
+      playSFX('click');
       const dbMode = existing.mode.replace('_accepted', '').trim();
       if (dbMode !== entryMode.trim()) { playSFX('error'); return alert(`상대방이 [${existing.mode.includes('free') ? '자유' : '랜덤'}대전]을 신청했습니다. 모드를 맞춰주세요!`); }
       if (existing.bet_gc !== betAmount) { playSFX('error'); return alert(`상대방이 배팅금 [${existing.bet_gc} GC]를 걸었습니다. 배팅금을 맞춰주세요!`); }
@@ -855,10 +997,19 @@ function App() {
       } else {
           setActiveMatch({ id: existing.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: false });
       }
-      await supabase.from('challenges').update(updatePayload).eq('id', existing.id); setMatchPhase('picking');
+      await supabase.from('challenges').update(updatePayload).eq('id', existing.id); setIncomingChallenge(null); setMatchPhase('picking');
     } else {
+      if (entryMode === 'free' && !canChallengeTargetByRegularRule(entryOpponent.trim())) {
+        playSFX('error');
+        return alert("정규 랭킹은 자신보다 최대 5단계 높은 상대에게만 도전 신청할 수 있습니다.");
+      }
+      playSFX('click');
       const { data: newChall } = await supabase.from('challenges').insert([{ challenger_name: currentUserName.trim(), target_name: entryOpponent.trim(), mode: entryMode, bet_gc: betAmount }]).select().single();
-      if (newChall) { setActiveMatch({ id: newChall.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: true }); setMatchPhase('waiting_sync'); }
+      if (newChall) {
+        setActiveMatch({ id: newChall.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: true });
+        setMatchPhase('waiting_sync');
+        showStatusPopup('info', '대전 신청 완료', `${entryOpponent.trim()}님에게 대전 신청을 보냈습니다. 수락/거절 응답을 기다려주세요.`);
+      }
     }
   };
 
@@ -1443,6 +1594,15 @@ function App() {
     const targetRank = getRegularRankIndexByName(targetName);
     if (myRank === null || targetRank === null) return false;
     return targetRank < myRank && myRank - targetRank <= 5;
+  };
+  const canAcceptIncomingByRegularRule = (challengerName?: string | null) => {
+    if (!challengerName || !currentUserName) return false;
+    if (challengerName.trim() === currentUserName.trim()) return false;
+    const myRank = getRegularRankIndexByName(currentUserName);
+    const challengerRank = getRegularRankIndexByName(challengerName);
+    if (myRank === null || challengerRank === null) return false;
+    // 수락 단계에서는 "나보다 최대 5단계 낮은 도전자"도 허용합니다.
+    return Math.abs(myRank - challengerRank) <= 5;
   };
 
   const onlineRankers = rankers.filter((r) => {
@@ -2880,6 +3040,41 @@ function App() {
             ))}
           <div className={`px-7 py-4 rounded-2xl border font-black text-xl sm:text-2xl ${resultFx.type === 'win' ? 'text-emerald-300 border-emerald-400/60 bg-black/65' : 'text-rose-300 border-rose-400/60 bg-black/65'}`}>
             {resultFx.message}
+          </div>
+        </div>
+      )}
+
+      {incomingChallenge && (
+        <div className="fixed inset-0 z-[275] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-[2rem] border border-cyan-400/70 p-6 sm:p-7 bg-[#0a0f1d] shadow-2xl"
+            style={{ animation: 'popup-in 260ms ease-out' }}
+          >
+            <h4 className="text-2xl font-black mb-3 text-cyan-300">대전 신청 도착</h4>
+            <div className="space-y-2 text-slate-200 text-base sm:text-lg leading-relaxed">
+              <p>
+                <span className="font-black text-pink-300">{incomingChallenge.challengerName}</span> 님이
+                <span className="font-black text-cyan-300"> {incomingChallenge.mode === 'free' ? '자유대전(정규)' : '랜덤대전(시즌)'}</span>을 신청했습니다.
+              </p>
+              <p className="text-sm text-slate-400">배팅 금액: <span className="font-black text-emerald-300">{incomingChallenge.betGc} GC</span></p>
+            </div>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                onMouseEnter={() => playSFX('hover')}
+                onClick={handleDeclineIncomingChallenge}
+                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-rose-400/50 text-rose-300 font-bold bg-black/50 hover:bg-rose-500/20 cursor-pointer"
+              >
+                거절
+              </button>
+              <button
+                onMouseEnter={() => playSFX('hover')}
+                onClick={handleAcceptIncomingChallenge}
+                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-cyan-400/50 text-cyan-300 font-bold bg-black/50 hover:bg-cyan-500/20 cursor-pointer"
+              >
+                수락
+              </button>
+            </div>
           </div>
         </div>
       )}
