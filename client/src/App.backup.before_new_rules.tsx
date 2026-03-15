@@ -87,7 +87,7 @@ function App() {
   const [entryOpponent, setEntryOpponent] = useState('');
   const [entryLegend, setEntryLegend] = useState('');
   const [entryWeapons, setEntryWeapons] = useState<string[]>(['', '']);
-  const [betAmount, setBetAmount] = useState<number>(200); 
+  const [betAmount, setBetAmount] = useState<number>(100); 
   const [rerollCount, setRerollCount] = useState<number>(0); 
 
   const [matchPhase, setMatchPhase] = useState<'idle' | 'setup_mode' | 'waiting_sync' | 'picking' | 'waiting_ready' | 'scoring'>('idle');
@@ -145,20 +145,8 @@ function App() {
   const currentUserName = profile?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name;
   const currentUserAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || profile?.avatar_url || null;
   const DISCORD_GUILD_ID = (import.meta.env.VITE_DISCORD_GUILD_ID as string | undefined)?.trim();
-  const REGULAR_TICKET_COST = 200;
-  const SEASON_TICKET_COST = 0;
-  const REGULAR_INACTIVE_GRACE_DAYS = 3;
-  const REGULAR_INACTIVE_DECAY_PER_DAY = 100;
-  const REGULAR_FIRST_WIN_BASE_BY_TIER_LEVEL: Record<number, number> = {
-    0: 25, // rookie/void
-    1: 25, // bronze
-    2: 40, // silver
-    3: 55, // gold
-    4: 70, // platinum
-    5: 100, // diamond
-    6: 200, // master
-    7: 300, // predator
-  };
+  const calculateRegularPoints = (wins?: number, losses?: number) =>
+    Math.max(0, 1000 + (wins || 0) * 30 - (losses || 0) * 20);
   const cosmeticsStorageKey = user?.id ? `gt_cosmetics_v1_${user.id}` : null;
   const defaultOwnedIds = ['name_default', 'style_default', 'border_default'];
   const isCurrentUserDisplayName = (name?: string | null) => (name || '').trim() === (currentUserName || '').trim();
@@ -189,19 +177,19 @@ function App() {
     border_plasma: 'border-indigo-300 shadow-[0_0_18px_rgba(129,140,248,0.68)]',
     border_void: 'border-slate-300 shadow-[0_0_18px_rgba(148,163,184,0.58)]',
   };
-  const rankCardFxByTier = (tierLevel: number) => {
-    if (tierLevel >= 7) return 'border border-red-300/75 shadow-[0_0_24px_rgba(248,113,113,0.28)] bg-[linear-gradient(140deg,rgba(248,113,113,0.08),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
-    if (tierLevel >= 6) return 'border border-violet-300/70 shadow-[0_0_20px_rgba(167,139,250,0.24)] bg-[linear-gradient(140deg,rgba(167,139,250,0.07),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
-    if (tierLevel >= 5) return 'border border-cyan-300/65 shadow-[0_0_18px_rgba(34,211,238,0.22)] bg-[linear-gradient(140deg,rgba(34,211,238,0.07),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
-    if (tierLevel >= 4) return 'border border-emerald-300/60 shadow-[0_0_16px_rgba(110,231,183,0.2)] bg-[linear-gradient(140deg,rgba(110,231,183,0.06),rgba(0,0,0,0.65)_50%,rgba(0,0,0,0.84))]';
-    if (tierLevel >= 3) return 'border border-amber-300/58 shadow-[0_0_14px_rgba(252,211,77,0.18)] bg-[linear-gradient(140deg,rgba(252,211,77,0.06),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
+  const rankCardFxByTier = (idx: number) => {
+    if (idx === 0) return 'border border-red-300/75 shadow-[0_0_24px_rgba(248,113,113,0.28)] bg-[linear-gradient(140deg,rgba(248,113,113,0.08),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 4) return 'border border-violet-300/70 shadow-[0_0_20px_rgba(167,139,250,0.24)] bg-[linear-gradient(140deg,rgba(167,139,250,0.07),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 9) return 'border border-cyan-300/65 shadow-[0_0_18px_rgba(34,211,238,0.22)] bg-[linear-gradient(140deg,rgba(34,211,238,0.07),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 16) return 'border border-emerald-300/60 shadow-[0_0_16px_rgba(110,231,183,0.2)] bg-[linear-gradient(140deg,rgba(110,231,183,0.06),rgba(0,0,0,0.65)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 25) return 'border border-amber-300/58 shadow-[0_0_14px_rgba(252,211,77,0.18)] bg-[linear-gradient(140deg,rgba(252,211,77,0.06),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
     return 'border border-slate-300/50 shadow-[0_0_12px_rgba(148,163,184,0.16)] bg-[linear-gradient(140deg,rgba(148,163,184,0.05),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
   };
-  const seasonCardFxByTier = (tierLevel: number) => {
-    if (tierLevel >= 7) return 'border border-red-300/72 shadow-[0_0_24px_rgba(248,113,113,0.28)] bg-[linear-gradient(140deg,rgba(248,113,113,0.09),rgba(0,0,0,0.65)_50%,rgba(0,0,0,0.84))]';
-    if (tierLevel >= 6) return 'border border-fuchsia-300/66 shadow-[0_0_20px_rgba(232,121,249,0.22)] bg-[linear-gradient(140deg,rgba(232,121,249,0.07),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
-    if (tierLevel >= 5) return 'border border-cyan-300/62 shadow-[0_0_18px_rgba(34,211,238,0.2)] bg-[linear-gradient(140deg,rgba(34,211,238,0.07),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
-    if (tierLevel >= 4) return 'border border-sky-300/58 shadow-[0_0_16px_rgba(125,211,252,0.18)] bg-[linear-gradient(140deg,rgba(125,211,252,0.06),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
+  const seasonCardFxByTier = (idx: number) => {
+    if (idx === 0) return 'border border-red-300/72 shadow-[0_0_24px_rgba(248,113,113,0.28)] bg-[linear-gradient(140deg,rgba(248,113,113,0.09),rgba(0,0,0,0.65)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 6) return 'border border-fuchsia-300/66 shadow-[0_0_20px_rgba(232,121,249,0.22)] bg-[linear-gradient(140deg,rgba(232,121,249,0.07),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 12) return 'border border-cyan-300/62 shadow-[0_0_18px_rgba(34,211,238,0.2)] bg-[linear-gradient(140deg,rgba(34,211,238,0.07),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
+    if (idx < 20) return 'border border-sky-300/58 shadow-[0_0_16px_rgba(125,211,252,0.18)] bg-[linear-gradient(140deg,rgba(125,211,252,0.06),rgba(0,0,0,0.66)_50%,rgba(0,0,0,0.84))]';
     return 'border border-indigo-300/54 shadow-[0_0_14px_rgba(165,180,252,0.16)] bg-[linear-gradient(140deg,rgba(165,180,252,0.06),rgba(0,0,0,0.67)_50%,rgba(0,0,0,0.84))]';
   };
   const equippedNameColorClass = nameColorClassMap[equippedItems.nameColor] || nameColorClassMap.name_default;
@@ -1024,341 +1012,130 @@ function App() {
     const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: true });
     const { data: matchRows } = await supabase
       .from('matches')
-      .select('match_type,winner_name,left_player_name,left_player,right_player_name,right_player,score_left,score_right,created_at');
-
-    if (!profiles) return;
-
-    const normalize = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
-    const dayMs = 24 * 60 * 60 * 1000;
-    const nowTs = Date.now();
-    const tierLevelByRank = (rank1: number | null, totalRanked: number) => {
-      if (!rank1 || totalRanked <= 0) return 0;
-      const top3 = Math.min(3, totalRanked);
-      const top5 = Math.max(top3, Math.ceil(totalRanked * 0.05));
-      const top10 = Math.max(top5, Math.ceil(totalRanked * 0.1));
-      const top20 = Math.max(top10, Math.ceil(totalRanked * 0.2));
-      const top30 = Math.max(top20, Math.ceil(totalRanked * 0.3));
-      const top50 = Math.max(top30, Math.ceil(totalRanked * 0.5));
-      if (rank1 <= top3) return 7;
-      if (rank1 <= top5) return 6;
-      if (rank1 <= top10) return 5;
-      if (rank1 <= top20) return 4;
-      if (rank1 <= top30) return 3;
-      if (rank1 <= top50) return 2;
-      return 1;
-    };
-
-    type SimState = {
-      regularMatches: number;
-      regularWins: number;
-      regularLosses: number;
-      regularRp: number;
-      regularWinStreak: number;
-      regularDefenseStack: number;
-      lastRegularMatchTs: number;
-      seasonMatches: number;
-      seasonWins: number;
-      seasonLosses: number;
-      seasonSp: number;
-      seasonWinStreak: number;
-      seasonDefenseStack: number;
-    };
-
-    const sim: Record<string, SimState> = {};
-    const ensure = (name: string) => {
-      if (!name) return;
-      if (!sim[name]) {
-        sim[name] = {
-          regularMatches: 0,
-          regularWins: 0,
-          regularLosses: 0,
-          regularRp: 0,
-          regularWinStreak: 0,
-          regularDefenseStack: 0,
-          lastRegularMatchTs: 0,
-          seasonMatches: 0,
-          seasonWins: 0,
-          seasonLosses: 0,
-          seasonSp: 0,
-          seasonWinStreak: 0,
-          seasonDefenseStack: 0,
-        };
-      }
-    };
-
-    profiles.forEach((p) => ensure(normalize(p.display_name || p.id)));
-
-    const getRegularSortedNames = () =>
-      Object.keys(sim)
-        .filter((k) => sim[k].regularWins > 0)
-        .sort((a, b) => {
-          if (sim[b].regularRp !== sim[a].regularRp) return sim[b].regularRp - sim[a].regularRp;
-          if (sim[b].regularWins !== sim[a].regularWins) return sim[b].regularWins - sim[a].regularWins;
-          if (sim[b].regularMatches !== sim[a].regularMatches) return sim[a].regularMatches - sim[b].regularMatches;
-          return a.localeCompare(b);
+      .select('match_type,winner_name,left_player_name,left_player,right_player_name,right_player');
+    if (profiles) {
+      const normalize = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+      const modeStats: Record<string, { regularMatches: number; regularWins: number; seasonMatches: number }> = {};
+      (matchRows || []).forEach((m: any) => {
+        const mode = String(m?.match_type || '').toLowerCase();
+        const left = normalize(m?.left_player_name || m?.left_player || '');
+        const right = normalize(m?.right_player_name || m?.right_player || '');
+        const winner = normalize(m?.winner_name || '');
+        const participants = [left, right].filter(Boolean);
+        if (participants.length === 0) return;
+        participants.forEach((name) => {
+          if (!modeStats[name]) modeStats[name] = { regularMatches: 0, regularWins: 0, seasonMatches: 0 };
+          if (mode.includes('free')) {
+            modeStats[name].regularMatches += 1;
+          } else if (mode.includes('random')) {
+            modeStats[name].seasonMatches += 1;
+          }
+          if (mode.includes('free') && winner && winner === name) {
+            modeStats[name].regularWins += 1;
+          }
         });
-
-    const getSeasonSortedNames = () =>
-      Object.keys(sim)
-        .filter((k) => sim[k].seasonMatches > 0)
-        .sort((a, b) => {
-          if (sim[b].seasonSp !== sim[a].seasonSp) return sim[b].seasonSp - sim[a].seasonSp;
-          if (sim[b].seasonWins !== sim[a].seasonWins) return sim[b].seasonWins - sim[a].seasonWins;
-          if (sim[b].seasonMatches !== sim[a].seasonMatches) return sim[a].seasonMatches - sim[b].seasonMatches;
-          return a.localeCompare(b);
-        });
-
-    const getRegularTierLevelBefore = (name: string) => {
-      const sorted = getRegularSortedNames();
-      const idx = sorted.indexOf(name);
-      return tierLevelByRank(idx >= 0 ? idx + 1 : null, sorted.length);
-    };
-    const getSeasonTierLevelBefore = (name: string) => {
-      const sorted = getSeasonSortedNames();
-      const idx = sorted.indexOf(name);
-      return tierLevelByRank(idx >= 0 ? idx + 1 : null, sorted.length);
-    };
-    const getRegularTopBefore = () => getRegularSortedNames()[0] || null;
-    const getSeasonTopBefore = () => getSeasonSortedNames()[0] || null;
-
-    const sortedMatches = [...(matchRows || [])].sort(
-      (a: any, b: any) => new Date(a?.created_at || 0).getTime() - new Date(b?.created_at || 0).getTime()
-    );
-
-    sortedMatches.forEach((m: any) => {
-      const mode = String(m?.match_type || '').toLowerCase();
-      const left = normalize(m?.left_player_name || m?.left_player || '');
-      const right = normalize(m?.right_player_name || m?.right_player || '');
-      if (!left || !right) return;
-      if (!mode.includes('free') && !mode.includes('random')) return;
-
-      ensure(left);
-      ensure(right);
-
-      const leftScore = Number(m?.score_left ?? 0) || 0;
-      const rightScore = Number(m?.score_right ?? 0) || 0;
-      const winnerFromName = normalize(m?.winner_name || '');
-      const winner = winnerFromName === left || winnerFromName === right ? winnerFromName : leftScore >= rightScore ? left : right;
-      const loser = winner === left ? right : left;
-      const winnerScore = winner === left ? leftScore : rightScore;
-      const loserScore = winner === left ? rightScore : leftScore;
-      const ts = new Date(m?.created_at || 0).getTime();
-      const safeTs = Number.isFinite(ts) ? ts : nowTs;
-
-      const winnerState = sim[winner];
-      const loserState = sim[loser];
-
-      if (mode.includes('free')) {
-        const topBefore = getRegularTopBefore();
-        const winnerTierBefore = getRegularTierLevelBefore(winner);
-        const loserTierBefore = getRegularTierLevelBefore(loser);
-        const isHigherTierWin = loserTierBefore > winnerTierBefore;
-        const isSweep = loserScore === 0;
-        const loserWonAnyRound = loserScore > 0;
-        const wasFirstRegularWin = winnerState.regularWins === 0;
-
-        winnerState.regularMatches += 1;
-        winnerState.regularWins += 1;
-        winnerState.lastRegularMatchTs = safeTs;
-        loserState.regularMatches += 1;
-        loserState.regularLosses += 1;
-        loserState.lastRegularMatchTs = safeTs;
-
-        if (wasFirstRegularWin) {
-          const startRp = REGULAR_FIRST_WIN_BASE_BY_TIER_LEVEL[loserTierBefore] ?? 25;
-          winnerState.regularRp = Math.max(0, winnerState.regularRp + startRp);
-          winnerState.regularWinStreak = 1;
-        } else {
-          const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
-          const nextStreak = winnerState.regularWinStreak + 1;
-          const streakMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
-          winnerState.regularRp = Math.max(0, winnerState.regularRp + Math.round(baseGain * streakMultiplier));
-          winnerState.regularWinStreak = nextStreak;
-        }
-
-        const losePenalty = 15 - (loserWonAnyRound ? 5 : 0);
-        loserState.regularRp = Math.max(0, loserState.regularRp - losePenalty);
-        loserState.regularWinStreak = 0;
-
-        if (topBefore === winner && winner === right) {
-          winnerState.regularDefenseStack += 1;
-          winnerState.regularWinStreak = 0;
-        } else {
-          winnerState.regularDefenseStack = 0;
-        }
-        if (topBefore === loser) {
-          loserState.regularDefenseStack = 0;
-        }
-      } else {
-        const topBefore = getSeasonTopBefore();
-        const winnerTierBefore = getSeasonTierLevelBefore(winner);
-        const loserTierBefore = getSeasonTierLevelBefore(loser);
-        const isHigherTierWin = loserTierBefore > winnerTierBefore;
-        const isSweep = loserScore === 0;
-        const loserWonAnyRound = loserScore > 0;
-
-        winnerState.seasonMatches += 1;
-        winnerState.seasonWins += 1;
-        loserState.seasonMatches += 1;
-        loserState.seasonLosses += 1;
-
-        const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
-        const nextSeasonStreak = winnerState.seasonWinStreak + 1;
-        const seasonMultiplier = nextSeasonStreak >= 3 ? Math.pow(1.2, nextSeasonStreak - 2) : 1;
-        winnerState.seasonSp += Math.round(baseGain * seasonMultiplier);
-        loserState.seasonSp += loserWonAnyRound ? 15 : 10;
-
-        winnerState.seasonWinStreak = nextSeasonStreak;
-        loserState.seasonWinStreak = 0;
-
-        if (topBefore === winner && winner === right) {
-          winnerState.seasonDefenseStack += 1;
-          winnerState.seasonWinStreak = 0;
-        } else {
-          winnerState.seasonDefenseStack = 0;
-        }
-        if (topBefore === loser) {
-          loserState.seasonDefenseStack = 0;
-        }
-      }
-    });
-
-    Object.values(sim).forEach((s) => {
-      if (s.regularWins <= 0 || !s.lastRegularMatchTs) return;
-      const idleDays = Math.floor((nowTs - s.lastRegularMatchTs) / dayMs);
-      const decayDays = idleDays - REGULAR_INACTIVE_GRACE_DAYS;
-      if (decayDays > 0) {
-        s.regularRp = Math.max(0, s.regularRp - decayDays * REGULAR_INACTIVE_DECAY_PER_DAY);
-      }
-    });
-
-    const base = profiles.map((r) => {
-      const key = normalize(r.display_name || r.id);
-      const s = sim[key] || {
-        regularMatches: 0,
-        regularWins: 0,
-        regularLosses: 0,
-        regularRp: 0,
-        regularWinStreak: 0,
-        regularDefenseStack: 0,
-        lastRegularMatchTs: 0,
-        seasonMatches: 0,
-        seasonWins: 0,
-        seasonLosses: 0,
-        seasonSp: 0,
-        seasonWinStreak: 0,
-        seasonDefenseStack: 0,
-      };
-      return {
+      });
+      const base = profiles.map((r) => ({
         ...r,
         display_name: r.display_name || 'GUEST',
         wins: r.wins || 0,
         losses: r.losses || 0,
         win_rate: (r.wins + r.losses) > 0 ? (((r.wins) / (r.wins + r.losses)) * 100).toFixed(1) + '%' : '0.0%',
         avatar_url: r.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.id}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
+        defense_stack: r.defense_stack || 0,
+        rp: typeof r.rp === 'number' ? r.rp : 0,
+        rank_index: typeof r.rank_index === 'number' ? r.rank_index : null,
+        regular_rp:
+          typeof r.regular_rp === 'number'
+            ? r.regular_rp
+            : calculateRegularPoints(r.wins || 0, r.losses || 0),
         gc: typeof r.gc === 'number' ? r.gc : 1000,
-        regular_rp: s.regularRp,
-        season_sp: s.seasonSp,
-        rp: s.seasonSp,
-        regular_matches: s.regularMatches,
-        regular_wins: s.regularWins,
-        regular_losses: s.regularLosses,
-        season_matches: s.seasonMatches,
-        season_wins: s.seasonWins,
-        season_losses: s.seasonLosses,
-        regular_win_streak: s.regularWinStreak,
-        season_win_streak: s.seasonWinStreak,
-        regular_defense_stack: s.regularDefenseStack,
-        season_defense_stack: s.seasonDefenseStack,
-        defense_stack: s.regularDefenseStack,
-        win_streak: s.regularWinStreak,
+        win_streak: r.win_streak || 0,
         owned_cosmetics: Array.isArray(r.owned_cosmetics) ? r.owned_cosmetics : [...defaultOwnedIds],
         equipped_name_color: r.equipped_name_color || 'name_default',
         equipped_name_style: r.equipped_name_style || 'style_default',
         equipped_border_fx: r.equipped_border_fx || 'border_default',
-      };
-    });
+        regular_matches: modeStats[normalize(r.display_name)]?.regularMatches || 0,
+        regular_wins: modeStats[normalize(r.display_name)]?.regularWins || 0,
+        season_matches: modeStats[normalize(r.display_name)]?.seasonMatches || 0,
+      }));
 
-    const regularSorted = [...base].sort((a, b) => {
-      const aPlaced = (a.regular_wins || 0) > 0;
-      const bPlaced = (b.regular_wins || 0) > 0;
-      if (aPlaced !== bPlaced) return aPlaced ? -1 : 1;
-      if (!aPlaced && !bPlaced) return normalize(a.display_name).localeCompare(normalize(b.display_name));
-      if ((b.regular_rp || 0) !== (a.regular_rp || 0)) return (b.regular_rp || 0) - (a.regular_rp || 0);
-      if ((b.regular_wins || 0) !== (a.regular_wins || 0)) return (b.regular_wins || 0) - (a.regular_wins || 0);
-      if ((a.regular_matches || 0) !== (b.regular_matches || 0)) return (a.regular_matches || 0) - (b.regular_matches || 0);
-      return normalize(a.display_name).localeCompare(normalize(b.display_name));
-    });
-    const regularPlacedCount = regularSorted.filter((r: any) => (r.regular_wins || 0) > 0).length;
-    let regularDisplayIdx = 0;
-    regularSorted.forEach((r: any, i) => {
-      const placed = (r.regular_wins || 0) > 0;
-      r.rankIndex = i;
-      r.regular_display_index = placed ? regularDisplayIdx++ : null;
-      r.regular_tier_level = placed ? tierLevelByRank((r.regular_display_index ?? 0) + 1, regularPlacedCount) : 0;
-    });
-
-    const seasonSorted = [...base].sort((a, b) => {
-      const aPlayed = (a.season_matches || 0) > 0;
-      const bPlayed = (b.season_matches || 0) > 0;
-      if (aPlayed !== bPlayed) return aPlayed ? -1 : 1;
-      if (!aPlayed && !bPlayed) return normalize(a.display_name).localeCompare(normalize(b.display_name));
-      if ((b.season_sp || 0) !== (a.season_sp || 0)) return (b.season_sp || 0) - (a.season_sp || 0);
-      if ((b.season_wins || 0) !== (a.season_wins || 0)) return (b.season_wins || 0) - (a.season_wins || 0);
-      if ((a.season_matches || 0) !== (b.season_matches || 0)) return (a.season_matches || 0) - (b.season_matches || 0);
-      return normalize(a.display_name).localeCompare(normalize(b.display_name));
-    });
-    const seasonPlayedCount = seasonSorted.filter((r: any) => (r.season_matches || 0) > 0).length;
-    let seasonDisplayIdx = 0;
-    seasonSorted.forEach((r: any, i) => {
-      const played = (r.season_matches || 0) > 0;
-      r.seasonRankIndex = i;
-      r.season_display_index = played ? seasonDisplayIdx++ : null;
-      r.season_tier_level = played ? tierLevelByRank((r.season_display_index ?? 0) + 1, seasonPlayedCount) : 0;
-    });
-
-    const seasonMetaMap = new Map<string, { seasonRankIndex: number; season_display_index: number | null; season_tier_level: number }>();
-    seasonSorted.forEach((r: any) => {
-      seasonMetaMap.set(normalize(r.display_name), {
-        seasonRankIndex: r.seasonRankIndex,
-        season_display_index: r.season_display_index,
-        season_tier_level: r.season_tier_level ?? 0,
+      const regularSorted = [...base].sort((a, b) => {
+        const aPlayed = (a.regular_matches || 0) > 0;
+        const bPlayed = (b.regular_matches || 0) > 0;
+        if (aPlayed !== bPlayed) return aPlayed ? -1 : 1;
+        if (!aPlayed && !bPlayed) {
+          return normalize(a.display_name).localeCompare(normalize(b.display_name));
+        }
+        if ((b.regular_wins || 0) !== (a.regular_wins || 0)) return (b.regular_wins || 0) - (a.regular_wins || 0);
+        const aWr = (a.regular_matches || 0) > 0 ? (a.regular_wins || 0) / (a.regular_matches || 0) : 0;
+        const bWr = (b.regular_matches || 0) > 0 ? (b.regular_wins || 0) / (b.regular_matches || 0) : 0;
+        if (bWr !== aWr) return bWr - aWr;
+        if ((b.regular_matches || 0) !== (a.regular_matches || 0)) return (b.regular_matches || 0) - (a.regular_matches || 0);
+        return normalize(a.display_name).localeCompare(normalize(b.display_name));
       });
-    });
-    regularSorted.forEach((r: any) => {
-      const key = normalize(r.display_name);
-      const seasonMeta = seasonMetaMap.get(key);
-      r.seasonRankIndex = seasonMeta?.seasonRankIndex ?? Number.MAX_SAFE_INTEGER;
-      r.season_display_index = seasonMeta?.season_display_index ?? null;
-      r.season_tier_level = seasonMeta?.season_tier_level ?? 0;
-    });
+      let regularDisplayIdx = 0;
+      regularSorted.forEach((r, i) => {
+        (r as any).rankIndex = i;
+        (r as any).regular_display_index = (r.regular_matches || 0) > 0 ? regularDisplayIdx++ : null;
+      });
 
-    const regularNow: Record<string, number> = {};
-    const seasonNow: Record<string, number> = {};
-    regularSorted.forEach((r: any, i) => {
-      const key = normalize(r.display_name);
-      if (key && typeof r.regular_display_index === 'number') regularNow[key] = i;
-    });
-    seasonSorted.forEach((r: any, i) => {
-      const key = normalize(r.display_name);
-      if (key && typeof r.season_display_index === 'number') seasonNow[key] = i;
-    });
+      const seasonSorted = [...base].sort((a, b) => {
+        const aPlayed = (a.season_matches || 0) > 0;
+        const bPlayed = (b.season_matches || 0) > 0;
+        if (aPlayed !== bPlayed) return aPlayed ? -1 : 1;
+        if (!aPlayed && !bPlayed) return normalize(a.display_name).localeCompare(normalize(b.display_name));
+        if ((b.rp || 0) !== (a.rp || 0)) return (b.rp || 0) - (a.rp || 0);
+        if ((b.season_matches || 0) !== (a.season_matches || 0)) return (b.season_matches || 0) - (a.season_matches || 0);
+        return normalize(a.display_name).localeCompare(normalize(b.display_name));
+      });
+      let seasonDisplayIdx = 0;
+      seasonSorted.forEach((r, i) => {
+        (r as any).seasonRankIndex = i;
+        (r as any).season_display_index = (r.season_matches || 0) > 0 ? seasonDisplayIdx++ : null;
+      });
+      const seasonMetaMap = new Map<string, { seasonRankIndex: number; season_display_index: number | null }>();
+      seasonSorted.forEach((r: any) => {
+        seasonMetaMap.set(normalize(r.display_name), {
+          seasonRankIndex: r.seasonRankIndex,
+          season_display_index: r.season_display_index,
+        });
+      });
+      regularSorted.forEach((r: any) => {
+        const key = normalize(r.display_name);
+        const seasonMeta = seasonMetaMap.get(key);
+        r.seasonRankIndex = seasonMeta?.seasonRankIndex ?? Number.MAX_SAFE_INTEGER;
+        r.season_display_index = seasonMeta?.season_display_index ?? null;
+      });
+      const regularNow: Record<string, number> = {};
+      const seasonNow: Record<string, number> = {};
+      regularSorted.forEach((r: any, i) => {
+        const key = normalize(r.display_name);
+        if (key && typeof r.regular_display_index === 'number') regularNow[key] = i;
+      });
+      seasonSorted.forEach((r: any, i) => {
+        const key = normalize(r.display_name);
+        if (key && typeof r.season_display_index === 'number') seasonNow[key] = i;
+      });
 
-    const prevRegular = rankHistoryRef.current.regular;
-    const prevSeason = rankHistoryRef.current.season;
-    const regularDelta: Record<string, number> = {};
-    const seasonDelta: Record<string, number> = {};
-    Object.keys(regularNow).forEach((key) => {
-      regularDelta[key] = typeof prevRegular[key] === 'number' ? prevRegular[key] - regularNow[key] : 0;
-    });
-    Object.keys(seasonNow).forEach((key) => {
-      seasonDelta[key] = typeof prevSeason[key] === 'number' ? prevSeason[key] - seasonNow[key] : 0;
-    });
+      const prevRegular = rankHistoryRef.current.regular;
+      const prevSeason = rankHistoryRef.current.season;
+      const regularDelta: Record<string, number> = {};
+      const seasonDelta: Record<string, number> = {};
+      Object.keys(regularNow).forEach((key) => {
+        regularDelta[key] =
+          typeof prevRegular[key] === 'number' ? prevRegular[key] - regularNow[key] : 0;
+      });
+      Object.keys(seasonNow).forEach((key) => {
+        seasonDelta[key] =
+          typeof prevSeason[key] === 'number' ? prevSeason[key] - seasonNow[key] : 0;
+      });
 
-    rankHistoryRef.current = { regular: regularNow, season: seasonNow };
-    setRegularRankMoves(regularDelta);
-    setSeasonRankMoves(seasonDelta);
-    setRankers(regularSorted);
+      rankHistoryRef.current = { regular: regularNow, season: seasonNow };
+      setRegularRankMoves(regularDelta);
+      setSeasonRankMoves(seasonDelta);
+      setRankers(regularSorted);
+    }
   };
 
   const fetchProfile = async (id: string) => {
@@ -1547,9 +1324,9 @@ function App() {
   const handleModeChange = (mode: 'free' | 'random') => {
     playSFX('click'); setEntryMode(mode); setEntryLegend(''); setEntryWeapons(['', '']); setRerollCount(0);
     if (mode === 'free') {
-      if (betAmount < REGULAR_TICKET_COST) setBetAmount(REGULAR_TICKET_COST);
+      if (betAmount < 100) setBetAmount(100);
     } else {
-      if (betAmount < SEASON_TICKET_COST) setBetAmount(SEASON_TICKET_COST);
+      setBetAmount(0);
     }
   };
 
@@ -1583,62 +1360,6 @@ function App() {
     });
   };
 
-  const lockChallengeStakeOnAccept = async (
-    mode: 'free' | 'random',
-    stakeEach: number,
-    challengerName: string,
-    targetName: string
-  ) => {
-    const stake = Math.max(0, Math.floor(stakeEach || 0));
-    if (stake <= 0) return { ok: true, message: '' };
-    const { data: cProfile } = await supabase.from('profiles').select('id,gc').eq('display_name', challengerName).single();
-    const { data: tProfile } = await supabase.from('profiles').select('id,gc').eq('display_name', targetName).single();
-    if (!cProfile || !tProfile) {
-      return { ok: false, message: '참가자 프로필을 찾지 못했습니다.' };
-    }
-    const cGc = typeof cProfile.gc === 'number' ? cProfile.gc : 1000;
-    const tGc = typeof tProfile.gc === 'number' ? tProfile.gc : 1000;
-    if (cGc < stake || tGc < stake) {
-      return {
-        ok: false,
-        message: `보유 GC 부족: ${challengerName}(${cGc}) / ${targetName}(${tGc}), 필요 ${stake}`,
-      };
-    }
-    const { error: cErr } = await supabase.from('profiles').update({ gc: cGc - stake }).eq('id', cProfile.id);
-    if (cErr) return { ok: false, message: cErr.message };
-    const { error: tErr } = await supabase.from('profiles').update({ gc: tGc - stake }).eq('id', tProfile.id);
-    if (tErr) {
-      await supabase.from('profiles').update({ gc: cGc }).eq('id', cProfile.id);
-      return { ok: false, message: tErr.message };
-    }
-    if (user?.id) fetchProfile(user.id);
-    fetchRankers();
-    return { ok: true, message: mode === 'free' ? '정규 티켓/배팅이 즉시 차감되었습니다.' : '시즌 배팅이 즉시 차감되었습니다.' };
-  };
-
-  const refundLockedStakeIfNeeded = async (challengeRow: any) => {
-    if (!challengeRow) return;
-    const mode = String(challengeRow.mode || '').toLowerCase();
-    if (!mode.includes('_accepted')) return;
-    const stake = Math.max(0, Math.floor(Number(challengeRow.bet_gc || 0)));
-    if (stake <= 0) return;
-    const challengerName = String(challengeRow.challenger_name || '').trim();
-    const targetName = String(challengeRow.target_name || '').trim();
-    if (!challengerName || !targetName) return;
-    const { data: cProfile } = await supabase.from('profiles').select('id,gc').eq('display_name', challengerName).single();
-    const { data: tProfile } = await supabase.from('profiles').select('id,gc').eq('display_name', targetName).single();
-    if (cProfile) {
-      const cGc = typeof cProfile.gc === 'number' ? cProfile.gc : 1000;
-      await supabase.from('profiles').update({ gc: cGc + stake }).eq('id', cProfile.id);
-    }
-    if (tProfile) {
-      const tGc = typeof tProfile.gc === 'number' ? tProfile.gc : 1000;
-      await supabase.from('profiles').update({ gc: tGc + stake }).eq('id', tProfile.id);
-    }
-    if (user?.id) fetchProfile(user.id);
-    fetchRankers();
-  };
-
   const handleAcceptIncomingChallenge = async () => {
     if (!incomingChallenge || !currentUserName) return;
     playSFX('click');
@@ -1650,9 +1371,8 @@ function App() {
       return;
     }
 
-    const alreadyAccepted = String(existing.mode || '').includes('_accepted');
     const baseMode = existing.mode.replace('_accepted', '').trim() as 'free' | 'random';
-    if (!alreadyAccepted && baseMode === 'free') {
+    if (baseMode === 'free') {
       const remainMs = getRegularCooldownRemainingMs(existing.challenger_name);
       if (remainMs > 0) {
         playSFX('error');
@@ -1676,81 +1396,34 @@ function App() {
       return;
     }
 
-    if (!alreadyAccepted && baseMode === 'free') {
-      const stake = Math.max(0, Math.floor(Number(existing.bet_gc || 0)));
-      if (stake < REGULAR_TICKET_COST) {
-        playSFX('error');
-        showStatusPopup('error', '수락 실패', `정규 랭크전 최소 티켓 금액은 ${REGULAR_TICKET_COST}GC입니다.`);
-        return;
-      }
-      if (!canAcceptIncomingByRegularRule(challengerName)) {
-        playSFX('error');
-        showStatusPopup('error', '수락 불가', '현재 정규 랭크 규칙상 해당 대전은 성립할 수 없습니다.');
-        await supabase.from('challenges').delete().eq('id', existing.id);
-        setIncomingChallenge(null);
-        return;
-      }
-    }
-
-    const stake = Math.max(0, Math.floor(Number(existing.bet_gc || 0)));
-    const stakeLock = alreadyAccepted
-      ? { ok: true, message: '' }
-      : await lockChallengeStakeOnAccept(baseMode, stake, challengerName, targetName);
-    if (!stakeLock.ok) {
-      playSFX('error');
-      showStatusPopup('error', '수락 실패', `GC 차감 처리 중 오류가 발생했습니다.\n${stakeLock.message}`);
-      return;
-    }
-
-    let challengerLegend = existing.legend || '';
-    let challengerWeapons = Array.isArray(existing.weapons) ? existing.weapons : ['', ''];
-    let targetLegend = existing.t_legend || '';
-    let targetWeapons = Array.isArray(existing.t_weapons) ? existing.t_weapons : ['', ''];
-
+    let updatePayload: any = { mode: `${baseMode}_accepted` };
     if (baseMode === 'random') {
-      if (!challengerLegend) challengerLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
-      if (!challengerWeapons[0] || !challengerWeapons[1]) challengerWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
-      if (!targetLegend) targetLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
-      if (!targetWeapons[0] || !targetWeapons[1]) targetWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
-    }
-
-    const updatePayload: any = {
-      mode: `${baseMode}_accepted`,
-      legend: challengerLegend || null,
-      weapons: challengerWeapons,
-      t_legend: targetLegend || null,
-      t_weapons: targetWeapons,
-    };
-
-    if (!alreadyAccepted) {
-      const { error: updateError } = await supabase.from('challenges').update(updatePayload).eq('id', existing.id);
-      if (updateError) {
-        await refundLockedStakeIfNeeded({ ...existing, mode: `${baseMode}_accepted` });
-        playSFX('error');
-        showStatusPopup('error', '수락 실패', `대전 수락 처리 중 오류가 발생했습니다: ${updateError.message}`);
-        return;
-      }
-    }
-
-    if (baseMode === 'random') {
-      const saved = readRandomDraftState(existing.id, false, currentUserName);
-      const nextLegend = saved?.legend || targetLegend || '';
-      const nextWeapons = saved?.weapons?.length === 2 ? saved.weapons : targetWeapons;
-      setEntryLegend(nextLegend);
-      setEntryWeapons(nextWeapons);
-      setRerollCount(saved?.rerollCount ?? 0);
+      const challengerLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
+      const challengerWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+      const targetLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
+      const targetWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+      updatePayload = {
+        ...updatePayload,
+        legend: challengerLegend,
+        weapons: challengerWeapons,
+        t_legend: targetLegend,
+        t_weapons: targetWeapons,
+      };
+      setEntryLegend(targetLegend);
+      setEntryWeapons(targetWeapons);
+      setRerollCount(0);
       setActiveMatch({
         id: existing.id,
         mode: baseMode,
         opponent: challengerName,
-        legend: nextLegend,
-        weapons: nextWeapons,
+        legend: targetLegend,
+        weapons: targetWeapons,
         isChallenger: false,
       });
       writeRandomDraftState(existing.id, false, currentUserName, {
-        rerollCount: saved?.rerollCount ?? 0,
-        legend: nextLegend,
-        weapons: nextWeapons,
+        rerollCount: 0,
+        legend: targetLegend,
+        weapons: targetWeapons,
       });
     } else {
       setEntryLegend('');
@@ -1766,13 +1439,17 @@ function App() {
       });
     }
 
+    const { error: updateError } = await supabase.from('challenges').update(updatePayload).eq('id', existing.id);
+    if (updateError) {
+      playSFX('error');
+      showStatusPopup('error', '수락 실패', `대전 수락 처리 중 오류가 발생했습니다: ${updateError.message}`);
+      return;
+    }
+
     setIncomingChallenge(null);
     setEntryOpponent(challengerName);
     setEntryMode(baseMode);
-    setBetAmount(stake);
-    if (!alreadyAccepted) {
-      showStatusPopup('success', '대전 수락', stakeLock.message || '대전이 성사되었습니다.');
-    }
+    setBetAmount(existing.bet_gc || 0);
     setMatchPhase('picking');
   };
 
@@ -1797,20 +1474,8 @@ function App() {
   };
 
   const handleStartMatch = async () => {
-    const targetExists = Boolean(regularRankMap.get(normalizeName(entryOpponent.trim())));
-    if (!targetExists) {
-      playSFX('error');
-      return alert('대상 닉네임을 찾을 수 없습니다. 접속 현황/랭킹에서 다시 선택해주세요.');
-    }
-    if (entryMode === 'free' && betAmount < REGULAR_TICKET_COST) {
-      playSFX('error');
-      return alert(`정규 랭크전 티켓 포함 최소 금액은 ${REGULAR_TICKET_COST}GC 입니다.`);
-    }
+    if (entryMode === 'free' && betAmount < 100) { playSFX('error'); return alert("자유대전 배팅 금액은 최소 100 GC 이상이어야 합니다."); }
     if (betAmount > 0 && (!profile || (profile.gc ?? 1000) < betAmount)) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc ?? 1000} GC)`); }
-    if (entryMode === 'free' && !canChallengeTargetByRegularRule(entryOpponent.trim())) {
-      playSFX('error');
-      return alert('정규 랭크전은 동일 티어 또는 1단계 상위 티어에게만 도전할 수 있습니다. (루키는 예외)');
-    }
 
     const { data: existing } = await supabase.from('challenges').select('*').eq('challenger_name', entryOpponent.trim()).eq('target_name', currentUserName.trim()).limit(1).maybeSingle();
     
@@ -1823,74 +1488,26 @@ function App() {
         }
       }
       playSFX('click');
-      const alreadyAccepted = String(existing.mode || '').includes('_accepted');
       const dbMode = existing.mode.replace('_accepted', '').trim();
       if (dbMode !== entryMode.trim()) { playSFX('error'); return alert(`상대방이 [${existing.mode.includes('free') ? '자유' : '랜덤'}대전]을 신청했습니다. 모드를 맞춰주세요!`); }
       if (existing.bet_gc !== betAmount) { playSFX('error'); return alert(`상대방이 배팅금 [${existing.bet_gc} GC]를 걸었습니다. 배팅금을 맞춰주세요!`); }
-      if (!alreadyAccepted && entryMode === 'free' && !canAcceptIncomingByRegularRule(entryOpponent.trim())) {
-        playSFX('error');
-        return alert('현재 정규 랭크 규칙상 해당 신청은 수락할 수 없습니다.');
-      }
 
-      const stake = Math.max(0, Math.floor(Number(existing.bet_gc || 0)));
-      if (!alreadyAccepted && entryMode === 'free' && stake < REGULAR_TICKET_COST) {
-        playSFX('error');
-        return alert(`정규 랭크전 최소 티켓 금액은 ${REGULAR_TICKET_COST}GC입니다.`);
-      }
-      const stakeLock = alreadyAccepted
-        ? { ok: true, message: '' }
-        : await lockChallengeStakeOnAccept(entryMode, stake, existing.challenger_name, existing.target_name);
-      if (!stakeLock.ok) {
-        playSFX('error');
-        return alert(`GC 차감 실패: ${stakeLock.message}`);
-      }
-
-      let challengerLegend = existing.legend || '';
-      let challengerWeapons = Array.isArray(existing.weapons) ? existing.weapons : ['', ''];
-      let targetLegend = existing.t_legend || '';
-      let targetWeapons = Array.isArray(existing.t_weapons) ? existing.t_weapons : ['', ''];
+      let updatePayload: any = { mode: existing.mode + '_accepted' };
       
       if (entryMode === 'random') {
-          if (!challengerLegend) challengerLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
-          if (!challengerWeapons[0] || !challengerWeapons[1]) challengerWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
-          if (!targetLegend) targetLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
-          if (!targetWeapons[0] || !targetWeapons[1]) targetWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
-          const saved = currentUserName ? readRandomDraftState(existing.id, false, currentUserName) : null;
-          const nextLegend = saved?.legend || targetLegend;
-          const nextWeapons = saved?.weapons?.length === 2 ? saved.weapons : targetWeapons;
-          setEntryLegend(nextLegend);
-          setEntryWeapons(nextWeapons);
-          setRerollCount(saved?.rerollCount ?? 0);
-          setActiveMatch({ id: existing.id, mode: entryMode, opponent: entryOpponent.trim(), legend: nextLegend, weapons: nextWeapons, isChallenger: false });
+          const a_leg = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)]; const a_wep = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+          const b_leg = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)]; const b_wep = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+          updatePayload.legend = a_leg; updatePayload.weapons = a_wep; updatePayload.t_legend = b_leg; updatePayload.t_weapons = b_wep;
+          setEntryLegend(b_leg); setEntryWeapons(b_wep); setRerollCount(0);
+          setActiveMatch({ id: existing.id, mode: entryMode, opponent: entryOpponent.trim(), legend: b_leg, weapons: b_wep, isChallenger: false });
           if (currentUserName) {
-            writeRandomDraftState(existing.id, false, currentUserName, { rerollCount: saved?.rerollCount ?? 0, legend: nextLegend, weapons: nextWeapons });
+            writeRandomDraftState(existing.id, false, currentUserName, { rerollCount: 0, legend: b_leg, weapons: b_wep });
           }
       } else {
           setRerollCount(0);
           setActiveMatch({ id: existing.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: false });
       }
-      if (!alreadyAccepted) {
-        const { error: acceptErr } = await supabase
-          .from('challenges')
-          .update({
-            mode: `${entryMode}_accepted`,
-            legend: challengerLegend || null,
-            weapons: challengerWeapons,
-            t_legend: targetLegend || null,
-            t_weapons: targetWeapons,
-          })
-          .eq('id', existing.id);
-        if (acceptErr) {
-          await refundLockedStakeIfNeeded({ ...existing, mode: `${entryMode}_accepted` });
-          playSFX('error');
-          return alert(`수락 처리 중 오류: ${acceptErr.message}`);
-        }
-      }
-      setIncomingChallenge(null);
-      if (!alreadyAccepted) {
-        showStatusPopup('success', '대전 수락', stakeLock.message || '대전이 성사되었습니다.');
-      }
-      setMatchPhase('picking');
+      await supabase.from('challenges').update(updatePayload).eq('id', existing.id); setIncomingChallenge(null); setMatchPhase('picking');
     } else {
       if (entryMode === 'free') {
         const remainMs = getRegularCooldownRemainingMs(entryOpponent.trim());
@@ -1926,17 +1543,7 @@ function App() {
   };
 
   const handleCancelMatch = async () => {
-    playSFX('click');
-    const { data: challengeRows } = await supabase
-      .from('challenges')
-      .select('*')
-      .or(`challenger_name.eq."${currentUserName?.trim()}",target_name.eq."${currentUserName?.trim()}"`);
-    if (Array.isArray(challengeRows) && challengeRows.length > 0) {
-      for (const row of challengeRows) {
-        await refundLockedStakeIfNeeded(row);
-      }
-    }
-    await supabase.from('challenges').delete().or(`challenger_name.eq."${currentUserName?.trim()}",target_name.eq."${currentUserName?.trim()}"`);
+    playSFX('click'); await supabase.from('challenges').delete().or(`challenger_name.eq."${currentUserName?.trim()}",target_name.eq."${currentUserName?.trim()}"`);
     if (activeMatch && currentUserName) clearRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName);
     setRerollCount(0);
     setMatchPhase('idle'); setActiveMatch(null);
@@ -1993,31 +1600,50 @@ function App() {
                     let cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
                     let tUpdates: any = { wins: tProfile.wins + (challengerWon ? 0 : 1), losses: tProfile.losses + (challengerWon ? 1 : 0) };
 
-                    const bet = Math.max(0, Math.floor(Number(updatedData.bet_gc || 0)));
-                    const cGc = typeof cProfile.gc === 'number' ? cProfile.gc : 1000;
-                    const tGc = typeof tProfile.gc === 'number' ? tProfile.gc : 1000;
-                    const isRegular = String(updatedData.mode || '').includes('free');
+                    if (updatedData.mode.includes('free')) {
+                        const bet = updatedData.bet_gc || 0;
+                        const cRankNow = getRegularRankIndexByName(challengerName);
+                        const tRankNow = getRegularRankIndexByName(targetName);
+                        const targetIsTopRegular = tRankNow === 0;
+                        const topRegularDefenseSucceeded = !challengerWon && targetIsTopRegular;
+                        const cPrevStreak = cProfile.win_streak || 0;
+                        const tPrevStreak = tProfile.win_streak || 0;
 
-                    if (isRegular) {
-                      // 정규전: 티켓(200)은 소멸, 초과 배팅만 승자가 획득
-                      const transferable = Math.max(0, bet - REGULAR_TICKET_COST) * 2;
-                      if (challengerWon) {
-                        cUpdates.gc = cGc + transferable;
-                        tUpdates.gc = tGc;
-                      } else {
-                        cUpdates.gc = cGc;
-                        tUpdates.gc = tGc + transferable;
-                      }
+                        if (challengerWon) {
+                          cUpdates.defense_stack = 0;
+                          tUpdates.defense_stack = 0;
+                          cUpdates.gc = (cProfile.gc ?? 1000) + bet;
+                          tUpdates.gc = (tProfile.gc ?? 1000) - bet;
+                          cUpdates.win_streak = cRankNow === 0 ? cPrevStreak : cPrevStreak + 1;
+                          tUpdates.win_streak = 0;
+                        } else {
+                          tUpdates.defense_stack = topRegularDefenseSucceeded ? (tProfile.defense_stack || 0) + 1 : 0;
+                          cUpdates.defense_stack = 0;
+                          cUpdates.gc = (cProfile.gc ?? 1000) - bet;
+                          tUpdates.gc = (tProfile.gc ?? 1000) + bet;
+                          tUpdates.win_streak = tRankNow === 0 ? tPrevStreak : tPrevStreak + 1;
+                          cUpdates.win_streak = 0;
+                        }
                     } else {
-                      // 시즌전: 배팅 전체 팟(양쪽)을 승자가 획득
-                      const transferable = bet * 2;
-                      if (challengerWon) {
-                        cUpdates.gc = cGc + transferable;
-                        tUpdates.gc = tGc;
-                      } else {
-                        cUpdates.gc = cGc;
-                        tUpdates.gc = tGc + transferable;
-                      }
+                        const targetSeasonRankNow = rpRankers.findIndex((r) => normalizeName(r.display_name) === normalizeName(targetName));
+                        const targetIsTopSeason = targetSeasonRankNow === 0;
+                        const topSeasonDefenseSucceeded = !challengerWon && targetIsTopSeason;
+                        const calcRP = (prof: any, won: boolean) => {
+                            const currentSp = typeof prof.rp === 'number' ? prof.rp : 0;
+                            const currentGc = typeof prof.gc === 'number' ? prof.gc : 1000;
+                            const spChg = won ? 30 : 10;
+                            const gcChg = won ? 50 : 30;
+                            const nStreak = won ? (prof.win_streak || 0) + 1 : 0;
+                            return { rp: currentSp + spChg, streak: nStreak, gc: currentGc + gcChg };
+                        };
+                        const cRes = calcRP(cProfile, challengerWon); const tRes = calcRP(tProfile, !challengerWon);
+                        cUpdates.rp = cRes.rp; cUpdates.win_streak = cRes.streak; cUpdates.gc = cRes.gc;
+                        tUpdates.rp = tRes.rp; tUpdates.win_streak = tRes.streak; tUpdates.gc = tRes.gc;
+                        if (topSeasonDefenseSucceeded) {
+                          tUpdates.win_streak = tProfile.win_streak || 0;
+                        }
+                        cUpdates.defense_stack = 0;
+                        tUpdates.defense_stack = topSeasonDefenseSucceeded ? (tProfile.defense_stack || 0) + 1 : 0;
                     }
                     await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id); await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
                 }
@@ -2166,50 +1792,43 @@ function App() {
   const getRankAssetPath = (name: string, ext: 'png' | 'webp' = 'png') =>
     `${import.meta.env.BASE_URL}ranks/${name}.${ext}?v=${rankAssetVersion}`;
 
-  const displayTierLevel = (idx: number | null | undefined, totalRanked: number) => {
-    if (typeof idx !== 'number' || idx < 0 || totalRanked <= 0) return 0;
-    const rank = idx + 1;
-    const top3 = Math.min(3, totalRanked);
-    const top5 = Math.max(top3, Math.ceil(totalRanked * 0.05));
-    const top10 = Math.max(top5, Math.ceil(totalRanked * 0.1));
-    const top20 = Math.max(top10, Math.ceil(totalRanked * 0.2));
-    const top30 = Math.max(top20, Math.ceil(totalRanked * 0.3));
-    const top50 = Math.max(top30, Math.ceil(totalRanked * 0.5));
-    if (rank <= top3) return 7;
-    if (rank <= top5) return 6;
-    if (rank <= top10) return 5;
-    if (rank <= top20) return 4;
-    if (rank <= top30) return 3;
-    if (rank <= top50) return 2;
-    return 1;
-  };
+  const getGrandRankInfo = (idx: number) => {
+    const badgeImage = (name: string, alt: string, fallbackName?: string, glowClass = 'bg-cyan-400/45') => (
+      <span className="relative inline-flex items-center justify-center w-12 h-12">
+        <span className={`absolute inset-0 blur-[10px] opacity-65 ${glowClass}`}></span>
+        <img
+          src={getRankAssetPath(name, 'png')}
+          alt={alt}
+          className="relative w-11 h-11 object-contain shrink-0"
+          loading="lazy"
+          onError={(e) => {
+            const target = e.currentTarget as HTMLImageElement;
+            const current = target.getAttribute('data-fallback-step') || 'png';
+            if (current === 'png') {
+              target.src = getRankAssetPath(name, 'webp');
+              target.setAttribute('data-fallback-step', 'webp');
+              return;
+            }
+            if (fallbackName && current !== 'fallback') {
+              target.src = getRankAssetPath(fallbackName, 'png');
+              target.setAttribute('data-fallback-step', 'fallback');
+              return;
+            }
+            target.style.display = 'none';
+          }}
+        />
+      </span>
+    );
 
-  const rankBadgeIcon = (name: string, alt: string, fallbackName?: string, glowClass = 'bg-cyan-400/45') => (
-    <span className="relative inline-flex items-center justify-center w-12 h-12">
-      <span className={`absolute inset-0 blur-[10px] opacity-65 ${glowClass}`}></span>
-      <img
-        src={getRankAssetPath(name, 'png')}
-        alt={alt}
-        className="relative w-11 h-11 object-contain shrink-0"
-        loading="lazy"
-        onError={(e) => {
-          const target = e.currentTarget as HTMLImageElement;
-          const current = target.getAttribute('data-fallback-step') || 'png';
-          if (current === 'png') {
-            target.src = getRankAssetPath(name, 'webp');
-            target.setAttribute('data-fallback-step', 'webp');
-            return;
-          }
-          if (fallbackName && current !== 'fallback') {
-            target.src = getRankAssetPath(fallbackName, 'png');
-            target.setAttribute('data-fallback-step', 'fallback');
-            return;
-          }
-          target.style.display = 'none';
-        }}
-      />
-    </span>
-  );
+    if (idx === 0) return { title: "프레데터", num: 1, color: "text-[#ff5a5a]", glow: "shadow-[0_0_18px_rgba(255,90,90,0.45)]", bg: "bg-[#ff5a5a]/20", icon: badgeImage('predator', 'predator badge', undefined, 'bg-red-500/55') };
+    if (idx < 4) return { title: "마스터", num: idx + 1, color: "text-[#c67cff]", glow: "shadow-[0_0_14px_rgba(198,124,255,0.4)]", bg: "bg-[#c67cff]/20", icon: badgeImage('master', 'master badge', undefined, 'bg-violet-500/45') };
+    if (idx < 9) return { title: "다이아몬드", num: idx + 1, color: "text-[#4fd8ff]", glow: "shadow-[0_0_12px_rgba(79,216,255,0.35)]", bg: "bg-[#4fd8ff]/20", icon: badgeImage('diamond', 'diamond badge', undefined, 'bg-sky-500/45') };
+    if (idx < 16) return { title: "플래티넘", num: idx + 1, color: "text-[#61ff90]", glow: "shadow-[0_0_10px_rgba(97,255,144,0.3)]", bg: "bg-[#61ff90]/20", icon: badgeImage('platinum', 'platinum badge', undefined, 'bg-emerald-500/45') };
+    if (idx < 25) return { title: "골드", num: idx + 1, color: "text-[#ffd84d]", glow: "shadow-[0_0_8px_rgba(255,216,77,0.28)]", bg: "bg-[#ffd84d]/20", icon: badgeImage('gold', 'gold badge', undefined, 'bg-yellow-500/45') };
+    if (idx < 36) return { title: "실버", num: idx + 1, color: "text-[#d0d8e6]", glow: "", bg: "bg-[#d0d8e6]/18", icon: badgeImage('silver', 'silver badge', undefined, 'bg-slate-400/40') };
+    if (idx < 50) return { title: "브론즈", num: idx + 1, color: "text-[#d39a6a]", glow: "", bg: "bg-[#d39a6a]/18", icon: badgeImage('bronze', 'bronze badge', undefined, 'bg-orange-500/35') };
+    return { title: "루키", num: idx + 1, color: "text-[#a3acb9]", glow: "", bg: "bg-[#a3acb9]/18", icon: badgeImage('rookie', 'rookie badge', 'bronze', 'bg-slate-500/35') };
+  };
 
   const seasonBadgeIcon = (fileName: string, alt: string, glowClass: string) => (
     <span className="relative inline-flex items-center justify-center w-12 h-12">
@@ -2238,35 +1857,10 @@ function App() {
     </span>
   );
 
-  const getGrandRankInfo = (idx: number | null | undefined, levelOverride?: number) => {
-    const regularRankedCount = rankers.filter((r: any) => (r.regular_wins || 0) > 0).length;
-    const level =
-      typeof levelOverride === 'number'
-        ? levelOverride
-        : displayTierLevel(typeof idx === 'number' ? idx : null, regularRankedCount);
-    const safeLevel = Math.max(0, Math.min(7, level));
-    const num = typeof idx === 'number' && idx >= 0 ? idx + 1 : null;
-    if (safeLevel === 7) return { title: '프레데터', num, color: 'text-[#ff5a5a]', glow: 'shadow-[0_0_18px_rgba(255,90,90,0.45)]', bg: 'bg-[#ff5a5a]/20', icon: rankBadgeIcon('predator', 'predator badge', undefined, 'bg-red-500/55') };
-    if (safeLevel === 6) return { title: '마스터', num, color: 'text-[#c67cff]', glow: 'shadow-[0_0_14px_rgba(198,124,255,0.4)]', bg: 'bg-[#c67cff]/20', icon: rankBadgeIcon('master', 'master badge', undefined, 'bg-violet-500/45') };
-    if (safeLevel === 5) return { title: '다이아몬드', num, color: 'text-[#4fd8ff]', glow: 'shadow-[0_0_12px_rgba(79,216,255,0.35)]', bg: 'bg-[#4fd8ff]/20', icon: rankBadgeIcon('diamond', 'diamond badge', undefined, 'bg-sky-500/45') };
-    if (safeLevel === 4) return { title: '플래티넘', num, color: 'text-[#61ff90]', glow: 'shadow-[0_0_10px_rgba(97,255,144,0.3)]', bg: 'bg-[#61ff90]/20', icon: rankBadgeIcon('platinum', 'platinum badge', undefined, 'bg-emerald-500/45') };
-    if (safeLevel === 3) return { title: '골드', num, color: 'text-[#ffd84d]', glow: 'shadow-[0_0_8px_rgba(255,216,77,0.28)]', bg: 'bg-[#ffd84d]/20', icon: rankBadgeIcon('gold', 'gold badge', undefined, 'bg-yellow-500/45') };
-    if (safeLevel === 2) return { title: '실버', num, color: 'text-[#d0d8e6]', glow: '', bg: 'bg-[#d0d8e6]/18', icon: rankBadgeIcon('silver', 'silver badge', undefined, 'bg-slate-400/40') };
-    if (safeLevel === 1) return { title: '브론즈', num, color: 'text-[#d39a6a]', glow: '', bg: 'bg-[#d39a6a]/18', icon: rankBadgeIcon('bronze', 'bronze badge', undefined, 'bg-orange-500/35') };
-    return { title: '루키', num: null, color: 'text-[#a3acb9]', glow: '', bg: 'bg-[#a3acb9]/18', icon: rankBadgeIcon('rookie', 'rookie badge', 'bronze', 'bg-slate-500/35') };
-  };
-
-  const getRPTierInfo = (idx: number | null | undefined, levelOverride?: number) => {
-    const seasonRankedCount = rankers.filter((r: any) => (r.season_matches || 0) > 0).length;
-    const level =
-      typeof levelOverride === 'number'
-        ? levelOverride
-        : displayTierLevel(typeof idx === 'number' ? idx : null, seasonRankedCount);
-    const safeLevel = Math.max(0, Math.min(7, level));
-    const tierRank = typeof idx === 'number' && idx >= 0 ? idx + 1 : null;
+  const getRPTierInfo = (idx: number) => {
     const makeTier = (
       name: string,
-      tierRankValue: number | null,
+      tierRank: number,
       color: string,
       glow: string,
       bg: string,
@@ -2274,17 +1868,17 @@ function App() {
       glowClass: string
     ) => ({
       name,
-      tierRank: tierRankValue,
+      tierRank,
       color,
       glow,
       bg,
       icon: seasonBadgeIcon(imageFile, `${name} badge`, glowClass),
     });
 
-    if (safeLevel === 7) {
+    if (idx === 0) {
       return makeTier(
         '이클립스',
-        tierRank,
+        1,
         'text-[#ff5a5a]',
         'shadow-[0_0_18px_rgba(255,90,90,0.45)]',
         'bg-[#ff5a5a]/20',
@@ -2292,10 +1886,10 @@ function App() {
         'bg-red-500/50'
       );
     }
-    if (safeLevel === 6) {
+    if (idx < 4) {
       return makeTier(
         '퀘이사',
-        tierRank,
+        idx,
         'text-[#c67cff]',
         'shadow-[0_0_16px_rgba(198,124,255,0.4)]',
         'bg-[#c67cff]/20',
@@ -2303,10 +1897,10 @@ function App() {
         'bg-violet-500/45'
       );
     }
-    if (safeLevel === 5) {
+    if (idx < 9) {
       return makeTier(
         '수퍼노바',
-        tierRank,
+        idx - 3,
         'text-[#67d7ff]',
         'shadow-[0_0_14px_rgba(103,215,255,0.38)]',
         'bg-[#67d7ff]/20',
@@ -2314,10 +1908,10 @@ function App() {
         'bg-sky-500/45'
       );
     }
-    if (safeLevel === 4) {
+    if (idx < 16) {
       return makeTier(
         '네뷸라',
-        tierRank,
+        idx - 8,
         'text-[#9df5ff]',
         'shadow-[0_0_12px_rgba(157,245,255,0.34)]',
         'bg-[#9df5ff]/20',
@@ -2325,10 +1919,10 @@ function App() {
         'bg-cyan-500/40'
       );
     }
-    if (safeLevel === 3) {
+    if (idx < 25) {
       return makeTier(
         '메테오',
-        tierRank,
+        idx - 15,
         'text-[#ffd84d]',
         'shadow-[0_0_10px_rgba(255,216,77,0.32)]',
         'bg-[#ffd84d]/20',
@@ -2336,10 +1930,10 @@ function App() {
         'bg-amber-500/40'
       );
     }
-    if (safeLevel === 2) {
+    if (idx < 36) {
       return makeTier(
         '아스테로이드',
-        tierRank,
+        idx - 24,
         'text-[#d7dee8]',
         'shadow-[0_0_10px_rgba(215,222,232,0.3)]',
         'bg-[#d7dee8]/20',
@@ -2347,10 +1941,10 @@ function App() {
         'bg-slate-500/35'
       );
     }
-    if (safeLevel === 1) {
+    if (idx < 50) {
       return makeTier(
         '더스트',
-        tierRank,
+        idx - 35,
         'text-[#c47a4a]',
         'shadow-[0_0_9px_rgba(196,122,74,0.28)]',
         'bg-[#c47a4a]/20',
@@ -2359,13 +1953,13 @@ function App() {
       );
     }
     return makeTier(
-      '보이드',
-      null,
-      'text-slate-300',
-      'shadow-[0_0_9px_rgba(148,163,184,0.26)]',
-      'bg-slate-400/12',
-      'void',
-      'bg-slate-500/35'
+      '더스트',
+      idx - 35,
+      'text-[#c47a4a]',
+      'shadow-[0_0_9px_rgba(196,122,74,0.28)]',
+      'bg-[#c47a4a]/20',
+      'dust',
+      'bg-orange-600/35'
     );
   };
 
@@ -2383,21 +1977,21 @@ function App() {
   const getRegularRankInfoByName = (name?: string | null) => {
     const found: any = regularRankMap.get(normalizeName(name));
     if (!found) return null;
-    const placed = (found.regular_wins || 0) > 0;
-    if (!placed) return getGrandRankInfo(null, 0);
+    const played = (found.regular_matches || 0) > 0;
+    if (!played) return getGrandRankInfo(9999);
     const idx = typeof found.regular_display_index === 'number' ? found.regular_display_index : found.rankIndex;
-    if (typeof idx !== 'number') return getGrandRankInfo(null, found.regular_tier_level || 0);
-    return getGrandRankInfo(idx, found.regular_tier_level || undefined);
+    if (typeof idx !== 'number') return getGrandRankInfo(9999);
+    return getGrandRankInfo(idx);
   };
 
   const getRegularRankLabelByName = (name?: string | null) => {
     const found: any = regularRankMap.get(normalizeName(name));
     if (!found) return '루키 -위';
-    const placed = (found.regular_wins || 0) > 0;
-    if (!placed) return '루키 -위';
+    const played = (found.regular_matches || 0) > 0;
+    if (!played) return '루키 -위';
     const idx = typeof found.regular_display_index === 'number' ? found.regular_display_index : found.rankIndex;
     if (typeof idx !== 'number') return '루키 -위';
-    const info = getGrandRankInfo(idx, found.regular_tier_level || undefined);
+    const info = getGrandRankInfo(idx);
     return `${info.title} ${idx + 1}위`;
   };
 
@@ -2408,23 +2002,23 @@ function App() {
     if (!found) return null;
     const played = (found.season_matches || 0) > 0;
     if (!played) {
-      return { index: null as number | null, ...getRPTierInfo(null, 0) };
+      return { index: null as number | null, ...getRPTierInfo(49) };
     }
     const idx = typeof found.season_display_index === 'number' ? found.season_display_index : null;
-    if (idx === null) return { index: null as number | null, ...getRPTierInfo(null, found.season_tier_level || 0) };
-    return { index: idx, ...getRPTierInfo(idx, found.season_tier_level || undefined) };
+    if (idx === null) return { index: null as number | null, ...getRPTierInfo(49) };
+    return { index: idx, ...getRPTierInfo(idx) };
   };
 
   const getSeasonRankLabelByName = (name?: string | null) => {
     const info = getSeasonRankInfoByName(name);
-    if (!info) return '보이드 -위';
+    if (!info) return '더스트 -위';
     if (typeof info.index !== 'number') return `${info.name} -위`;
     return `${info.name} ${info.index + 1}위`;
   };
 
   const getRegularRankIndexByName = (name?: string | null) => {
     const found: any = regularRankMap.get(normalizeName(name));
-    if (!found || (found.regular_wins || 0) <= 0) return null;
+    if (!found || (found.regular_matches || 0) <= 0) return null;
     if (typeof found.regular_display_index === 'number') return found.regular_display_index;
     if (typeof found.rankIndex === 'number') return found.rankIndex;
     return null;
@@ -2433,13 +2027,13 @@ function App() {
   const currentUserRegularInfo = getRegularRankInfoByName(currentUserName);
   const currentUserRegularIndex = getRegularRankIndexByName(currentUserName);
   const currentUserSeasonInfo = getSeasonRankInfoByName(currentUserName);
-  const currentUserSeasonPoints = (regularRankMap.get(normalizeName(currentUserName)) as any)?.season_sp ?? 0;
+  const currentUserSeasonPoints = profile?.rp ?? 0;
   const getStreakBountyGC = (streak?: number) => {
     const safe = streak || 0;
     if (safe < 3) return 0;
     return 100 + (safe - 3) * 50;
   };
-  const getDefenseBonusGC = (stack?: number) => (stack || 0) * 100;
+  const getDefenseBonusGC = (stack?: number) => (stack || 0) * 200;
   const getRegularInnerGlowStyle = (idx: number): React.CSSProperties => {
     if (idx === 0) {
       return {
@@ -2523,30 +2117,6 @@ function App() {
     return (mode === 'regular' ? regularRankMoves[key] : seasonRankMoves[key]) || 0;
   };
   const REGULAR_REMATCH_COOLDOWN_MS = 12 * 60 * 60 * 1000;
-  const getRegularTierLevelByName = (name?: string | null) => {
-    const found: any = regularRankMap.get(normalizeName(name));
-    if (!found) return 0;
-    if ((found.regular_wins || 0) <= 0) return 0;
-    return typeof found.regular_tier_level === 'number' ? found.regular_tier_level : 0;
-  };
-  const canRegularChallengeByTierRule = (challengerName?: string | null, targetName?: string | null) => {
-    if (!challengerName || !targetName) return false;
-    const challengerNorm = normalizeName(challengerName);
-    const targetNorm = normalizeName(targetName);
-    if (!challengerNorm || !targetNorm || challengerNorm === targetNorm) return false;
-    const challengerRow: any = regularRankMap.get(challengerNorm);
-    const targetRow: any = regularRankMap.get(targetNorm);
-    if (!challengerRow || !targetRow) return false;
-
-    const challengerTierLevel = getRegularTierLevelByName(challengerName);
-    const targetTierLevel = getRegularTierLevelByName(targetName);
-    const challengerIsRookie = (challengerRow.regular_wins || 0) <= 0 || challengerTierLevel <= 0;
-    if (challengerIsRookie) return true;
-    if (targetTierLevel <= 0) return false;
-    if (targetTierLevel < challengerTierLevel) return false;
-    if (targetTierLevel > challengerTierLevel + 1) return false;
-    return true;
-  };
   const getRegularCooldownRemainingMs = (targetName?: string | null) => {
     if (!currentUserName || !targetName) return 0;
     const me = normalizeName(currentUserName);
@@ -2575,11 +2145,13 @@ function App() {
   };
   const canChallengeTargetByRegularRule = (targetName?: string | null) => {
     if (!targetName || !currentUserName) return false;
-    return canRegularChallengeByTierRule(currentUserName, targetName);
+    if (targetName.trim() === currentUserName.trim()) return false;
+    return true;
   };
   const canAcceptIncomingByRegularRule = (challengerName?: string | null) => {
     if (!challengerName || !currentUserName) return false;
-    return canRegularChallengeByTierRule(challengerName, currentUserName);
+    if (challengerName.trim() === currentUserName.trim()) return false;
+    return true;
   };
   const getRegularChallengeUiState = (targetName?: string | null) => {
     if (!targetName || !currentUserName) {
@@ -2927,7 +2499,7 @@ function App() {
                       <span className={`text-[1.1rem] sm:text-[1.35rem] lg:text-[1.95rem] font-black leading-tight whitespace-nowrap drop-shadow-[0_0_10px_rgba(34,211,238,0.35)] ${currentUserSeasonInfo?.color || 'text-slate-300'}`}>
                         {currentUserSeasonInfo
                           ? `${currentUserSeasonInfo.name} ${typeof currentUserSeasonInfo.index === 'number' ? `${currentUserSeasonInfo.index + 1}위` : '-위'}`
-                          : '보이드 -위'}
+                          : '더스트 -위'}
                       </span>
                     </div>
                 </div>
@@ -2966,7 +2538,7 @@ function App() {
                     <div className="flex-1 overflow-y-auto space-y-3 sm:space-y-4 custom-scrollbar pr-1 sm:pr-2 pt-2 animate-in fade-in">
                         {onlineRankers.length > 0 ? onlineRankers.map((ou, i) => {
                           const regularIdx = typeof ou.regular_display_index === 'number' ? ou.regular_display_index : null;
-                          const rankInfo = getGrandRankInfo(regularIdx, (r as any).regular_tier_level);
+                          const rankInfo = getGrandRankInfo(regularIdx ?? 9999);
                           const seasonInfo = getSeasonRankInfoByName(ou.display_name);
                           const challengeUi = getRegularChallengeUiState(ou.display_name);
                           return (
@@ -2986,7 +2558,7 @@ function App() {
                                     <span className={`text-[11px] font-bold mt-0.5 ${seasonInfo?.color || 'text-slate-400'}`}>
                                       {seasonInfo
                                         ? `${seasonInfo.name} ${typeof seasonInfo.index === 'number' ? `${seasonInfo.index + 1}위` : '-위'}`
-                                        : '보이드 -위'}
+                                        : '더스트 -위'}
                                     </span>
                                   </div>
                                </div>
@@ -3066,24 +2638,24 @@ function App() {
                            
                            <div className="bg-black/60 p-5 rounded-2xl border border-white/5 mt-2 flex flex-col gap-4">
                               <div className="flex justify-between items-center">
-                                 <p className="text-base text-pink-400 font-bold">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">{entryMode === 'free' ? `최소 ${REGULAR_TICKET_COST}` : '0 가능'}</span></p>
+                                 <p className="text-base text-pink-400 font-bold">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">{entryMode === 'free' ? '최소 100' : '0 가능'}</span></p>
                                  <input 
                                    type="number" 
                                    min={entryMode === 'free' ? 100 : 0} 
                                    value={betAmount} 
-                                  onChange={(e) => setBetAmount(Number(e.target.value) || 0)} 
-                                  onBlur={() => {
-                                    if (entryMode === 'free' && betAmount < REGULAR_TICKET_COST) setBetAmount(REGULAR_TICKET_COST);
-                                    if (entryMode === 'random' && betAmount < 0) setBetAmount(0);
-                                  }}
+                                   onChange={(e) => setBetAmount(Number(e.target.value))} 
+                                   onBlur={() => {
+                                     if (entryMode === 'free' && betAmount < 100) setBetAmount(100);
+                                     if (entryMode === 'random' && betAmount < 0) setBetAmount(0);
+                                   }}
                                    className="w-28 bg-white/5 border border-white/10 p-2.5 rounded-xl outline-none text-white font-bold text-right text-lg select-text cursor-pointer" 
                                  />
                               </div>
                               <div className="grid grid-cols-2 gap-2">
                                  <div className="grid grid-cols-3 gap-1 min-w-0">
-                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(entryMode === 'free' ? REGULAR_TICKET_COST : 0, p - 50)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-50</button>
-                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(entryMode === 'free' ? REGULAR_TICKET_COST : 0, p - 100)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-100</button>
-                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(entryMode === 'free' ? REGULAR_TICKET_COST : 0, p - 500)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-500</button>
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(entryMode === 'free' ? 100 : 0, p - 50)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-50</button>
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(entryMode === 'free' ? 100 : 0, p - 100)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-100</button>
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(entryMode === 'free' ? 100 : 0, p - 500)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-500</button>
                                  </div>
                                  <div className="grid grid-cols-3 gap-1 min-w-0">
                                     <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => p + 50); }} className="w-full px-0 py-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 rounded-lg text-sm font-bold hover:bg-cyan-500 hover:text-black transition-colors">+50</button>
@@ -3274,10 +2846,10 @@ function App() {
                           {miniRankMode === 'free' ? (
                             rankers.length > 0 ? rankers.filter(r => matchesSearch(r.display_name, miniSearchQuery)).map((r) => {
                               const regularIdx = typeof (r as any).regular_display_index === 'number' ? (r as any).regular_display_index : null;
-                              const grandRank = getGrandRankInfo(regularIdx, (r as any).regular_tier_level); if (!grandRank) return null;
+                              const grandRank = getGrandRankInfo(regularIdx ?? 9999); if (!grandRank) return null;
                               const challengeUi = getRegularChallengeUiState(r.display_name);
                               return (
-                                <div ref={setRankCardRef('mini', 'free', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${rankCardFxByTier((r as any).regular_tier_level || 0)}`}>
+                                <div ref={setRankCardRef('mini', 'free', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${rankCardFxByTier(regularIdx ?? 9999)}`}>
                                   <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)]">
                                     {regularIdx === null ? '-' : `${regularIdx + 1}위`}
                                   </span>
@@ -3293,16 +2865,16 @@ function App() {
                                       </span>
                                     </div>
                                   )}
-                                  {((r.regular_defense_stack || 0) > 0 || (r.regular_win_streak || 0) >= 3) && (
+                                  {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 3) && (
                                     <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex flex-col items-end gap-1.5 z-20">
-                                      {(r.regular_defense_stack || 0) > 0 && (
+                                      {(r.defense_stack || 0) > 0 && (
                                         <span className="font-black text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full bg-red-500/18 text-red-200 border border-red-400/45 shadow-[0_0_10px_rgba(248,113,113,0.35)]">
-                                          🛡 방어전 {r.regular_defense_stack}
+                                          🛡 방어전 {r.defense_stack}
                                         </span>
                                       )}
-                                      {(r.regular_win_streak || 0) >= 3 && (
+                                      {(r.win_streak || 0) >= 3 && (
                                         <span className="font-black text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/16 text-emerald-200 border border-emerald-400/45 shadow-[0_0_10px_rgba(52,211,153,0.35)]">
-                                          🔥 {r.regular_win_streak}연승{getStreakBountyGC(r.regular_win_streak || 0) > 0 ? ` · ${getStreakBountyGC(r.regular_win_streak || 0)}GC` : ''}
+                                          🔥 {r.win_streak}연승{getStreakBountyGC(r.win_streak || 0) > 0 ? ` · ${getStreakBountyGC(r.win_streak || 0)}GC` : ''}
                                         </span>
                                       )}
                                     </div>
@@ -3335,9 +2907,9 @@ function App() {
                           ) : (
                             rpRankers.length > 0 ? rpRankers.filter(r => matchesSearch(r.display_name, miniSearchQuery)).slice(0, 10).map((r, i) => {
                               const seasonIdx = typeof (r as any).season_display_index === 'number' ? (r as any).season_display_index : null;
-                              const tier = getRPTierInfo(seasonIdx, (r as any).season_tier_level);
+                              const tier = getRPTierInfo(seasonIdx ?? 49);
                               return (
-                                <div ref={setRankCardRef('mini', 'random', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${seasonCardFxByTier((r as any).season_tier_level || 0)}`}>
+                                <div ref={setRankCardRef('mini', 'random', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => handleProfileClick(r.display_name)} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${seasonCardFxByTier(seasonIdx ?? 49)}`}>
                                   <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)]">
                                     {seasonIdx === null ? '-' : `${seasonIdx + 1}위`}
                                   </span>
@@ -3349,20 +2921,20 @@ function App() {
                                   {seasonIdx === null && (
                                     <div className="absolute inset-x-0 top-[3.05rem] flex justify-center pointer-events-none">
                                       <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black text-orange-200 bg-orange-500/18 border border-orange-300/35">
-                                        보이드
+                                        더스트
                                       </span>
                                     </div>
                                   )}
-                                  {((r.season_defense_stack || 0) > 0 || (r.season_win_streak || 0) >= 3) && (
+                                  {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 3) && (
                                     <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex flex-col items-end gap-1.5 z-20">
-                                      {(r.season_defense_stack || 0) > 0 && (
+                                      {(r.defense_stack || 0) > 0 && (
                                         <span className="font-black text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full bg-red-500/18 text-red-200 border border-red-400/45 shadow-[0_0_10px_rgba(248,113,113,0.35)]">
-                                          🛡 방어전 {r.season_defense_stack}
+                                          🛡 방어전 {r.defense_stack}
                                         </span>
                                       )}
-                                      {(r.season_win_streak || 0) >= 3 && (
+                                      {(r.win_streak || 0) >= 3 && (
                                         <span className="font-black text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/16 text-emerald-200 border border-emerald-400/45 shadow-[0_0_10px_rgba(52,211,153,0.35)]">
-                                          🔥 {r.season_win_streak}연승{getStreakBountyGC(r.season_win_streak || 0) > 0 ? ` · ${getStreakBountyGC(r.season_win_streak || 0)}GC` : ''}
+                                          🔥 {r.win_streak}연승{getStreakBountyGC(r.win_streak || 0) > 0 ? ` · ${getStreakBountyGC(r.win_streak || 0)}GC` : ''}
                                         </span>
                                       )}
                                     </div>
@@ -3373,7 +2945,7 @@ function App() {
                                       <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${getCardAvatarBorderFxForUser(r.display_name)} shrink-0`} alt="p"/>
                                       <span className={`font-bold text-base sm:text-[1.2rem] leading-tight whitespace-normal break-all ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
-                                    <span className="font-black text-fuchsia-400 text-[1.15rem] sm:text-[1.5rem] shrink-0">{r.season_sp ?? 0}</span>
+                                    <span className="font-black text-fuchsia-400 text-[1.15rem] sm:text-[1.5rem] shrink-0">{r.rp ?? 0}</span>
                                   </div>
                                 </div>
                               );
@@ -3546,11 +3118,11 @@ function App() {
                       const renderRegularCard = (r: any, tone: 'hero' | 'mid' | 'small' = 'small') => {
                         const regularIdx = typeof r.regular_display_index === 'number' ? r.regular_display_index : null;
                         const isRookieTier = regularIdx === null;
-                        const grandRank = getGrandRankInfo(regularIdx, (r as any).regular_tier_level);
+                        const grandRank = getGrandRankInfo(regularIdx ?? 9999);
                         if (!grandRank) return null;
                         const move = getRankMoveValue(r.display_name, 'regular');
                         const isTopRegular = regularIdx === 0;
-                        const throneDefenseStack = r.regular_defense_stack || 0;
+                        const throneDefenseStack = r.defense_stack || 0;
                         const throneBounty = getDefenseBonusGC(throneDefenseStack);
                         const challengeUi = getRegularChallengeUiState(r.display_name);
 
@@ -3570,7 +3142,7 @@ function App() {
                            key={r.id}
                            onMouseEnter={() => playSFX('hover')}
                            onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }}
-                           className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${rankCardFxByTier((r as any).regular_tier_level || 0)} hover:brightness-110 mt-10`}
+                           className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${rankCardFxByTier(regularIdx ?? 9999)} hover:brightness-110 mt-10`}
                          >
                             <div className="absolute w-full flex justify-center z-20 pointer-events-none" style={{ top: 0 }}>
                               <div className={`${badgeClass} absolute flex items-center justify-center`}>
@@ -3697,10 +3269,10 @@ function App() {
                       {rpRankers.length > 0 ? rpRankers.filter(r => matchesSearch(r.display_name, mainSearchQuery)).map((r, i) => {
                            const seasonIdx = typeof (r as any).season_display_index === 'number' ? (r as any).season_display_index : null;
                            const isDustTier = seasonIdx === null;
-                           const tier = getRPTierInfo(seasonIdx, (r as any).season_tier_level);
+                           const tier = getRPTierInfo(seasonIdx ?? 49);
                            const move = getRankMoveValue(r.display_name, 'season');
                            const isTopSeason = seasonIdx === 0;
-                           const throneDefenseStack = r.season_defense_stack || 0;
+                           const throneDefenseStack = r.defense_stack || 0;
                            const throneBounty = getDefenseBonusGC(throneDefenseStack);
                            const isRank1 = seasonIdx === 0;
                            const isRank2_3 = seasonIdx === 1 || seasonIdx === 2;
@@ -3720,7 +3292,7 @@ function App() {
 
                            return (
                              <div key={r.id} className={spanClass}>
-                                <div ref={setRankCardRef('main', 'random', r.display_name)} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${seasonCardFxByTier((r as any).season_tier_level || 0)} hover:brightness-110 mt-10`}>
+                                <div ref={setRankCardRef('main', 'random', r.display_name)} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${seasonCardFxByTier(seasonIdx ?? 49)} hover:brightness-110 mt-10`}>
                                    {seasonIdx === 0 && <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-[3rem] pointer-events-none"></div>}
                                    
                                     <span className="absolute left-3 sm:left-4 top-3 text-[2.2rem] sm:text-[2.8rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_14px_rgba(34,211,238,0.5)] z-20">
@@ -3744,7 +3316,7 @@ function App() {
                                     {isDustTier && (
                                       <div className="absolute inset-x-0 top-12 sm:top-14 lg:top-16 flex justify-center pointer-events-none z-20">
                                         <span className="px-3.5 py-1 rounded-full text-xs sm:text-sm font-black text-orange-200 bg-orange-500/20 border border-orange-300/35">
-                                          보이드
+                                          더스트
                                         </span>
                                       </div>
                                     )}
@@ -3766,7 +3338,7 @@ function App() {
                                         <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameSize}`}>{r.display_name}</span>
                                       </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
-                                       <span className={`font-black text-fuchsia-400 tracking-tight ${statSize}`}>{r.season_sp ?? 0}</span>
+                                       <span className={`font-black text-fuchsia-400 tracking-tight ${statSize}`}>{r.rp ?? 0}</span>
                                        <span className="text-[10px] font-black text-slate-400 tracking-wider">SP (시즌)</span>
                                      </div>
                                    </div>
@@ -3834,7 +3406,7 @@ function App() {
                             <span>{currentUserSeasonInfo?.icon || '🪐'}</span>
                             {currentUserSeasonInfo
                               ? `${currentUserSeasonInfo.name} ${typeof currentUserSeasonInfo.index === 'number' ? `${currentUserSeasonInfo.index + 1}위` : '-위'}`
-                              : '보이드 -위'}
+                              : '더스트 -위'}
                           </span>
                         </div>
                       </div>
@@ -3848,7 +3420,7 @@ function App() {
                           <span>{currentUserSeasonInfo?.icon || '🪐'}</span>
                           {currentUserSeasonInfo
                             ? `${currentUserSeasonInfo.name} ${typeof currentUserSeasonInfo.index === 'number' ? `${currentUserSeasonInfo.index + 1}위` : '-위'}`
-                            : '보이드 -위'}
+                            : '더스트 -위'}
                         </span>
                       </div>
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -3858,7 +3430,7 @@ function App() {
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">최고 연승</p><p className="text-2xl font-black text-amber-300">{myStats.longestStreak}</p></div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">정규 경기</p><p className="text-2xl font-black text-cyan-300">{myStats.freeMatches}</p></div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">시즌 경기</p><p className="text-2xl font-black text-violet-300">{myStats.randomMatches}</p></div>
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">SP (시즌)</p><p className="text-2xl font-black text-fuchsia-400">{currentUserSeasonPoints}</p></div>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">SP (시즌)</p><p className="text-2xl font-black text-fuchsia-400">{profile?.rp ?? 0}</p></div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">GC (상점)</p><p className="text-2xl font-black text-emerald-400">{profile?.gc ?? 1000}</p></div>
                       </div>
                     </div>
@@ -4028,7 +3600,7 @@ function App() {
                            <span>{selectedPlayerSeasonInfo?.icon || '🪐'}</span>
                            {selectedPlayerSeasonInfo
                              ? `${selectedPlayerSeasonInfo.name} ${typeof selectedPlayerSeasonInfo.index === 'number' ? `${selectedPlayerSeasonInfo.index + 1}위` : '-위'}`
-                             : '보이드 -위'}
+                             : '더스트 -위'}
                         </span>
                       </div>
                     </div>
@@ -4057,7 +3629,7 @@ function App() {
                         </div>
                         <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center">
                           <p className="text-xs font-bold text-slate-400 mb-2">SP (시즌)</p>
-                          <p className="text-3xl font-black text-fuchsia-400">{selectedPlayer.season_sp ?? 0}</p>
+                          <p className="text-3xl font-black text-fuchsia-400">{selectedPlayer.rp ?? 0}</p>
                         </div>
                         <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center col-span-1">
                           <p className="text-xs font-bold text-slate-400 mb-2">GC (상점)</p>
