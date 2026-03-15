@@ -214,6 +214,71 @@ function App() {
   };
 
   const isOwnedItem = (itemId: string) => defaultOwnedIds.includes(itemId) || ownedItemIds.includes(itemId);
+  type SavedRandomDraft = {
+    rerollCount: number;
+    legend: string;
+    weapons: string[];
+  };
+  const getRandomDraftStorageKey = (
+    challengeId: string,
+    isChallenger: boolean,
+    username?: string | null
+  ) => {
+    const safeUser = (username || currentUserName || 'unknown').trim().toLowerCase();
+    return `gt_random_draft_v2_${safeUser}_${challengeId}_${isChallenger ? 'c' : 't'}`;
+  };
+  const readRandomDraftState = (
+    challengeId: string,
+    isChallenger: boolean,
+    username?: string | null
+  ): SavedRandomDraft | null => {
+    try {
+      const key = getRandomDraftStorageKey(challengeId, isChallenger, username);
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as SavedRandomDraft;
+      if (!parsed || typeof parsed.legend !== 'string' || !Array.isArray(parsed.weapons)) return null;
+      return {
+        rerollCount: Number.isFinite(parsed.rerollCount) ? Math.max(0, Number(parsed.rerollCount)) : 0,
+        legend: parsed.legend || '',
+        weapons: [parsed.weapons[0] || '', parsed.weapons[1] || ''],
+      };
+    } catch {
+      return null;
+    }
+  };
+  const writeRandomDraftState = (
+    challengeId: string,
+    isChallenger: boolean,
+    username: string,
+    draft: SavedRandomDraft
+  ) => {
+    try {
+      const key = getRandomDraftStorageKey(challengeId, isChallenger, username);
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          rerollCount: Math.max(0, draft.rerollCount || 0),
+          legend: draft.legend || '',
+          weapons: [draft.weapons?.[0] || '', draft.weapons?.[1] || ''],
+        })
+      );
+    } catch {
+      // ignore localStorage write failures
+    }
+  };
+  const clearRandomDraftState = (
+    challengeId: string,
+    isChallenger: boolean,
+    username?: string | null
+  ) => {
+    try {
+      const key = getRandomDraftStorageKey(challengeId, isChallenger, username);
+      localStorage.removeItem(key);
+    } catch {
+      // ignore localStorage remove failures
+    }
+  };
 
   const activeMatchRef = useRef(activeMatch);
   const matchPhaseRef = useRef(matchPhase);
@@ -361,14 +426,21 @@ function App() {
       const isC = data.challenger_name === username;
       const opp = isC ? data.target_name : data.challenger_name;
       const amIReady = isC ? data.c_ready : data.t_ready;
+      const isRandomAccepted = data.mode.includes('random') && data.mode.includes('_accepted');
+      const savedRandomDraft = isRandomAccepted ? readRandomDraftState(data.id, isC, username) : null;
       
       let localLegend = isC ? (data.legend || '') : (data.t_legend || '');
       let localWeapons = isC ? (data.weapons || ['', '']) : (data.t_weapons || ['', '']);
 
-      if (data.mode.includes('random') && data.mode.includes('_accepted') && !amIReady && (!localLegend || localLegend === '')) {
+      if (isRandomAccepted && !amIReady && savedRandomDraft?.legend) {
+          localLegend = savedRandomDraft.legend;
+          localWeapons = [savedRandomDraft.weapons?.[0] || '', savedRandomDraft.weapons?.[1] || ''];
+          setEntryLegend(localLegend); setEntryWeapons(localWeapons);
+      } else if (isRandomAccepted && !amIReady && (!localLegend || localLegend === '')) {
           localLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
           localWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
           setEntryLegend(localLegend); setEntryWeapons(localWeapons);
+          writeRandomDraftState(data.id, isC, username, { rerollCount: savedRandomDraft?.rerollCount || 0, legend: localLegend, weapons: localWeapons });
       } else {
           // 픽 단계에서 아직 Ready를 누르지 않았다면, 상대 업데이트로 내 로컬 선택값이 지워지지 않게 보존합니다.
           if (matchPhaseRef.current === 'picking' && !amIReady) {
@@ -381,6 +453,7 @@ function App() {
           }
           setEntryLegend(localLegend); setEntryWeapons(localWeapons);
       }
+      setRerollCount(isRandomAccepted ? (savedRandomDraft?.rerollCount || 0) : 0);
 
       setActiveMatch({ id: data.id, mode: data.mode, opponent: opp, legend: localLegend, weapons: localWeapons, oppLegend: isC ? data.t_legend : data.legend, oppWeapons: isC ? data.t_weapons : data.weapons, isChallenger: isC });
       setEntryOpponent(opp); setEntryMode(data.mode.replace('_accepted', '') as 'free' | 'random'); setBetAmount(data.bet_gc || 0);
@@ -406,7 +479,10 @@ function App() {
         setActiveMatch(null);
       }
     } else {
+      const prevMatch = activeMatchRef.current;
+      if (prevMatch) clearRandomDraftState(prevMatch.id, prevMatch.isChallenger, username);
       setIncomingChallenge(null);
+      setRerollCount(0);
       if (matchPhaseRef.current !== 'idle') { setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); }
     }
   };
@@ -659,7 +735,8 @@ function App() {
                }
                if (currentMatch && updated.id === currentMatch.id) {
                     if (currentPhase === 'waiting_sync' && updated.mode.includes('_accepted')) {
-                        playSFX('matchStart'); setMatchPhase('picking'); if (updated.mode.includes('random')) handleModeChange('random');
+                        playSFX('matchStart');
+                        setMatchPhase('picking');
                     }
                    if ((currentPhase === 'picking' || currentPhase === 'waiting_ready') && updated.c_ready && updated.t_ready) {
                        playSFX('success'); setActiveMatch(prev => prev ? { ...prev, oppLegend: prev.isChallenger ? updated.t_legend : updated.legend, oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons } : prev); setMatchPhase('scoring');
@@ -696,12 +773,16 @@ function App() {
                        setEntryOpponent('');
                        setEntryLegend('');
                        setEntryWeapons(['', '']);
+                       setRerollCount(0);
+                       clearRandomDraftState(currentMatch.id, currentMatch.isChallenger, currentUserName);
                        fetchData();
                        fetchRankers();
                        if(user) fetchProfile(user.id);
                    } else if (currentPhase !== 'idle') {
                        playSFX('click');
                        showStatusPopup('info', '매치 종료', '매치가 취소되었거나 정상적으로 종료되었습니다.');
+                       setRerollCount(0);
+                       clearRandomDraftState(currentMatch.id, currentMatch.isChallenger, currentUserName);
                        setMatchPhase('idle');
                        setActiveMatch(null);
                        setWaitingForScore(false);
@@ -871,7 +952,7 @@ function App() {
   };
 
   const handleModeChange = (mode: 'free' | 'random') => {
-    playSFX('click'); setEntryMode(mode); setEntryLegend(''); setEntryWeapons(['', '']);
+    playSFX('click'); setEntryMode(mode); setEntryLegend(''); setEntryWeapons(['', '']); setRerollCount(0);
     if (mode === 'free') {
       if (betAmount < 100) setBetAmount(100);
     } else {
@@ -881,11 +962,32 @@ function App() {
 
   const handleReroll = async () => {
     playSFX('click');
+    if (!activeMatch || !currentUserName) return;
     if (rerollCount > 0) {
        if (!profile || profile.gc < 50) return alert("GC가 부족합니다! (50 GC 필요)");
        await supabase.from('profiles').update({ gc: profile.gc - 50 }).eq('id', user.id); if(user) fetchProfile(user.id);
     }
-    setRerollCount(r => r + 1); setEntryLegend(ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)]); setEntryWeapons([...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2));
+    const nextRerollCount = rerollCount + 1;
+    const nextLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
+    const nextWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+    const updatePayload = activeMatch.isChallenger
+      ? { legend: nextLegend, weapons: nextWeapons }
+      : { t_legend: nextLegend, t_weapons: nextWeapons };
+    const { error: updateError } = await supabase.from('challenges').update(updatePayload).eq('id', activeMatch.id);
+    if (updateError) {
+      playSFX('error');
+      showStatusPopup('error', '리롤 반영 실패', '리롤 정보 저장 중 문제가 발생했습니다. 다시 시도해주세요.');
+      return;
+    }
+    setRerollCount(nextRerollCount);
+    setEntryLegend(nextLegend);
+    setEntryWeapons(nextWeapons);
+    setActiveMatch((prev) => (prev ? { ...prev, legend: nextLegend, weapons: nextWeapons } : prev));
+    writeRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName, {
+      rerollCount: nextRerollCount,
+      legend: nextLegend,
+      weapons: nextWeapons,
+    });
   };
 
   const handleAcceptIncomingChallenge = async () => {
@@ -944,6 +1046,7 @@ function App() {
       };
       setEntryLegend(targetLegend);
       setEntryWeapons(targetWeapons);
+      setRerollCount(0);
       setActiveMatch({
         id: existing.id,
         mode: baseMode,
@@ -952,9 +1055,15 @@ function App() {
         weapons: targetWeapons,
         isChallenger: false,
       });
+      writeRandomDraftState(existing.id, false, currentUserName, {
+        rerollCount: 0,
+        legend: targetLegend,
+        weapons: targetWeapons,
+      });
     } else {
       setEntryLegend('');
       setEntryWeapons(['', '']);
+      setRerollCount(0);
       setActiveMatch({
         id: existing.id,
         mode: baseMode,
@@ -995,6 +1104,7 @@ function App() {
     setEntryOpponent('');
     setEntryLegend('');
     setEntryWeapons(['', '']);
+    setRerollCount(0);
     showStatusPopup('info', '대전 거절', `${pending.challengerName}님의 대전 신청을 거절했습니다.`);
   };
 
@@ -1027,9 +1137,13 @@ function App() {
           const a_leg = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)]; const a_wep = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
           const b_leg = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)]; const b_wep = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
           updatePayload.legend = a_leg; updatePayload.weapons = a_wep; updatePayload.t_legend = b_leg; updatePayload.t_weapons = b_wep;
-          setEntryLegend(b_leg); setEntryWeapons(b_wep);
+          setEntryLegend(b_leg); setEntryWeapons(b_wep); setRerollCount(0);
           setActiveMatch({ id: existing.id, mode: entryMode, opponent: entryOpponent.trim(), legend: b_leg, weapons: b_wep, isChallenger: false });
+          if (currentUserName) {
+            writeRandomDraftState(existing.id, false, currentUserName, { rerollCount: 0, legend: b_leg, weapons: b_wep });
+          }
       } else {
+          setRerollCount(0);
           setActiveMatch({ id: existing.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: false });
       }
       await supabase.from('challenges').update(updatePayload).eq('id', existing.id); setIncomingChallenge(null); setMatchPhase('picking');
@@ -1048,6 +1162,7 @@ function App() {
       playSFX('click');
       const { data: newChall } = await supabase.from('challenges').insert([{ challenger_name: currentUserName.trim(), target_name: entryOpponent.trim(), mode: entryMode, bet_gc: betAmount }]).select().single();
       if (newChall) {
+        setRerollCount(0);
         setActiveMatch({ id: newChall.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: true });
         setMatchPhase('waiting_sync');
         showStatusPopup('info', '대전 신청 완료', `${entryOpponent.trim()}님에게 대전 신청을 보냈습니다. 수락/거절 응답을 기다려주세요.`);
@@ -1060,11 +1175,20 @@ function App() {
     playSFX('click'); if (!activeMatch) return;
     const updatePayload = activeMatch.isChallenger ? { legend: entryLegend, weapons: entryWeapons, c_ready: true } : { t_legend: entryLegend, t_weapons: entryWeapons, t_ready: true };
     setActiveMatch({ ...activeMatch, legend: entryLegend, weapons: entryWeapons });
+    if (currentUserName && activeMatch.mode.includes('random')) {
+      writeRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName, {
+        rerollCount,
+        legend: entryLegend,
+        weapons: entryWeapons,
+      });
+    }
     await supabase.from('challenges').update(updatePayload).eq('id', activeMatch.id); setMatchPhase('waiting_ready');
   };
 
   const handleCancelMatch = async () => {
     playSFX('click'); await supabase.from('challenges').delete().or(`challenger_name.eq."${currentUserName?.trim()}",target_name.eq."${currentUserName?.trim()}"`);
+    if (activeMatch && currentUserName) clearRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName);
+    setRerollCount(0);
     setMatchPhase('idle'); setActiveMatch(null);
   };
 
@@ -1192,6 +1316,8 @@ function App() {
                 const didWin = winnerName?.trim() === (currentUserName || '').trim();
                 triggerResultFx(didWin, didWin ? '전투 승리! 순위가 갱신되었습니다.' : '전투 종료! 결과가 반영되었습니다.');
                 showStatusPopup(didWin ? 'success' : 'info', didWin ? '승리' : '결과 반영', didWin ? '축하합니다. 승리 기록과 순위 변동이 적용되었습니다.' : '전투 결과와 랭킹 정보가 업데이트되었습니다.');
+                if (currentUserName) clearRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName);
+                setRerollCount(0);
                 await supabase.from('challenges').delete().eq('id', activeMatch.id);
             } else {
                 playSFX('error');
@@ -1203,7 +1329,16 @@ function App() {
                 setWaitingForScore(false); setMyWins(null); setMyLosses(null); await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
             }
         }
-    } else { playSFX('success'); setMatchPhase('idle'); setActiveMatch(null); setWaitingForScore(false); setMyWins(null); setMyLosses(null); }
+    } else {
+      playSFX('success');
+      if (activeMatch && currentUserName) clearRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName);
+      setRerollCount(0);
+      setMatchPhase('idle');
+      setActiveMatch(null);
+      setWaitingForScore(false);
+      setMyWins(null);
+      setMyLosses(null);
+    }
   };
 
   const copyPlayerName = (name: string) => {
