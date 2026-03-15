@@ -729,13 +729,13 @@ function App() {
         win_rate: (r.wins + r.losses) > 0 ? (((r.wins) / (r.wins + r.losses)) * 100).toFixed(1) + '%' : '0.0%',
         avatar_url: r.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.id}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
         defense_stack: r.defense_stack || 0,
-        rp: r.rp || 1000,
+        rp: typeof r.rp === 'number' ? r.rp : 0,
         rank_index: typeof r.rank_index === 'number' ? r.rank_index : null,
         regular_rp:
           typeof r.regular_rp === 'number'
             ? r.regular_rp
             : calculateRegularPoints(r.wins || 0, r.losses || 0),
-        gc: r.gc || 0,
+        gc: typeof r.gc === 'number' ? r.gc : 1000,
         win_streak: r.win_streak || 0,
         owned_cosmetics: Array.isArray(r.owned_cosmetics) ? r.owned_cosmetics : [...defaultOwnedIds],
         equipped_name_color: r.equipped_name_color || 'name_default',
@@ -754,7 +754,7 @@ function App() {
         }
       });
 
-      const seasonSorted = [...base].sort((a, b) => (b.rp || 1000) - (a.rp || 1000));
+      const seasonSorted = [...base].sort((a, b) => (b.rp ?? 0) - (a.rp ?? 0));
       const regularNow: Record<string, number> = {};
       const seasonNow: Record<string, number> = {};
       regularSorted.forEach((r, i) => {
@@ -830,14 +830,14 @@ function App() {
       return;
     }
 
-    if ((profile.gc || 0) < item.cost) {
+    if ((profile.gc ?? 1000) < item.cost) {
       playSFX('error');
-      alert(`GC가 부족합니다. (필요: ${item.cost} / 보유: ${profile.gc || 0})`);
+      alert(`GC가 부족합니다. (필요: ${item.cost} / 보유: ${profile.gc ?? 1000})`);
       return;
     }
 
     playSFX('click');
-    const nextGc = (profile.gc || 0) - item.cost;
+    const nextGc = (profile.gc ?? 1000) - item.cost;
     const { error } = await supabase.from('profiles').update({ gc: nextGc }).eq('id', user.id);
     if (error) {
       playSFX('error');
@@ -1000,7 +1000,7 @@ function App() {
 
   const handleStartMatch = async () => {
     if (entryMode === 'free' && betAmount < 100) { playSFX('error'); return alert("자유대전 배팅 금액은 최소 100 GC 이상이어야 합니다."); }
-    if (betAmount > 0 && (!profile || profile.gc < betAmount)) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc || 0} GC)`); }
+    if (betAmount > 0 && (!profile || (profile.gc ?? 1000) < betAmount)) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc ?? 1000} GC)`); }
 
     const { data: existing } = await supabase.from('challenges').select('*').eq('challenger_name', entryOpponent.trim()).eq('target_name', currentUserName.trim()).limit(1).maybeSingle();
     
@@ -1133,15 +1133,15 @@ function App() {
                         if (challengerWon) {
                           cUpdates.defense_stack = 0;
                           tUpdates.defense_stack = 0;
-                          cUpdates.gc = (cProfile.gc || 0) + bet;
-                          tUpdates.gc = (tProfile.gc || 0) - bet;
+                          cUpdates.gc = (cProfile.gc ?? 1000) + bet;
+                          tUpdates.gc = (tProfile.gc ?? 1000) - bet;
                           cUpdates.win_streak = cRankNow === 0 ? cPrevStreak : cPrevStreak + 1;
                           tUpdates.win_streak = 0;
                         } else {
                           tUpdates.defense_stack = topRegularDefenseSucceeded ? (tProfile.defense_stack || 0) + 1 : 0;
                           cUpdates.defense_stack = 0;
-                          cUpdates.gc = (cProfile.gc || 0) - bet;
-                          tUpdates.gc = (tProfile.gc || 0) + bet;
+                          cUpdates.gc = (cProfile.gc ?? 1000) - bet;
+                          tUpdates.gc = (tProfile.gc ?? 1000) + bet;
                           tUpdates.win_streak = tRankNow === 0 ? tPrevStreak : tPrevStreak + 1;
                           cUpdates.win_streak = 0;
                         }
@@ -1170,13 +1170,15 @@ function App() {
                         const targetSeasonRankNow = rpRankers.findIndex((r) => normalizeName(r.display_name) === normalizeName(targetName));
                         const targetIsTopSeason = targetSeasonRankNow === 0;
                         const topSeasonDefenseSucceeded = !challengerWon && targetIsTopSeason;
-                        const calcRP = (prof: any, won: boolean, oppProf: any) => {
-                            let rpChg = won ? 50 : -20; let nStreak = won ? (prof.win_streak || 0) + 1 : 0;
-                            if (won) { if (nStreak === 2) rpChg = 60; else if (nStreak === 3) rpChg = 75; else if (nStreak >= 4) rpChg = 100; if ((oppProf.rp || 1000) - (prof.rp || 1000) > 300) rpChg += 100; }
-                            const bet = updatedData.bet_gc || 0; const gcChg = (won ? 100 : 30) + (won ? bet : -bet);
-                            return { rp: (prof.rp || 1000) + rpChg, streak: nStreak, gc: (prof.gc || 0) + gcChg };
+                        const calcRP = (prof: any, won: boolean) => {
+                            const currentSp = typeof prof.rp === 'number' ? prof.rp : 0;
+                            const currentGc = typeof prof.gc === 'number' ? prof.gc : 1000;
+                            const spChg = won ? 30 : 10;
+                            const gcChg = won ? 50 : 30;
+                            const nStreak = won ? (prof.win_streak || 0) + 1 : 0;
+                            return { rp: currentSp + spChg, streak: nStreak, gc: currentGc + gcChg };
                         };
-                        const cRes = calcRP(cProfile, challengerWon, tProfile); const tRes = calcRP(tProfile, !challengerWon, cProfile);
+                        const cRes = calcRP(cProfile, challengerWon); const tRes = calcRP(tProfile, !challengerWon);
                         cUpdates.rp = cRes.rp; cUpdates.win_streak = cRes.streak; cUpdates.gc = cRes.gc;
                         tUpdates.rp = tRes.rp; tUpdates.win_streak = tRes.streak; tUpdates.gc = tRes.gc;
                         if (topSeasonDefenseSucceeded) {
@@ -1542,7 +1544,7 @@ function App() {
   );
   const currentUserSeasonInfo =
     currentUserSeasonIndex >= 0 ? { index: currentUserSeasonIndex, ...getRPTierInfo(currentUserSeasonIndex) } : null;
-  const currentUserSeasonPoints = profile?.rp || 1000;
+  const currentUserSeasonPoints = profile?.rp ?? 0;
   const getStreakBountyGC = (streak?: number) => {
     const safe = streak || 0;
     if (safe < 3) return 0;
@@ -1993,7 +1995,7 @@ function App() {
                 <div className="flex flex-col gap-2 bg-black/45 px-3 py-3 rounded-2xl border border-white/10 shadow-inner w-full sm:w-auto min-w-0 sm:min-w-[220px] sm:max-w-[250px]">
                     <div className="bg-black/45 rounded-xl border border-emerald-400/25 px-3 py-2 text-center">
                       <p className="text-[11px] font-black text-emerald-300 tracking-widest">GC (상점)</p>
-                      <p className="text-[1.3rem] sm:text-[1.5rem] lg:text-[1.7rem] font-black text-emerald-300 leading-tight">{profile?.gc || 0}</p>
+                      <p className="text-[1.3rem] sm:text-[1.5rem] lg:text-[1.7rem] font-black text-emerald-300 leading-tight">{profile?.gc ?? 1000}</p>
                     </div>
                     <div className="bg-black/45 rounded-xl border border-fuchsia-400/25 px-3 py-2 text-center">
                       <p className="text-[11px] font-black text-fuchsia-300 tracking-widest">SP (시즌)</p>
@@ -2421,7 +2423,7 @@ function App() {
                                       <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${isCurrentUserDisplayName(r.display_name) ? getAvatarBorderFxForUser(r.display_name) : (i < 3 ? 'border-red-500 shadow-[0_0_10px_red]' : 'border-cyan-200/40')} shrink-0`} alt="p"/>
                                       <span className={`font-bold text-base sm:text-[1.2rem] leading-tight whitespace-normal break-all ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
-                                    <span className="font-black text-fuchsia-400 text-[1.15rem] sm:text-[1.5rem] shrink-0">{r.rp || 1000}</span>
+                                    <span className="font-black text-fuchsia-400 text-[1.15rem] sm:text-[1.5rem] shrink-0">{r.rp ?? 0}</span>
                                   </div>
                                 </div>
                               );
@@ -2451,7 +2453,7 @@ function App() {
                 <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
                   <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm sm:text-base">
                     <span className="px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-bold">
-                      보유 GC: {profile?.gc || 0}
+                      보유 GC: {profile?.gc ?? 1000}
                     </span>
                     <span className="px-3 py-1.5 rounded-full bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 font-bold">
                       닉네임: {SHOP_ITEMS.find((item) => item.id === equippedItems.nameColor)?.name || '기본 화이트'}
@@ -2796,7 +2798,7 @@ function App() {
                                         <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameSize}`}>{r.display_name}</span>
                                       </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
-                                       <span className={`font-black text-fuchsia-400 tracking-tight ${statSize}`}>{r.rp || 1000}</span>
+                                       <span className={`font-black text-fuchsia-400 tracking-tight ${statSize}`}>{r.rp ?? 0}</span>
                                        <span className="text-[10px] font-black text-slate-400 tracking-wider">SP (시즌)</span>
                                      </div>
                                    </div>
@@ -2884,8 +2886,8 @@ function App() {
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">최고 연승</p><p className="text-2xl font-black text-amber-300">{myStats.longestStreak}</p></div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">정규 경기</p><p className="text-2xl font-black text-cyan-300">{myStats.freeMatches}</p></div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">시즌 경기</p><p className="text-2xl font-black text-violet-300">{myStats.randomMatches}</p></div>
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">SP (시즌)</p><p className="text-2xl font-black text-fuchsia-400">{profile?.rp || 1000}</p></div>
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">GC (상점)</p><p className="text-2xl font-black text-emerald-400">{profile?.gc || 0}</p></div>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">SP (시즌)</p><p className="text-2xl font-black text-fuchsia-400">{profile?.rp ?? 0}</p></div>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">GC (상점)</p><p className="text-2xl font-black text-emerald-400">{profile?.gc ?? 1000}</p></div>
                       </div>
                     </div>
                   </div>
@@ -3081,11 +3083,11 @@ function App() {
                         </div>
                         <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center">
                           <p className="text-xs font-bold text-slate-400 mb-2">SP (시즌)</p>
-                          <p className="text-3xl font-black text-fuchsia-400">{selectedPlayer.rp || 1000}</p>
+                          <p className="text-3xl font-black text-fuchsia-400">{selectedPlayer.rp ?? 0}</p>
                         </div>
                         <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center col-span-1">
                           <p className="text-xs font-bold text-slate-400 mb-2">GC (상점)</p>
-                          <p className="text-3xl font-black text-emerald-400">{selectedPlayer.gc || 0}</p>
+                          <p className="text-3xl font-black text-emerald-400">{selectedPlayer.gc ?? 1000}</p>
                         </div>
                         <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center">
                           <p className="text-xs font-bold text-slate-400 mb-2">FAVORITE LEGEND</p>
@@ -3255,4 +3257,5 @@ function App() {
 }
 
 export default App;
+
 
