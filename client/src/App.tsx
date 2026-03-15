@@ -37,6 +37,22 @@ type IncomingChallengeRequest = {
   betGc: number;
 };
 
+type RewardChestReason = 'first_daily_random' | 'every_three_random';
+type PendingRewardChest = {
+  id: string;
+  reason: RewardChestReason;
+  sourceMatchId: string;
+  createdAt: string;
+};
+type RandomRewardState = {
+  version: 1;
+  seeded: boolean;
+  lastFirstDailyDate: string;
+  postFirstMatchCount: number;
+  processedMatchIds: string[];
+  pendingChests: PendingRewardChest[];
+};
+
 const SHOP_ITEMS: ShopItem[] = [
   { id: 'name_default', category: 'nameColor', name: '기본 화이트', description: '클래식 화이트 닉네임', cost: 0, preview: 'A', accentClass: 'text-white' },
   { id: 'name_cyan', category: 'nameColor', name: '네온 시안', description: '시원한 시안 계열 닉네임', cost: 1500, preview: 'A', accentClass: 'text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.6)]' },
@@ -113,6 +129,11 @@ function App() {
     { type: 'success' | 'error' | 'info'; title: string; message: string } | null
   >(null);
   const [incomingChallenge, setIncomingChallenge] = useState<IncomingChallengeRequest | null>(null);
+  const [rewardChestQueue, setRewardChestQueue] = useState<PendingRewardChest[]>([]);
+  const [activeRewardChest, setActiveRewardChest] = useState<PendingRewardChest | null>(null);
+  const [rewardChestOpening, setRewardChestOpening] = useState(false);
+  const [rewardChestClaiming, setRewardChestClaiming] = useState(false);
+  const [rewardChestRewardGc, setRewardChestRewardGc] = useState<number | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonPos, setScrollTopButtonPos] = useState<{ left: number; top: number } | null>(null);
 
@@ -212,17 +233,104 @@ function App() {
     const cosmetic = getCosmeticStateForUser(name);
     return borderFxClassMap[cosmetic.borderFx] || borderFxClassMap.border_default;
   };
-  const getKstDateKey = () => {
+  const getKstDateKeyFromInput = (input?: string | number | Date) => {
+    const baseDate = input ? new Date(input) : new Date();
+    const safeDate = Number.isNaN(baseDate.getTime()) ? new Date() : baseDate;
     const parts = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Seoul',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-    }).formatToParts(new Date());
+    }).formatToParts(safeDate);
     const y = parts.find((p) => p.type === 'year')?.value ?? '0000';
     const m = parts.find((p) => p.type === 'month')?.value ?? '00';
     const d = parts.find((p) => p.type === 'day')?.value ?? '00';
     return `${y}-${m}-${d}`;
+  };
+  const getKstDateKey = () => getKstDateKeyFromInput();
+  const getRandomRewardStorageKey = (userId: string) => `gt_random_reward_v1_${userId}`;
+  const buildDefaultRandomRewardState = (): RandomRewardState => ({
+    version: 1,
+    seeded: false,
+    lastFirstDailyDate: '',
+    postFirstMatchCount: 0,
+    processedMatchIds: [],
+    pendingChests: [],
+  });
+  const getMatchStableId = (match: any) => {
+    if (match?.id) return String(match.id);
+    const stamp = String(match?.created_at || '');
+    const left = String(match?.left_player_name || match?.left_player || '');
+    const right = String(match?.right_player_name || match?.right_player || '');
+    const score = `${match?.score_left ?? '-'}:${match?.score_right ?? '-'}`;
+    return `${stamp}|${left}|${right}|${score}`;
+  };
+  const readRandomRewardState = (userId?: string | null): RandomRewardState => {
+    if (!userId) return buildDefaultRandomRewardState();
+    try {
+      const raw = localStorage.getItem(getRandomRewardStorageKey(userId));
+      if (!raw) return buildDefaultRandomRewardState();
+      const parsed = JSON.parse(raw) as Partial<RandomRewardState>;
+      return {
+        version: 1,
+        seeded: Boolean(parsed?.seeded),
+        lastFirstDailyDate: typeof parsed?.lastFirstDailyDate === 'string' ? parsed.lastFirstDailyDate : '',
+        postFirstMatchCount: Number.isFinite(parsed?.postFirstMatchCount)
+          ? Math.max(0, Number(parsed?.postFirstMatchCount) % 3)
+          : 0,
+        processedMatchIds: Array.isArray(parsed?.processedMatchIds)
+          ? parsed.processedMatchIds.map((id) => String(id)).filter(Boolean).slice(-1200)
+          : [],
+        pendingChests: Array.isArray(parsed?.pendingChests)
+          ? parsed.pendingChests
+              .map((chest: any) => ({
+                id: String(chest?.id || ''),
+                reason: chest?.reason === 'every_three_random' ? 'every_three_random' : 'first_daily_random',
+                sourceMatchId: String(chest?.sourceMatchId || ''),
+                createdAt: String(chest?.createdAt || ''),
+              }))
+              .filter((chest) => chest.id && chest.sourceMatchId)
+              .slice(-32)
+          : [],
+      };
+    } catch {
+      return buildDefaultRandomRewardState();
+    }
+  };
+  const writeRandomRewardState = (userId: string, nextState: RandomRewardState) => {
+    try {
+      const safeState: RandomRewardState = {
+        version: 1,
+        seeded: Boolean(nextState.seeded),
+        lastFirstDailyDate: nextState.lastFirstDailyDate || '',
+        postFirstMatchCount: Math.max(0, Number(nextState.postFirstMatchCount || 0) % 3),
+        processedMatchIds: [...new Set((nextState.processedMatchIds || []).map((id) => String(id)).filter(Boolean))].slice(-1200),
+        pendingChests: (nextState.pendingChests || []).slice(-32),
+      };
+      localStorage.setItem(getRandomRewardStorageKey(userId), JSON.stringify(safeState));
+    } catch {
+      // ignore localStorage write failures
+    }
+  };
+  const getRewardChestReasonLabel = (reason: RewardChestReason) =>
+    reason === 'first_daily_random' ? '오늘 랜덤 대전 첫 경기 보상' : '랜덤 대전 3판 달성 보상';
+  const drawRandomChestGcReward = () => {
+    const weighted: Array<{ gc: number; weight: number }> = [
+      { gc: 50, weight: 40 },
+      { gc: 75, weight: 24 },
+      { gc: 100, weight: 16 },
+      { gc: 150, weight: 10 },
+      { gc: 200, weight: 6 },
+      { gc: 300, weight: 3 },
+      { gc: 500, weight: 1 },
+    ];
+    const totalWeight = weighted.reduce((sum, item) => sum + item.weight, 0);
+    let roll = Math.random() * totalWeight;
+    for (const item of weighted) {
+      roll -= item.weight;
+      if (roll <= 0) return item.gc;
+    }
+    return 50;
   };
 
   const isOwnedItem = (itemId: string) => defaultOwnedIds.includes(itemId) || ownedItemIds.includes(itemId);
@@ -511,6 +619,96 @@ function App() {
     if (!user?.id || !profile) return;
     void grantDailyLoginRewardIfNeeded();
   }, [user?.id, profile]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setRewardChestQueue([]);
+      setActiveRewardChest(null);
+      setRewardChestOpening(false);
+      setRewardChestClaiming(false);
+      setRewardChestRewardGc(null);
+      return;
+    }
+    const state = readRandomRewardState(user.id);
+    setRewardChestQueue(state.pendingChests);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (activeRewardChest || rewardChestQueue.length === 0) return;
+    setActiveRewardChest(rewardChestQueue[0]);
+    setRewardChestOpening(false);
+    setRewardChestClaiming(false);
+    setRewardChestRewardGc(null);
+  }, [rewardChestQueue, activeRewardChest]);
+
+  useEffect(() => {
+    if (!user?.id || !currentUserName || !Array.isArray(logs)) return;
+    const myName = (currentUserName || '').trim().toLowerCase();
+    if (!myName) return;
+
+    const randomMatchesForMe = [...logs]
+      .filter((m) => {
+        const mode = String(m?.match_type || '').toLowerCase();
+        if (!mode.includes('random')) return false;
+        const left = String(m?.left_player_name || m?.left_player || '').trim().toLowerCase();
+        const right = String(m?.right_player_name || m?.right_player || '').trim().toLowerCase();
+        return left === myName || right === myName;
+      })
+      .sort((a, b) => new Date(a?.created_at || 0).getTime() - new Date(b?.created_at || 0).getTime());
+
+    const state = readRandomRewardState(user.id);
+    if (!state.seeded) {
+      state.seeded = true;
+      state.processedMatchIds = randomMatchesForMe.map((m) => getMatchStableId(m)).filter(Boolean).slice(-1200);
+      writeRandomRewardState(user.id, state);
+      setRewardChestQueue(state.pendingChests);
+      return;
+    }
+
+    const processed = new Set(state.processedMatchIds || []);
+    let touched = false;
+    let addedChestCount = 0;
+
+    randomMatchesForMe.forEach((match) => {
+      const stableId = getMatchStableId(match);
+      if (!stableId || processed.has(stableId)) return;
+      processed.add(stableId);
+      touched = true;
+
+      const matchKstDate = getKstDateKeyFromInput(match?.created_at);
+      if (state.lastFirstDailyDate !== matchKstDate) {
+        state.lastFirstDailyDate = matchKstDate;
+        state.pendingChests.push({
+          id: `${stableId}:daily`,
+          reason: 'first_daily_random',
+          sourceMatchId: stableId,
+          createdAt: new Date().toISOString(),
+        });
+        addedChestCount += 1;
+      } else {
+        state.postFirstMatchCount = Math.max(0, Number(state.postFirstMatchCount || 0)) + 1;
+        if (state.postFirstMatchCount >= 3) {
+          state.postFirstMatchCount = 0;
+          state.pendingChests.push({
+            id: `${stableId}:cycle`,
+            reason: 'every_three_random',
+            sourceMatchId: stableId,
+            createdAt: new Date().toISOString(),
+          });
+          addedChestCount += 1;
+        }
+      }
+    });
+
+    if (!touched) return;
+    state.processedMatchIds = Array.from(processed).slice(-1200);
+    state.pendingChests = state.pendingChests.slice(-32);
+    writeRandomRewardState(user.id, state);
+    if (addedChestCount > 0) {
+      playSFX('success');
+    }
+    setRewardChestQueue(state.pendingChests);
+  }, [logs, user?.id, currentUserName]);
 
   useEffect(() => {
     if (!cosmeticsStorageKey) {
@@ -1007,6 +1205,51 @@ function App() {
     } finally {
       dailyRewardCheckingRef.current = false;
     }
+  };
+
+  const removeConsumedRewardChest = (chestId: string) => {
+    if (!user?.id) return;
+    const state = readRandomRewardState(user.id);
+    state.pendingChests = (state.pendingChests || []).filter((c) => c.id !== chestId);
+    writeRandomRewardState(user.id, state);
+    setRewardChestQueue(state.pendingChests);
+  };
+
+  const handleOpenRewardChest = async () => {
+    if (!user?.id || !activeRewardChest || rewardChestClaiming || rewardChestRewardGc !== null) return;
+    playSFX('click');
+    setRewardChestClaiming(true);
+    setRewardChestOpening(true);
+    await new Promise((resolve) => setTimeout(resolve, 760));
+
+    const rewardGc = drawRandomChestGcReward();
+    const { data: freshProfile } = await supabase.from('profiles').select('gc').eq('id', user.id).single();
+    const currentGc = typeof freshProfile?.gc === 'number' ? freshProfile.gc : (typeof profile?.gc === 'number' ? profile.gc : 1000);
+    const nextGc = currentGc + rewardGc;
+    const { error } = await supabase.from('profiles').update({ gc: nextGc }).eq('id', user.id);
+    if (error) {
+      playSFX('error');
+      setRewardChestOpening(false);
+      setRewardChestClaiming(false);
+      showStatusPopup('error', '보상 상자 오류', `보상 지급 중 문제가 발생했습니다.\n${error.message}`);
+      return;
+    }
+
+    setProfile((prev: any) => (prev ? { ...prev, gc: nextGc } : prev));
+    setRankers((prev) => prev.map((r) => (r.id === user.id ? { ...r, gc: nextGc } : r)));
+    removeConsumedRewardChest(activeRewardChest.id);
+    setRewardChestRewardGc(rewardGc);
+    setRewardChestOpening(false);
+    setRewardChestClaiming(false);
+    playSFX('success');
+  };
+
+  const handleRewardChestClose = () => {
+    if (rewardChestClaiming) return;
+    playSFX('click');
+    setActiveRewardChest(null);
+    setRewardChestRewardGc(null);
+    setRewardChestOpening(false);
   };
 
   const equipCosmeticItem = (item: ShopItem) => {
@@ -2157,6 +2400,45 @@ function App() {
         0% { opacity: 0; transform: translate(-50%, -50%) scale(0.2); }
         20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         100% { opacity: 0; transform: translate(-50%, -50%) scale(1.45); }
+      }
+      @keyframes chest-float {
+        0%, 100% { transform: translateY(0) scale(1); }
+        50% { transform: translateY(-8px) scale(1.02); }
+      }
+      @keyframes chest-open-burst {
+        0% { transform: scale(1); filter: brightness(1); }
+        30% { transform: scale(1.08); filter: brightness(1.25); }
+        55% { transform: scale(0.96); filter: brightness(1.5); }
+        100% { transform: scale(1); filter: brightness(1.05); }
+      }
+      @keyframes chest-spark {
+        0% { opacity: 0; transform: translateY(6px) scale(0.6); }
+        30% { opacity: 1; transform: translateY(-4px) scale(1); }
+        100% { opacity: 0; transform: translateY(-22px) scale(1.2); }
+      }
+      @keyframes reward-pop {
+        0% { opacity: 0; transform: translateY(10px) scale(0.86); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      .reward-chest-shell {
+        position: relative;
+        overflow: hidden;
+      }
+      .reward-chest-shell::before,
+      .reward-chest-shell::after {
+        content: '';
+        position: absolute;
+        inset: -20%;
+        pointer-events: none;
+        opacity: 0;
+        background: radial-gradient(circle, rgba(250,204,21,0.35) 0%, rgba(34,211,238,0.12) 38%, transparent 70%);
+      }
+      .reward-chest-shell.is-opening::before,
+      .reward-chest-shell.is-opening::after {
+        animation: chest-spark 680ms ease-out;
+      }
+      .reward-chest-shell.is-opening::after {
+        animation-delay: 120ms;
       }
     `}</style>
   );
@@ -3449,6 +3731,58 @@ function App() {
               >
                 거절
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeRewardChest && (
+        <div className="fixed inset-0 z-[285] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div
+            className={`w-full max-w-xl rounded-[2rem] border border-amber-300/65 bg-[#070b16] p-6 sm:p-8 shadow-2xl relative reward-chest-shell ${rewardChestOpening ? 'is-opening' : ''}`}
+            style={{ animation: 'popup-in 260ms ease-out' }}
+          >
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_25%_20%,rgba(250,204,21,0.14),transparent_42%),radial-gradient(circle_at_78%_84%,rgba(34,211,238,0.12),transparent_48%)]" />
+            <div className="relative z-10 text-center">
+              <h4 className="text-2xl sm:text-3xl font-black text-amber-300 tracking-wide">보상 상자 도착!</h4>
+              <p className="mt-3 text-slate-200 text-sm sm:text-base font-bold">
+                {getRewardChestReasonLabel(activeRewardChest.reason)}
+              </p>
+              <p className="mt-1 text-slate-400 text-xs sm:text-sm">상자를 눌러서 랜덤 GC 보상을 획득하세요</p>
+
+              <button
+                onMouseEnter={() => playSFX('hover')}
+                onClick={handleOpenRewardChest}
+                disabled={rewardChestClaiming || rewardChestRewardGc !== null}
+                className="mx-auto mt-7 hvr-grow block w-[190px] sm:w-[220px] rounded-[1.4rem] border border-amber-300/70 bg-[linear-gradient(180deg,rgba(250,204,21,0.28),rgba(15,23,42,0.9))] px-5 py-5 shadow-[0_0_26px_rgba(250,204,21,0.42)] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                style={{
+                  animation:
+                    rewardChestOpening
+                      ? 'chest-open-burst 680ms ease-out'
+                      : 'chest-float 2.2s ease-in-out infinite',
+                }}
+              >
+                <span className="block text-4xl sm:text-5xl leading-none">🎁</span>
+                <span className="mt-2 block text-amber-200 font-black text-sm sm:text-base tracking-wide">
+                  {rewardChestOpening ? '개봉 중...' : rewardChestRewardGc !== null ? '개봉 완료' : '터치하여 오픈'}
+                </span>
+              </button>
+
+              {rewardChestRewardGc !== null && (
+                <div className="mt-6" style={{ animation: 'reward-pop 300ms ease-out' }}>
+                  <p className="text-slate-300 text-sm sm:text-base font-bold">축하합니다! 획득 보상</p>
+                  <p className="mt-1 text-4xl sm:text-5xl font-black text-emerald-300 drop-shadow-[0_0_16px_rgba(52,211,153,0.7)]">
+                    +{rewardChestRewardGc} GC
+                  </p>
+                  <button
+                    onMouseEnter={() => playSFX('hover')}
+                    onClick={handleRewardChestClose}
+                    className="hvr-grow hvr-glow mt-6 px-6 py-3 rounded-xl border border-cyan-400/60 text-cyan-300 font-black bg-black/45 hover:bg-cyan-500/20 cursor-pointer"
+                  >
+                    확인
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
