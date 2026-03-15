@@ -219,6 +219,8 @@ function App() {
   const matchPhaseRef = useRef(matchPhase);
   const waitingForScoreRef = useRef(waitingForScore);
   const incomingChallengeRef = useRef(incomingChallenge);
+  const entryLegendRef = useRef(entryLegend);
+  const entryWeaponsRef = useRef(entryWeapons);
   const recentLogsBoardRef = useRef<HTMLDivElement | null>(null);
   const rankingBoardRef = useRef<HTMLDivElement | null>(null);
   const cosmeticSyncWarnedRef = useRef(false);
@@ -253,6 +255,8 @@ function App() {
   useEffect(() => { matchPhaseRef.current = matchPhase; }, [matchPhase]);
   useEffect(() => { waitingForScoreRef.current = waitingForScore; }, [waitingForScore]);
   useEffect(() => { incomingChallengeRef.current = incomingChallenge; }, [incomingChallenge]);
+  useEffect(() => { entryLegendRef.current = entryLegend; }, [entryLegend]);
+  useEffect(() => { entryWeaponsRef.current = entryWeapons; }, [entryWeapons]);
   useEffect(() => {
     setShowMoreRegularRanks(false);
   }, [mainRankTab, mainSearchQuery]);
@@ -366,6 +370,15 @@ function App() {
           localWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
           setEntryLegend(localLegend); setEntryWeapons(localWeapons);
       } else {
+          // 픽 단계에서 아직 Ready를 누르지 않았다면, 상대 업데이트로 내 로컬 선택값이 지워지지 않게 보존합니다.
+          if (matchPhaseRef.current === 'picking' && !amIReady) {
+            const draftLegend = entryLegendRef.current || '';
+            const draftWeapons = entryWeaponsRef.current || ['', ''];
+            const dbLegendEmpty = !localLegend || localLegend === '';
+            const dbWeaponsEmpty = !Array.isArray(localWeapons) || !localWeapons[0] || !localWeapons[1];
+            if (dbLegendEmpty && draftLegend) localLegend = draftLegend;
+            if (dbWeaponsEmpty && (draftWeapons[0] || draftWeapons[1])) localWeapons = draftWeapons;
+          }
           setEntryLegend(localLegend); setEntryWeapons(localWeapons);
       }
 
@@ -733,7 +746,7 @@ function App() {
       const hasPersistedRankIndex = base.length > 0 && base.every((r) => typeof r.rank_index === 'number');
       const regularSorted = hasPersistedRankIndex
         ? [...base].sort((a, b) => (a.rank_index ?? Number.MAX_SAFE_INTEGER) - (b.rank_index ?? Number.MAX_SAFE_INTEGER))
-        : [...base].sort((a, b) => (b.regular_rp || 1000) - (a.regular_rp || 1000));
+        : [...base];
       regularSorted.forEach((r, i) => {
         (r as any).rankIndex = i;
         if (typeof (r as any).rank_index !== 'number') {
@@ -889,8 +902,23 @@ function App() {
     const baseMode = existing.mode.replace('_accepted', '').trim() as 'free' | 'random';
     if (baseMode === 'free' && !canAcceptIncomingByRegularRule(existing.challenger_name)) {
       playSFX('error');
-      showStatusPopup('error', '수락 불가', '정규 랭킹은 서로 최대 5단계 차이 내에서만 매치할 수 있습니다.');
+      showStatusPopup('error', '수락 불가', '정규 랭킹은 나보다 최대 5단계 낮은 도전자까지만 수락할 수 있습니다.');
       return;
+    }
+    if (baseMode === 'free') {
+      const remainMs = getRegularCooldownRemainingMs(existing.challenger_name);
+      if (remainMs > 0) {
+        playSFX('error');
+        showStatusPopup('error', '재도전 쿨타임', `같은 상대와의 정규 랭크전은 12시간 쿨타임이 있습니다.\n남은 시간: ${formatCooldownLabel(remainMs)}`);
+        await supabase.from('challenges').delete().eq('id', existing.id);
+        setIncomingChallenge(null);
+        setMatchPhase('idle');
+        setActiveMatch(null);
+        setEntryOpponent('');
+        setEntryLegend('');
+        setEntryWeapons(['', '']);
+        return;
+      }
     }
 
     const challengerName = existing.challenger_name?.trim();
@@ -979,7 +1007,14 @@ function App() {
     if (existing) {
       if (entryMode === 'free' && !canAcceptIncomingByRegularRule(entryOpponent.trim())) {
         playSFX('error');
-        return alert("정규 랭킹 수락은 서로 최대 5단계 차이 내에서만 가능합니다.");
+        return alert("정규 랭킹 수락은 나보다 최대 5단계 낮은 도전자까지만 가능합니다.");
+      }
+      if (entryMode === 'free') {
+        const remainMs = getRegularCooldownRemainingMs(entryOpponent.trim());
+        if (remainMs > 0) {
+          playSFX('error');
+          return alert(`같은 상대와의 정규 랭크전은 12시간 쿨타임이 있습니다. (남은 시간: ${formatCooldownLabel(remainMs)})`);
+        }
       }
       playSFX('click');
       const dbMode = existing.mode.replace('_accepted', '').trim();
@@ -1001,7 +1036,14 @@ function App() {
     } else {
       if (entryMode === 'free' && !canChallengeTargetByRegularRule(entryOpponent.trim())) {
         playSFX('error');
-        return alert("정규 랭킹은 자신보다 최대 5단계 높은 상대에게만 도전 신청할 수 있습니다.");
+        return alert("정규 랭킹은 하위 티어(루키~골드)는 상위 누구에게나, 플래티넘 이상은 최대 3단계 위까지만 도전할 수 있습니다.");
+      }
+      if (entryMode === 'free') {
+        const remainMs = getRegularCooldownRemainingMs(entryOpponent.trim());
+        if (remainMs > 0) {
+          playSFX('error');
+          return alert(`같은 상대와의 정규 랭크전은 12시간 쿨타임이 있습니다. (남은 시간: ${formatCooldownLabel(remainMs)})`);
+        }
       }
       playSFX('click');
       const { data: newChall } = await supabase.from('challenges').insert([{ challenger_name: currentUserName.trim(), target_name: entryOpponent.trim(), mode: entryMode, bet_gc: betAmount }]).select().single();
@@ -1085,21 +1127,23 @@ function App() {
                         const tRegular = typeof tProfile.regular_rp === 'number' ? tProfile.regular_rp : calculateRegularPoints(tProfile.wins || 0, tProfile.losses || 0);
                         const targetIsTopRegular = tRankNow === 0;
                         const topRegularDefenseSucceeded = !challengerWon && targetIsTopRegular;
+                        const cPrevStreak = cProfile.win_streak || 0;
+                        const tPrevStreak = tProfile.win_streak || 0;
 
                         if (challengerWon) {
                           cUpdates.defense_stack = 0;
                           tUpdates.defense_stack = 0;
                           cUpdates.gc = (cProfile.gc || 0) + bet;
                           tUpdates.gc = (tProfile.gc || 0) - bet;
+                          cUpdates.win_streak = cRankNow === 0 ? cPrevStreak : cPrevStreak + 1;
+                          tUpdates.win_streak = 0;
                         } else {
                           tUpdates.defense_stack = topRegularDefenseSucceeded ? (tProfile.defense_stack || 0) + 1 : 0;
                           cUpdates.defense_stack = 0;
                           cUpdates.gc = (cProfile.gc || 0) - bet;
                           tUpdates.gc = (tProfile.gc || 0) + bet;
-                        }
-                        if (topRegularDefenseSucceeded) {
-                          // 1위 방어전 성공 시 연승은 더 이상 증가하지 않고 유지됩니다.
-                          tUpdates.win_streak = tProfile.win_streak || 0;
+                          tUpdates.win_streak = tRankNow === 0 ? tPrevStreak : tPrevStreak + 1;
+                          cUpdates.win_streak = 0;
                         }
 
                         const winnerRank = challengerWon ? cRankNow : tRankNow;
@@ -1587,13 +1631,46 @@ function App() {
     if (!key) return 0;
     return (mode === 'regular' ? regularRankMoves[key] : seasonRankMoves[key]) || 0;
   };
+  const REGULAR_REMATCH_COOLDOWN_MS = 12 * 60 * 60 * 1000;
+  const getRegularCooldownRemainingMs = (targetName?: string | null) => {
+    if (!currentUserName || !targetName) return 0;
+    const me = normalizeName(currentUserName);
+    const target = normalizeName(targetName);
+    if (!me || !target || me === target) return 0;
+    let latestMatchTs = 0;
+    for (const m of logs) {
+      const type = String(m?.match_type || '').toLowerCase();
+      if (!type.includes('free')) continue;
+      const left = normalizeName((m?.left_player_name || m?.left_player || '') as string);
+      const right = normalizeName((m?.right_player_name || m?.right_player || '') as string);
+      const isPair = (left === me && right === target) || (left === target && right === me);
+      if (!isPair) continue;
+      const ts = new Date(m?.created_at || 0).getTime();
+      if (Number.isFinite(ts) && ts > latestMatchTs) latestMatchTs = ts;
+    }
+    if (!latestMatchTs) return 0;
+    const remain = latestMatchTs + REGULAR_REMATCH_COOLDOWN_MS - Date.now();
+    return remain > 0 ? remain : 0;
+  };
+  const formatCooldownLabel = (ms: number) => {
+    const totalMinutes = Math.ceil(ms / 60000);
+    const hh = Math.floor(totalMinutes / 60);
+    const mm = totalMinutes % 60;
+    return `${hh}시간 ${mm}분`;
+  };
+  const isRegularUnlimitedTier = (rankIndex: number) => {
+    const tier = getGrandRankInfo(rankIndex)?.title || '';
+    return tier === '루키' || tier === '브론즈' || tier === '실버' || tier === '골드';
+  };
   const canChallengeTargetByRegularRule = (targetName?: string | null) => {
     if (!targetName || !currentUserName) return false;
     if (targetName.trim() === currentUserName.trim()) return false;
     const myRank = getRegularRankIndexByName(currentUserName);
     const targetRank = getRegularRankIndexByName(targetName);
     if (myRank === null || targetRank === null) return false;
-    return targetRank < myRank && myRank - targetRank <= 5;
+    if (targetRank >= myRank) return false;
+    if (isRegularUnlimitedTier(myRank)) return true;
+    return myRank - targetRank <= 3;
   };
   const canAcceptIncomingByRegularRule = (challengerName?: string | null) => {
     if (!challengerName || !currentUserName) return false;
@@ -1601,8 +1678,32 @@ function App() {
     const myRank = getRegularRankIndexByName(currentUserName);
     const challengerRank = getRegularRankIndexByName(challengerName);
     if (myRank === null || challengerRank === null) return false;
-    // 수락 단계에서는 "나보다 최대 5단계 낮은 도전자"도 허용합니다.
-    return Math.abs(myRank - challengerRank) <= 5;
+    // 도전 받은 사람은 자기보다 최대 5단계 낮은 도전자까지 수락 가능합니다.
+    return challengerRank > myRank && challengerRank - myRank <= 5;
+  };
+  const getRegularChallengeUiState = (targetName?: string | null) => {
+    if (!targetName || !currentUserName) {
+      return { label: '도전불가', hint: '', clickable: false, className: 'bg-slate-800/50 border border-slate-700 text-slate-500' };
+    }
+    if (targetName.trim() === currentUserName.trim()) {
+      return { label: '나', hint: '', clickable: false, className: 'bg-blue-600/20 border border-blue-500/50 text-blue-400' };
+    }
+    const remainMs = getRegularCooldownRemainingMs(targetName);
+    if (remainMs > 0) {
+      return {
+        label: '쿨타임',
+        hint: formatCooldownLabel(remainMs),
+        clickable: false,
+        className: 'bg-amber-500/18 border border-amber-400/45 text-amber-300',
+      };
+    }
+    if (matchPhase !== 'idle') {
+      return { label: '도전불가', hint: '', clickable: false, className: 'bg-slate-800/50 border border-slate-700 text-slate-500' };
+    }
+    if (canChallengeTargetByRegularRule(targetName)) {
+      return { label: '도전가능', hint: '', clickable: true, className: 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-500 hover:text-black' };
+    }
+    return { label: '도전불가', hint: '', clickable: false, className: 'bg-slate-800/50 border border-slate-700 text-slate-500' };
   };
 
   const onlineRankers = rankers.filter((r) => {
@@ -1935,7 +2036,7 @@ function App() {
                         {onlineRankers.length > 0 ? onlineRankers.map((ou, i) => {
                           const rankInfo = getGrandRankInfo(ou.rankIndex);
                           const seasonInfo = getSeasonRankInfoByName(ou.display_name);
-                          const challengeAllowed = canChallengeTargetByRegularRule(ou.display_name);
+                          const challengeUi = getRegularChallengeUiState(ou.display_name);
                           return (
                             <div key={i} onMouseEnter={() => playSFX('hover')} className="bg-black/60 border border-white/10 p-3 sm:p-4 rounded-[1.2rem] sm:rounded-[1.5rem] flex items-center justify-between hover:border-cyan-400/50 transition-all group gap-2">
                                <div className="flex items-center gap-2 sm:gap-4 cursor-pointer group/profile flex-1 min-w-0 mr-1 sm:mr-2" onClick={() => handleProfileClick(ou.display_name)}>
@@ -1958,19 +2059,18 @@ function App() {
                                 ) : (
                                    <button 
                                      onMouseEnter={() => playSFX('hover')} 
-                                     onClick={() => { playSFX('click'); handleTargetLock(ou.display_name); }} 
-                                     disabled={matchPhase !== 'idle' || !challengeAllowed} 
-                                      className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all shrink-0 cursor-pointer ${
-                                        matchPhase !== 'idle'
-                                          ? 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'
-                                          : challengeAllowed
-                                            ? 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-500 hover:text-black'
-                                            : 'bg-slate-800/50 border border-slate-700 text-slate-500 cursor-not-allowed'
-                                      }`}
-                                   >
-                                     {matchPhase !== 'idle' ? '대전 중' : challengeAllowed ? '도전가능' : '도전불가'}
+                                     onClick={() => {
+                                       if (!challengeUi.clickable) return;
+                                       playSFX('click');
+                                       handleTargetLock(ou.display_name);
+                                     }} 
+                                     title={challengeUi.hint ? `남은 시간: ${challengeUi.hint}` : undefined}
+                                     disabled={!challengeUi.clickable}
+                                      className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all shrink-0 cursor-pointer ${challengeUi.className}`}
+                                    >
+                                     {challengeUi.label}
                                    </button>
-                                )}
+                                 )}
                             </div>
                           )
                        }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">{onlineBoardEmptyText}</div>)}
@@ -2238,6 +2338,7 @@ function App() {
                           {miniRankMode === 'free' ? (
                             rankers.length > 0 ? rankers.filter(r => matchesSearch(r.display_name, miniSearchQuery)).map((r) => {
                               const grandRank = getGrandRankInfo(r.rankIndex); if (!grandRank) return null;
+                              const challengeUi = getRegularChallengeUiState(r.display_name);
                               return (
                                 <div ref={setRankCardRef('mini', 'free', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${rankCardFxByTier(r.rankIndex)}`}>
                                   <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)]">
@@ -2248,14 +2349,14 @@ function App() {
                                       {grandRank.icon}
                                     </div>
                                   </div>
-                                  {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 2) && (
+                                  {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 3) && (
                                     <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex flex-col items-end gap-1.5 z-20">
                                       {(r.defense_stack || 0) > 0 && (
                                         <span className="font-black text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full bg-red-500/18 text-red-200 border border-red-400/45 shadow-[0_0_10px_rgba(248,113,113,0.35)]">
                                           🛡 방어전 {r.defense_stack}
                                         </span>
                                       )}
-                                      {(r.win_streak || 0) >= 2 && (
+                                      {(r.win_streak || 0) >= 3 && (
                                         <span className="font-black text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/16 text-emerald-200 border border-emerald-400/45 shadow-[0_0_10px_rgba(52,211,153,0.35)]">
                                           🔥 {r.win_streak}연승{getStreakBountyGC(r.win_streak || 0) > 0 ? ` · ${getStreakBountyGC(r.win_streak || 0)}GC` : ''}
                                         </span>
@@ -2268,6 +2369,21 @@ function App() {
                                       <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${isCurrentUserDisplayName(r.display_name) ? getAvatarBorderFxForUser(r.display_name) : (r.rankIndex === 0 ? 'border-red-400 shadow-[0_0_16px_rgba(248,113,113,0.65)]' : 'border-cyan-200/40')} shrink-0`} alt="p"/>
                                       <span className={`font-bold text-base sm:text-[1.2rem] leading-tight whitespace-normal break-all ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
+                                    <button
+                                      onMouseEnter={() => playSFX('hover')}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!challengeUi.clickable) return;
+                                        playSFX('click');
+                                        setActiveMenu('home');
+                                        handleTargetLock(r.display_name);
+                                      }}
+                                      title={challengeUi.hint ? `남은 시간: ${challengeUi.hint}` : undefined}
+                                      disabled={!challengeUi.clickable}
+                                      className={`shrink-0 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-black transition-all cursor-pointer ${challengeUi.className}`}
+                                    >
+                                      {challengeUi.hint ? `${challengeUi.label}` : challengeUi.label}
+                                    </button>
                                   </div>
                                 </div>
                               );
@@ -2285,14 +2401,14 @@ function App() {
                                       {tier.icon}
                                     </div>
                                   </div>
-                                  {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 2) && (
+                                  {((r.defense_stack || 0) > 0 || (r.win_streak || 0) >= 3) && (
                                     <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex flex-col items-end gap-1.5 z-20">
                                       {(r.defense_stack || 0) > 0 && (
                                         <span className="font-black text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full bg-red-500/18 text-red-200 border border-red-400/45 shadow-[0_0_10px_rgba(248,113,113,0.35)]">
                                           🛡 방어전 {r.defense_stack}
                                         </span>
                                       )}
-                                      {(r.win_streak || 0) >= 2 && (
+                                      {(r.win_streak || 0) >= 3 && (
                                         <span className="font-black text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/16 text-emerald-200 border border-emerald-400/45 shadow-[0_0_10px_rgba(52,211,153,0.35)]">
                                           🔥 {r.win_streak}연승{getStreakBountyGC(r.win_streak || 0) > 0 ? ` · ${getStreakBountyGC(r.win_streak || 0)}GC` : ''}
                                         </span>
@@ -2482,6 +2598,7 @@ function App() {
                         const isTopRegular = r.rankIndex === 0;
                         const throneDefenseStack = r.defense_stack || 0;
                         const throneBounty = getDefenseBonusGC(throneDefenseStack);
+                        const challengeUi = getRegularChallengeUiState(r.display_name);
 
                         const cardClass =
                           tone === 'hero'
@@ -2538,10 +2655,25 @@ function App() {
                                <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${r.rankIndex === 0 ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.65)]' : 'border-white/20'} shrink-0`} alt="p"/>
                                <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameClass}`}>{r.display_name}</span>
                              </div>
-                           </div>
-                         </div>
-                       );
-                     };
+                             <button
+                               onMouseEnter={() => playSFX('hover')}
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (!challengeUi.clickable) return;
+                                 playSFX('click');
+                                 setActiveMenu('home');
+                                 handleTargetLock(r.display_name);
+                               }}
+                               title={challengeUi.hint ? `남은 시간: ${challengeUi.hint}` : undefined}
+                               disabled={!challengeUi.clickable}
+                               className={`shrink-0 px-4 py-2 rounded-xl text-sm sm:text-base font-black transition-all cursor-pointer ${challengeUi.className}`}
+                             >
+                               {challengeUi.label}
+                             </button>
+                            </div>
+                          </div>
+                        );
+                      };
 
                      if (regularFiltered.length === 0) {
                        return <div className="col-span-12 flex items-center justify-center h-[300px] opacity-50 text-2xl font-bold text-cyan-400 tracking-widest">해당하는 랭커가 없습니다.</div>;
@@ -3062,17 +3194,17 @@ function App() {
             <div className="mt-6 grid grid-cols-2 gap-3">
               <button
                 onMouseEnter={() => playSFX('hover')}
-                onClick={handleDeclineIncomingChallenge}
-                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-rose-400/50 text-rose-300 font-bold bg-black/50 hover:bg-rose-500/20 cursor-pointer"
-              >
-                거절
-              </button>
-              <button
-                onMouseEnter={() => playSFX('hover')}
                 onClick={handleAcceptIncomingChallenge}
                 className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-cyan-400/50 text-cyan-300 font-bold bg-black/50 hover:bg-cyan-500/20 cursor-pointer"
               >
                 수락
+              </button>
+              <button
+                onMouseEnter={() => playSFX('hover')}
+                onClick={handleDeclineIncomingChallenge}
+                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-rose-400/50 text-rose-300 font-bold bg-black/50 hover:bg-rose-500/20 cursor-pointer"
+              >
+                거절
               </button>
             </div>
           </div>
