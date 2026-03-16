@@ -135,7 +135,6 @@ function App() {
   const [ingamePlatformDraft, setIngamePlatformDraft] = useState<IngamePlatform>('steam');
   const [savingIngameProfile, setSavingIngameProfile] = useState(false);
   const [showIngameSetupModal, setShowIngameSetupModal] = useState(false);
-  const [ingameCopyStatus, setIngameCopyStatus] = useState(false);
   const [ownedItemIds, setOwnedItemIds] = useState<string[]>(['name_default', 'style_default', 'border_default']);
   const [equippedItems, setEquippedItems] = useState<{ nameColor: string; nameStyle: string; borderFx: string }>({
     nameColor: 'name_default',
@@ -340,13 +339,20 @@ function App() {
       row?.game_nickname ||
       row?.battle_nickname ||
       row?.in_game_nickname ||
+      row?.steam_friend_code ||
+      row?.steam_code ||
+      row?.steam_id ||
+      row?.ea_nickname ||
+      row?.ea_id ||
+      row?.origin_id ||
       ''
     ).trim();
     const dbPlatform = normalizeIngamePlatform(
       row?.ingame_platform ||
       row?.game_platform ||
       row?.battle_platform ||
-      row?.in_game_platform
+      row?.in_game_platform ||
+      (row?.ea_nickname || row?.ea_id || row?.origin_id ? 'ea' : 'steam')
     );
     if (dbNickname) return { nickname: dbNickname, platform: dbPlatform };
     const map = readIngameProfileMap();
@@ -580,7 +586,6 @@ function App() {
   const suppressNextDeletePopupChallengeIdRef = useRef<string | null>(null);
   const statusPopupTimerRef = useRef<number | null>(null);
   const statusPopupFadeTimerRef = useRef<number | null>(null);
-  const ingameCopyTimerRef = useRef<number | null>(null);
   const autoScoreSubmitKeyRef = useRef('');
   const rankCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
@@ -683,15 +688,6 @@ function App() {
       if (statusPopupFadeTimerRef.current) window.clearTimeout(statusPopupFadeTimerRef.current);
     };
   }, [statusPopup]);
-
-  useEffect(() => {
-    return () => {
-      if (ingameCopyTimerRef.current) {
-        window.clearTimeout(ingameCopyTimerRef.current);
-        ingameCopyTimerRef.current = null;
-      }
-    };
-  }, []);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1205,7 +1201,18 @@ function App() {
                    if (currentPhase === 'scoring') {
                        setActiveMatch(prev => prev ? { ...prev, oppLegend: prev.isChallenger ? updated.t_legend : updated.legend, oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons } : prev);
                    }
-                   if (updated.c_win === null && updated.t_win === null && isWaiting) {
+                   const prevRow: any = payload.old || {};
+                   const hadAnyScoreBefore =
+                     prevRow.c_win !== null ||
+                     prevRow.c_lose !== null ||
+                     prevRow.t_win !== null ||
+                     prevRow.t_lose !== null;
+                   const nowAllScoresNull =
+                     updated.c_win === null &&
+                     updated.c_lose === null &&
+                     updated.t_win === null &&
+                     updated.t_lose === null;
+                   if (nowAllScoresNull && hadAnyScoreBefore && isWaiting) {
                        playSFX('error');
                        showStatusPopup(
                          'error',
@@ -1654,6 +1661,15 @@ function App() {
         { game_nickname: nickname, game_platform: platform },
         { battle_nickname: nickname, battle_platform: platform },
         { in_game_nickname: nickname, in_game_platform: platform },
+        platform === 'steam'
+          ? { steam_friend_code: nickname, ingame_platform: platform }
+          : { ea_nickname: nickname, ingame_platform: platform },
+        platform === 'steam'
+          ? { steam_code: nickname, game_platform: platform }
+          : { ea_id: nickname, game_platform: platform },
+        platform === 'steam'
+          ? { steam_id: nickname, battle_platform: platform }
+          : { origin_id: nickname, battle_platform: platform },
       ];
 
       let syncedToDb = false;
@@ -2425,7 +2441,7 @@ function App() {
       showStatusPopup('error', '입력 필요', '레전드와 무기를 모두 설정하세요.');
       return;
     }
-    playSFX('click'); setWaitingForScore(true);
+    playSFX('click');
     
     const isC = activeMatch.isChallenger;
     const pickPayload = isC ? { legend: nextLegend, weapons: nextWeapons } : { t_legend: nextLegend, t_weapons: nextWeapons };
@@ -2436,6 +2452,7 @@ function App() {
       showStatusPopup('error', '픽 저장 실패', `레전드/무기 저장 중 오류가 발생했습니다: ${pickErr.message}`);
       return;
     }
+    setWaitingForScore(true);
     setActiveMatch((prev) => (prev ? { ...prev, legend: nextLegend, weapons: nextWeapons } : prev));
     if (currentUserName && isRandomSeasonMode(activeMatch.mode)) {
       writeRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName, {
@@ -2611,8 +2628,7 @@ function App() {
           showStatusPopup(
             didWin ? 'success' : 'info',
             didWin ? '전투 승리! 결과 반영 완료' : '전투 종료! 결과 반영 완료',
-            `스코어 ${updatedData.c_win} : ${updatedData.t_win}\n${pointDeltaLine}\n${gcDeltaLine}`,
-            { autoCloseMs: 1000, hideConfirm: true }
+            `스코어 ${updatedData.c_win} : ${updatedData.t_win}\n${pointDeltaLine}\n${gcDeltaLine}`
           );
           if (currentUserName) clearRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName);
           setRerollCount(0);
@@ -4299,25 +4315,29 @@ function App() {
 
                    {(() => {
                      const regularFiltered = rankers.length > 0 ? rankers.filter((r) => matchesSearch(r.display_name, mainSearchQuery)) : [];
-                      const renderRegularCard = (r: any, tone: 'hero' | 'mid' | 'small' = 'small') => {
-	                        const regularIdx = typeof r.regular_display_index === 'number' ? r.regular_display_index : null;
+                      const renderRegularCard = (r: any) => {
+		                        const regularIdx = typeof r.regular_display_index === 'number' ? r.regular_display_index : null;
                         const grandRank = getGrandRankInfo(regularIdx, (r as any).regular_tier_level);
                         if (!grandRank) return null;
-	                        const move = getRankMoveValue(r.display_name, 'regular');
-	                        const isTopRegular = regularIdx === 0;
-	                        const throneDefenseStack = r.regular_defense_stack || 0;
-	                        const throneBounty = getDefenseBonusGC(throneDefenseStack);
+		                        const move = getRankMoveValue(r.display_name, 'regular');
+		                        const isTopRegular = regularIdx === 0;
+                            const isRank1 = regularIdx === 0;
+                            const isRank2_3 = regularIdx === 1 || regularIdx === 2;
+                            const isRank4_6 = regularIdx !== null && regularIdx >= 3 && regularIdx <= 5;
+		                        const throneDefenseStack = r.regular_defense_stack || 0;
+		                        const throneBounty = getDefenseBonusGC(throneDefenseStack);
 
-	                        const cardClass =
-	                          tone === 'hero'
-	                            ? 'p-12 pt-16 pb-12 rounded-[3.2rem]'
-                            : tone === 'mid'
-                              ? 'p-7 pt-11 pb-7 rounded-[2rem]'
-                              : 'p-5 pt-9 pb-5 rounded-[1.35rem]';
-	                        const avatarClass = tone === 'hero' ? 'w-28 h-28' : tone === 'mid' ? 'w-20 h-20' : 'w-14 h-14';
-	                        const nameClass = tone === 'hero' ? 'text-5xl' : tone === 'mid' ? 'text-2xl' : 'text-lg';
-	                        const badgeClass = tone === 'hero' ? 'px-14 py-5 text-[34px] -top-12' : tone === 'mid' ? 'px-12 py-4 text-[24px] -top-9' : 'px-8 py-2.5 text-[19px] -top-6';
-	                        const rankTextClass = tone === 'hero' ? 'text-[3.9rem] sm:text-[4.8rem]' : tone === 'mid' ? 'text-[2.8rem] sm:text-[3.4rem]' : 'text-[2.25rem] sm:text-[2.9rem]';
+                            const cardClass = isRank1
+                              ? 'w-full max-w-5xl p-12 pt-16 pb-12 rounded-[3.5rem] shadow-[0_0_30px_rgba(239,68,68,0.5)] hover:shadow-[0_0_50px_rgba(239,68,68,0.7)] hover:scale-[1.03]'
+                              : isRank4_6
+                                ? 'p-6 pt-10 pb-6 rounded-[1.5rem]'
+                                : isRank2_3
+                                  ? 'p-8 pt-12 pb-8 rounded-[2rem]'
+                                  : 'p-5 pt-8 pb-5 rounded-xl';
+                            const avatarClass = isRank1 ? 'w-32 h-32' : isRank4_6 ? 'w-16 h-16' : isRank2_3 ? 'w-20 h-20' : 'w-14 h-14';
+                            const nameClass = isRank1 ? 'text-5xl' : isRank4_6 ? 'text-xl' : isRank2_3 ? 'text-2xl' : 'text-lg';
+                            const badgeClass = isRank1 ? 'px-14 py-5 text-[34px] -top-12' : isRank4_6 ? 'px-10 py-3 text-[20px] -top-7' : isRank2_3 ? 'px-12 py-4 text-[24px] -top-9' : 'px-8 py-2.5 text-[18px] -top-6';
+		                        const rankTextClass = isRank1 ? 'text-[3.9rem] sm:text-[4.8rem]' : isRank2_3 ? 'text-[2.8rem] sm:text-[3.4rem]' : 'text-[2.25rem] sm:text-[2.9rem]';
 
 	                       return (
                          <div
@@ -4365,7 +4385,7 @@ function App() {
 	                               <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameClass}`}>{r.display_name}</span>
 	                             </div>
                                <div className="flex flex-col items-end shrink-0 ml-2">
-                                 <span className={`font-black text-yellow-300 tracking-tight ${tone === 'hero' ? 'text-6xl' : tone === 'mid' ? 'text-4xl' : 'text-2xl'}`}>{Math.max(0, Number(r.regular_rp ?? 0))}</span>
+                                 <span className={`font-black text-yellow-300 tracking-tight ${isRank1 ? 'text-6xl' : isRank2_3 ? 'text-4xl' : isRank4_6 ? 'text-2xl' : 'text-xl'}`}>{Math.max(0, Number(r.regular_rp ?? 0))}</span>
                                  <span className="text-[10px] font-black text-slate-400 tracking-wider">RP (정규)</span>
                                </div>
 	                            </div>
@@ -4386,25 +4406,20 @@ function App() {
                            const isRank4_6 = regularIdx !== null && regularIdx >= 3 && regularIdx <= 5;
 
                            let spanClass = 'col-span-6';
-                           let tone: 'hero' | 'mid' | 'small' = 'mid';
 
                            if (isRank1) {
                              spanClass = 'col-span-12 flex justify-center';
-                             tone = 'hero';
                            } else if (isRank2_3) {
                              spanClass = 'col-span-6';
-                             tone = 'mid';
                            } else if (isRank4_6) {
                              spanClass = 'col-span-4';
-                             tone = 'small';
                            } else {
                              spanClass = 'col-span-3';
-                             tone = 'small';
                            }
 
                            return (
                              <div key={r.id} className={spanClass}>
-                               {renderRegularCard(r, tone)}
+                               {renderRegularCard(r)}
                              </div>
                            );
                          })}
@@ -4558,10 +4573,8 @@ function App() {
                           </span>
                         </div>
                       </div>
-                      <p className="text-cyan-400 font-bold text-sm sm:text-base lg:text-lg mb-5 tracking-wide whitespace-normal break-all">{user?.email || "로그인이 필요합니다"}</p>
                       <div className="mb-5 rounded-2xl border border-cyan-400/35 bg-black/35 p-3 sm:p-4">
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                          <p className="text-cyan-300 font-black text-sm sm:text-base">인게임 닉네임</p>
                           <div className="flex items-center gap-2">
                             <button
                               onMouseEnter={() => playSFX('hover')}
@@ -4593,21 +4606,6 @@ function App() {
                             className="flex-1 rounded-xl border border-white/15 bg-black/45 px-3 py-2.5 text-white font-bold text-sm sm:text-base outline-none focus:border-cyan-400/70"
                           />
                           <div className="flex gap-2">
-                            <button
-                              onMouseEnter={() => playSFX('hover')}
-                              onClick={() => {
-                                const quickName = ingameNicknameDraft.trim() || currentUserIngameNickname || (currentUserName || '');
-                                if (!quickName) return;
-                                playSFX('click');
-                                navigator.clipboard.writeText(quickName);
-                                setIngameCopyStatus(true);
-                                if (ingameCopyTimerRef.current) window.clearTimeout(ingameCopyTimerRef.current);
-                                ingameCopyTimerRef.current = window.setTimeout(() => setIngameCopyStatus(false), 1100);
-                              }}
-                              className="px-3 py-2.5 rounded-xl border border-cyan-400/50 bg-cyan-500/15 text-cyan-300 font-black text-sm sm:text-base cursor-pointer hover:bg-cyan-500/25"
-                            >
-                              {ingameCopyStatus ? '복사됨!' : '인게임'}
-                            </button>
                             <button
                               onMouseEnter={() => playSFX('hover')}
                               onClick={() => void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft)}
@@ -4756,7 +4754,6 @@ function App() {
                 <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest&backgroundColor=b6e3f4"} className="w-32 h-32 rounded-full border-4 border-cyan-400 shadow-[0_0_20px_cyan]" alt="profile"/>
                 <div onMouseEnter={() => playSFX('hover')} className="flex-1 min-w-0">
                   <h3 className={`italic uppercase font-black text-4xl text-white whitespace-normal break-all leading-tight mb-2`}>{currentUserName || "GUEST PILOT"}</h3>
-                  <p className="text-cyan-400 font-bold tracking-widest text-lg whitespace-normal break-all leading-tight">{user?.email || "디스코드 로그인이 필요합니다"}</p>
                 </div>
               </div>
               <div className="flex items-center justify-between border-b border-white/10 pb-10">
