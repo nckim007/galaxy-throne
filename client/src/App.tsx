@@ -334,25 +334,28 @@ function App() {
     writeIngameProfileMap(map);
   };
   const resolveIngameProfile = (row?: any): { nickname: string; platform: IngamePlatform } => {
-    const dbNickname = String(
-      row?.ingame_nickname ||
-      row?.game_nickname ||
-      row?.battle_nickname ||
-      row?.in_game_nickname ||
-      row?.steam_friend_code ||
-      row?.steam_code ||
-      row?.steam_id ||
-      row?.ea_nickname ||
-      row?.ea_id ||
-      row?.origin_id ||
-      ''
-    ).trim();
+    const nicknameCandidates = [
+      row?.ingame_nickname,
+      row?.in_game_nickname,
+      row?.game_nickname,
+      row?.battle_nickname,
+      row?.steam_friend_code,
+      row?.steam_friendcode,
+      row?.steam_code,
+      row?.steam_id,
+      row?.ea_nickname,
+      row?.ea_name,
+      row?.ea_id,
+      row?.origin_id,
+    ];
+    const dbNickname =
+      nicknameCandidates.map((v) => String(v || '').trim()).find((v) => v.length > 0) || '';
     const dbPlatform = normalizeIngamePlatform(
       row?.ingame_platform ||
+      row?.in_game_platform ||
       row?.game_platform ||
       row?.battle_platform ||
-      row?.in_game_platform ||
-      (row?.ea_nickname || row?.ea_id || row?.origin_id ? 'ea' : 'steam')
+      (row?.ea_nickname || row?.ea_name || row?.ea_id || row?.origin_id ? 'ea' : 'steam')
     );
     if (dbNickname) return { nickname: dbNickname, platform: dbPlatform };
     const map = readIngameProfileMap();
@@ -1656,21 +1659,31 @@ function App() {
         platform,
       });
 
+      const rowKeys = new Set(Object.keys(profile || {}));
+      const maybe = (payload: any, requiredKey?: string) => {
+        if (!payload) return null;
+        if (!requiredKey) return payload;
+        return rowKeys.has(requiredKey) ? payload : null;
+      };
       const payloadCandidates: any[] = [
+        maybe({ ingame_nickname: nickname, ingame_platform: platform }, 'ingame_nickname'),
+        maybe({ in_game_nickname: nickname, in_game_platform: platform }, 'in_game_nickname'),
+        maybe({ game_nickname: nickname, game_platform: platform }, 'game_nickname'),
+        maybe({ battle_nickname: nickname, battle_platform: platform }, 'battle_nickname'),
+        platform === 'steam'
+          ? maybe({ steam_friend_code: nickname, ingame_platform: platform }, 'steam_friend_code')
+          : maybe({ ea_nickname: nickname, ingame_platform: platform }, 'ea_nickname'),
+        platform === 'steam'
+          ? maybe({ steam_friendcode: nickname, ingame_platform: platform }, 'steam_friendcode')
+          : maybe({ ea_name: nickname, ingame_platform: platform }, 'ea_name'),
+        platform === 'steam'
+          ? maybe({ steam_code: nickname, game_platform: platform }, 'steam_code')
+          : maybe({ ea_id: nickname, game_platform: platform }, 'ea_id'),
+        platform === 'steam'
+          ? maybe({ steam_id: nickname, battle_platform: platform }, 'steam_id')
+          : maybe({ origin_id: nickname, battle_platform: platform }, 'origin_id'),
         { ingame_nickname: nickname, ingame_platform: platform },
-        { game_nickname: nickname, game_platform: platform },
-        { battle_nickname: nickname, battle_platform: platform },
-        { in_game_nickname: nickname, in_game_platform: platform },
-        platform === 'steam'
-          ? { steam_friend_code: nickname, ingame_platform: platform }
-          : { ea_nickname: nickname, ingame_platform: platform },
-        platform === 'steam'
-          ? { steam_code: nickname, game_platform: platform }
-          : { ea_id: nickname, game_platform: platform },
-        platform === 'steam'
-          ? { steam_id: nickname, battle_platform: platform }
-          : { origin_id: nickname, battle_platform: platform },
-      ];
+      ].filter(Boolean);
 
       let syncedToDb = false;
       let lastError: any = null;
