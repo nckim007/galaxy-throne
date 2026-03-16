@@ -167,6 +167,10 @@ function App() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonPos, setScrollTopButtonPos] = useState<{ left: number; top: number; transform: string } | null>(null);
   const [cooldownNowMs, setCooldownNowMs] = useState(() => Date.now());
+  const [starRainActive, setStarRainActive] = useState(false);
+  const [starRainParticles, setStarRainParticles] = useState<
+    { id: number; left: number; delay: number; duration: number; size: number; drift: number }[]
+  >([]);
 
   const [bgmEnabled, setBgmEnabled] = useState(localStorage.getItem('bgmEnabled') !== 'false');
   const [sfxEnabled, setSfxEnabled] = useState(localStorage.getItem('sfxEnabled') !== 'false');
@@ -190,6 +194,33 @@ function App() {
     5: 100, // diamond
     6: 200, // master
     7: 300, // predator
+  };
+  const calcSeasonStreakMultiplier = (nextStreak: number) => {
+    if (nextStreak < 4) return 1;
+    return Math.pow(1.2, nextStreak - 3);
+  };
+  const calcSeasonWinReward = (opts: {
+    winnerScore: number;
+    isHigherTierWin: boolean;
+    nextStreak: number;
+  }) => {
+    const winnerScore = Math.max(0, Math.floor(Number(opts.winnerScore || 0)));
+    const extraWins = Math.max(0, winnerScore - 3);
+    const higherTierBonusWins = opts.isHigherTierWin ? winnerScore : 0;
+    const baseSp = 30 + extraWins * 10 + higherTierBonusWins * 15;
+    const baseGc = 60 + extraWins * 20 + higherTierBonusWins * 30;
+    const multiplier = calcSeasonStreakMultiplier(opts.nextStreak);
+    return {
+      sp: Math.round(baseSp * multiplier),
+      gc: Math.round(baseGc * multiplier),
+    };
+  };
+  const calcSeasonLoseReward = (loserScore: number) => {
+    const safeLoserScore = Math.max(0, Math.floor(Number(loserScore || 0)));
+    return {
+      sp: 10 + (safeLoserScore > 0 ? safeLoserScore * 5 : 0),
+      gc: 20 + (safeLoserScore > 0 ? safeLoserScore * 10 : 0),
+    };
   };
   const cosmeticsStorageKey = user?.id ? `gt_cosmetics_v1_${user.id}` : null;
   const defaultOwnedIds = ['name_default', 'style_default', 'border_default'];
@@ -649,6 +680,8 @@ function App() {
   const suppressNextDeletePopupChallengeIdRef = useRef<string | null>(null);
   const statusPopupTimerRef = useRef<number | null>(null);
   const statusPopupFadeTimerRef = useRef<number | null>(null);
+  const starRainTimerRef = useRef<number | null>(null);
+  const scoringSessionChallengeIdRef = useRef<string | null>(null);
   const autoScoreSubmitKeyRef = useRef('');
   const manualLoadoutRef = useRef<{
     free: { legend: string; weapons: [string, string] };
@@ -695,6 +728,19 @@ function App() {
   useEffect(() => { incomingChallengeRef.current = incomingChallenge; }, [incomingChallenge]);
   useEffect(() => { entryLegendRef.current = entryLegend; }, [entryLegend]);
   useEffect(() => { entryWeaponsRef.current = entryWeapons; }, [entryWeapons]);
+  useEffect(() => {
+    if (matchPhase !== 'scoring' || !activeMatch?.id) {
+      scoringSessionChallengeIdRef.current = null;
+      return;
+    }
+    if (scoringSessionChallengeIdRef.current !== activeMatch.id) {
+      scoringSessionChallengeIdRef.current = activeMatch.id;
+      autoScoreSubmitKeyRef.current = '';
+      setWaitingForScore(false);
+      setMyWins(null);
+      setMyLosses(null);
+    }
+  }, [matchPhase, activeMatch?.id]);
   useEffect(() => {
     const modeSource = matchPhase === 'scoring' && activeMatch ? activeMatch.mode : entryMode;
     rememberManualLoadout(modeSource, entryLegend, entryWeapons);
@@ -763,6 +809,15 @@ function App() {
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (starRainTimerRef.current) {
+        window.clearTimeout(starRainTimerRef.current);
+        starRainTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (statusPopupTimerRef.current) {
       window.clearTimeout(statusPopupTimerRef.current);
       statusPopupTimerRef.current = null;
@@ -821,6 +876,28 @@ function App() {
   ) => {
     setStatusPopupFading(false);
     setStatusPopup({ type, title, message, autoCloseMs: options?.autoCloseMs, hideConfirm: options?.hideConfirm });
+  };
+
+  const triggerStarRain = () => {
+    playSFX('click');
+    const particles = Array.from({ length: 90 }, (_, idx) => ({
+      id: idx + 1,
+      left: Math.random() * 100,
+      delay: Math.random() * 1.5,
+      duration: 2.2 + Math.random() * 2.4,
+      size: 8 + Math.random() * 10,
+      drift: -70 + Math.random() * 140,
+    }));
+    setStarRainParticles(particles);
+    setStarRainActive(true);
+    if (starRainTimerRef.current) {
+      window.clearTimeout(starRainTimerRef.current);
+    }
+    starRainTimerRef.current = window.setTimeout(() => {
+      setStarRainActive(false);
+      setStarRainParticles([]);
+      starRainTimerRef.current = null;
+    }, 10000);
   };
 
   const triggerResultFx = (didWin: boolean, message: string) => {
@@ -1259,6 +1336,37 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const profilesChannel = supabase
+      .channel('profiles_realtime_sync')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
+        const nextRow: any = payload.new || {};
+        if (!nextRow?.id) return;
+        const resolved = resolveIngameProfile(nextRow);
+        setRankers((prev) =>
+          prev.map((row) =>
+            row.id === nextRow.id
+              ? { ...row, ...nextRow, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform }
+              : row
+          )
+        );
+        setSelectedPlayer((prev) =>
+          prev && prev.id === nextRow.id
+            ? { ...prev, ...nextRow, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform }
+            : prev
+        );
+        setProfile((prev) =>
+          prev && prev.id === nextRow.id
+            ? { ...prev, ...nextRow, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform }
+            : prev
+        );
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(profilesChannel);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!currentUserName) return;
     const channel = supabase.channel('unified_challenge_sync_' + currentUserName.replace(/[^a-zA-Z0-9]/g, ''))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'challenges' }, payload => {
@@ -1307,12 +1415,15 @@ function App() {
                      prevRow.c_lose !== null ||
                      prevRow.t_win !== null ||
                      prevRow.t_lose !== null;
+                   const hadBothScoresBefore =
+                     isSubmittedScorePair(prevRow.c_win, prevRow.c_lose) &&
+                     isSubmittedScorePair(prevRow.t_win, prevRow.t_lose);
                    const nowAllScoresNull =
                      updated.c_win === null &&
                      updated.c_lose === null &&
                      updated.t_win === null &&
                      updated.t_lose === null;
-                   if (nowAllScoresNull && hadAnyScoreBefore && isWaiting) {
+                   if (nowAllScoresNull && hadAnyScoreBefore && hadBothScoresBefore && isWaiting) {
                        playSFX('error');
                        showStatusPopup(
                          'error',
@@ -1342,7 +1453,7 @@ function App() {
                               String(deletedRow?.challenger_name || '').trim() === String(currentUserName || '').trim();
                             if (wasSenderWaiting) {
                               const targetDisplay = String(deletedRow?.target_name || '').trim() || '상대방';
-                              showStatusPopup('error', '매치 종료', `${targetDisplay}님이 잔뜩 쫄았습니다 ㅋㅋㅋㅋㅋ`);
+                              showStatusPopup('error', '매치 종료', `(${targetDisplay}님이 잔뜩 쫄아서 거절했습니다 ㅋㅋㅋㅋㅋ)`);
                             } else {
 	                            showStatusPopup('info', '매치 종료', '대전이 종료되었습니다.');
                             }
@@ -1362,12 +1473,12 @@ function App() {
                        playSFX('click');
                        const wasSenderWaiting =
                          String(deletedRow?.challenger_name || '').trim() === String(currentUserName || '').trim();
-                       if (wasSenderWaiting) {
-                         const targetDisplay = String(deletedRow?.target_name || '').trim() || '상대방';
-                         showStatusPopup('error', '매치 종료', `${targetDisplay}님이 잔뜩 쫄았습니다 ㅋㅋㅋㅋㅋ`);
-                       } else {
-                         showStatusPopup('info', '매치 종료', '매치가 취소되었거나 정상적으로 종료되었습니다.');
-                       }
+                        if (wasSenderWaiting) {
+                          const targetDisplay = String(deletedRow?.target_name || '').trim() || '상대방';
+                          showStatusPopup('error', '매치 종료', `(${targetDisplay}님이 잔뜩 쫄아서 거절했습니다 ㅋㅋㅋㅋㅋ)`);
+                        } else {
+                          showStatusPopup('info', '매치 종료', '매치가 취소되었거나 정상적으로 종료되었습니다.');
+                        }
                        setRerollCount(0);
                        clearRandomDraftState(currentMatch.id, currentMatch.isChallenger, currentUserName);
                        setMatchPhase('idle');
@@ -1561,22 +1672,21 @@ function App() {
         const winnerTierBefore = getSeasonTierLevelBefore(winner);
         const loserTierBefore = getSeasonTierLevelBefore(loser);
         const isHigherTierWin = loserTierBefore > winnerTierBefore;
-        const isSweep = loserScore === 0;
-        const loserWonAnyRound = loserScore > 0;
 
         winnerState.seasonMatches += 1;
         winnerState.seasonWins += 1;
         loserState.seasonMatches += 1;
         loserState.seasonLosses += 1;
 
-        const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
         const nextSeasonStreak = winnerState.seasonWinStreak + 1;
-        const seasonMultiplier = nextSeasonStreak >= 3 ? Math.pow(1.2, nextSeasonStreak - 2) : 1;
-        const extraWinRounds = Math.max(0, winnerScore - 3);
-        const winnerRoundBonus = extraWinRounds * 5;
-        const loserRoundBonus = extraWinRounds * 3;
-        winnerState.seasonSp += Math.round(baseGain * seasonMultiplier) + winnerRoundBonus;
-        loserState.seasonSp += (loserWonAnyRound ? 15 : 10) + loserRoundBonus;
+        const winnerReward = calcSeasonWinReward({
+          winnerScore,
+          isHigherTierWin,
+          nextStreak: nextSeasonStreak,
+        });
+        const loserReward = calcSeasonLoseReward(loserScore);
+        winnerState.seasonSp += winnerReward.sp;
+        loserState.seasonSp += loserReward.sp;
 
         winnerState.seasonWinStreak = nextSeasonStreak;
         loserState.seasonWinStreak = 0;
@@ -1766,29 +1876,23 @@ function App() {
         platform,
       });
 
-      const rowKeys = new Set(Object.keys(profile || {}));
-      const maybe = (payload: any, requiredKey?: string) => {
-        if (!payload) return null;
-        if (!requiredKey) return payload;
-        return rowKeys.has(requiredKey) ? payload : null;
-      };
       const payloadCandidates: any[] = [
-        maybe({ ingame_nickname: nickname, ingame_platform: platform }, 'ingame_nickname'),
-        maybe({ in_game_nickname: nickname, in_game_platform: platform }, 'in_game_nickname'),
-        maybe({ game_nickname: nickname, game_platform: platform }, 'game_nickname'),
-        maybe({ battle_nickname: nickname, battle_platform: platform }, 'battle_nickname'),
+        { ingame_nickname: nickname, ingame_platform: platform },
+        { in_game_nickname: nickname, in_game_platform: platform },
+        { game_nickname: nickname, game_platform: platform },
+        { battle_nickname: nickname, battle_platform: platform },
         platform === 'steam'
-          ? maybe({ steam_friend_code: nickname, ingame_platform: platform }, 'steam_friend_code')
-          : maybe({ ea_nickname: nickname, ingame_platform: platform }, 'ea_nickname'),
+          ? { steam_friend_code: nickname, ingame_platform: platform }
+          : { ea_nickname: nickname, ingame_platform: platform },
         platform === 'steam'
-          ? maybe({ steam_friendcode: nickname, ingame_platform: platform }, 'steam_friendcode')
-          : maybe({ ea_name: nickname, ingame_platform: platform }, 'ea_name'),
+          ? { steam_friendcode: nickname, ingame_platform: platform }
+          : { ea_name: nickname, ingame_platform: platform },
         platform === 'steam'
-          ? maybe({ steam_code: nickname, game_platform: platform }, 'steam_code')
-          : maybe({ ea_id: nickname, game_platform: platform }, 'ea_id'),
+          ? { steam_code: nickname, game_platform: platform }
+          : { ea_id: nickname, game_platform: platform },
         platform === 'steam'
-          ? maybe({ steam_id: nickname, battle_platform: platform }, 'steam_id')
-          : maybe({ origin_id: nickname, battle_platform: platform }, 'origin_id'),
+          ? { steam_id: nickname, battle_platform: platform }
+          : { origin_id: nickname, battle_platform: platform },
         { ingame_nickname: nickname, ingame_platform: platform },
       ].filter(Boolean);
 
@@ -1812,6 +1916,8 @@ function App() {
       setIngameNicknameDraft(nickname);
       setIngamePlatformDraft(platform);
       setShowIngameSetupModal(false);
+      fetchRankers();
+      if (user?.id) fetchProfile(user.id);
 
       if (!syncedToDb && lastError) {
         console.warn('[ingame-profile-sync] DB 컬럼 동기화 실패. local fallback 사용:', lastError.message);
@@ -2671,7 +2777,6 @@ function App() {
           const challengerWon = challengerScore > targetScore;
           const winnerScore = Math.max(challengerScore, targetScore);
           const loserScore = Math.min(challengerScore, targetScore);
-          const extraWinRounds = Math.max(0, winnerScore - 3);
           const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', challengerName).single();
           const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', targetName).single();
           let currentPointLabel = isRegularMode(baseMode) ? 'RP (정규포인트)' : 'SP (시즌포인트)';
@@ -2691,6 +2796,21 @@ function App() {
           const cGc = typeof cProfile.gc === 'number' ? cProfile.gc : 1000;
           const tGc = typeof tProfile.gc === 'number' ? tProfile.gc : 1000;
           const isRegular = isRegularMode(baseMode);
+          const challengerRowBefore: any = regularRankMap.get(normalizeName(challengerName));
+          const targetRowBefore: any = regularRankMap.get(normalizeName(targetName));
+          const challengerSeasonTierBefore = typeof challengerRowBefore?.season_tier_level === 'number' ? challengerRowBefore.season_tier_level : 0;
+          const targetSeasonTierBefore = typeof targetRowBefore?.season_tier_level === 'number' ? targetRowBefore.season_tier_level : 0;
+          const winnerSeasonTierBefore = challengerWon ? challengerSeasonTierBefore : targetSeasonTierBefore;
+          const loserSeasonTierBefore = challengerWon ? targetSeasonTierBefore : challengerSeasonTierBefore;
+          const winnerSeasonStreakBefore = challengerWon
+            ? Number(challengerRowBefore?.season_win_streak || 0)
+            : Number(targetRowBefore?.season_win_streak || 0);
+          const seasonWinnerReward = calcSeasonWinReward({
+            winnerScore,
+            isHigherTierWin: loserSeasonTierBefore > winnerSeasonTierBefore,
+            nextStreak: winnerSeasonStreakBefore + 1,
+          });
+          const seasonLoserReward = calcSeasonLoseReward(loserScore);
 
           if (isRegular) {
             // 정규전: 티켓(200)은 소멸, 초과 배팅만 승자가 획득
@@ -2703,14 +2823,14 @@ function App() {
               tUpdates.gc = tGc + transferable;
             }
           } else {
-            // 시즌전: 배팅 전체 팟(양쪽)을 승자가 획득
+            // 시즌전: 점수 보상 + 배팅 전체 팟(양쪽)을 승자가 획득
             const transferable = bet * 2;
             if (challengerWon) {
-              cUpdates.gc = cGc + transferable;
-              tUpdates.gc = tGc;
+              cUpdates.gc = cGc + seasonWinnerReward.gc + transferable;
+              tUpdates.gc = tGc + seasonLoserReward.gc;
             } else {
-              cUpdates.gc = cGc;
-              tUpdates.gc = tGc + transferable;
+              cUpdates.gc = cGc + seasonLoserReward.gc;
+              tUpdates.gc = tGc + seasonWinnerReward.gc + transferable;
             }
           }
 
@@ -2719,7 +2839,6 @@ function App() {
           const isCurrentChallenger = currentNameNorm === challengerNorm;
           const didCurrentWin = winnerName?.trim() === (currentUserName || '').trim();
           const myScore = isCurrentChallenger ? challengerScore : targetScore;
-          const oppScore = isCurrentChallenger ? targetScore : challengerScore;
           const myRowBefore: any = regularRankMap.get(normalizeName(currentUserName));
 
           if (isRegularMode(baseMode)) {
@@ -2741,20 +2860,7 @@ function App() {
               currentPointDelta = -(15 - (myScore > 0 ? 5 : 0));
             }
           } else {
-            if (didCurrentWin) {
-              const myTierBefore = typeof myRowBefore?.season_tier_level === 'number' ? myRowBefore.season_tier_level : 0;
-              const oppTierBefore = typeof regularRankMap.get(normalizeName(isCurrentChallenger ? targetName : challengerName))?.season_tier_level === 'number'
-                ? regularRankMap.get(normalizeName(isCurrentChallenger ? targetName : challengerName))?.season_tier_level
-                : 0;
-              const isSweep = oppScore === 0;
-              const isHigherTierWin = Number(oppTierBefore || 0) > Number(myTierBefore || 0);
-              const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
-              const nextStreak = Number(myRowBefore?.season_win_streak || 0) + 1;
-              const seasonMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
-              currentPointDelta = Math.round(baseGain * seasonMultiplier) + (extraWinRounds * 5);
-            } else {
-              currentPointDelta = (myScore > 0 ? 15 : 10) + (extraWinRounds * 3);
-            }
+            currentPointDelta = didCurrentWin ? seasonWinnerReward.sp : seasonLoserReward.sp;
           }
 
           currentGcDelta = isCurrentChallenger
@@ -3741,12 +3847,48 @@ function App() {
       .reward-chest-shell.is-opening::after {
         animation-delay: 120ms;
       }
+      @keyframes star-rain-fall {
+        0% { opacity: 0; transform: translate3d(0, -12vh, 0) scale(0.75) rotate(0deg); }
+        10% { opacity: 1; }
+        90% { opacity: 0.95; }
+        100% { opacity: 0; transform: translate3d(var(--drift), 118vh, 0) scale(1.08) rotate(260deg); }
+      }
+      .star-rain-item {
+        position: absolute;
+        top: -14vh;
+        color: rgba(255, 243, 168, 0.98);
+        text-shadow:
+          0 0 10px rgba(250, 204, 21, 0.85),
+          0 0 22px rgba(34, 211, 238, 0.55);
+        animation-name: star-rain-fall;
+        animation-timing-function: linear;
+        animation-fill-mode: forwards;
+      }
     `}</style>
   );
 
   return (
     <div className="flex h-screen bg-black text-slate-300 overflow-hidden relative select-none">
       {globalFontStyle}
+      {starRainActive && (
+        <div className="fixed inset-0 z-[48] pointer-events-none overflow-hidden">
+          {starRainParticles.map((particle) => (
+            <span
+              key={`star-rain-${particle.id}`}
+              className="star-rain-item"
+              style={{
+                left: `${particle.left}%`,
+                animationDelay: `${particle.delay}s`,
+                animationDuration: `${particle.duration}s`,
+                fontSize: `${particle.size}px`,
+                ['--drift' as any]: `${particle.drift}px`,
+              }}
+            >
+              ✦
+            </span>
+          ))}
+        </div>
+      )}
       <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 brightness-[0.76] contrast-[1.08] saturate-[1.04]" style={{ backgroundImage: `url(${bgImage})` }}>
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.30),rgba(2,6,23,0.62))]"></div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_18%,rgba(56,189,248,0.08),transparent_40%),radial-gradient(circle_at_80%_22%,rgba(217,70,239,0.08),transparent_42%)]"></div>
@@ -3754,7 +3896,7 @@ function App() {
       </div>
       
       <aside className="w-14 sm:w-16 lg:w-20 bg-black/20 backdrop-blur-md border-r border-cyan-500/30 shadow-2xl flex flex-col items-center py-6 sm:py-8 lg:py-10 gap-6 sm:gap-8 lg:gap-10 z-20 shrink-0 h-screen fixed left-0">
-        <div onMouseEnter={() => playSFX('hover')} className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 shadow-lg cursor-pointer">
+        <div onMouseEnter={() => playSFX('hover')} onClick={triggerStarRain} className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 shadow-lg cursor-pointer">
           <Star className="text-cyan-400 animate-pulse" size={20}/>
         </div>
         <div className="flex flex-col gap-6 sm:gap-8 lg:gap-10 text-slate-500 w-full items-center">
@@ -3915,7 +4057,7 @@ function App() {
                                <h4 className="text-xl sm:text-2xl font-bold text-white tracking-widest">타겟과 모드를 설정하세요</h4>
                            </div>
                             <div className="bg-black/60 p-4 rounded-2xl border border-white/10 shadow-inner relative">
-                               <p className="text-xs text-slate-500 font-bold mb-2 pl-2">TARGET NICKNAME</p>
+                               <p className="text-xs text-slate-500 font-bold mb-2 pl-2">상대방 닉네임 (TARGET NICKNAME)</p>
                                 <input
                                  value={entryOpponent}
                                  onChange={(e) => setEntryOpponent(e.target.value)}
