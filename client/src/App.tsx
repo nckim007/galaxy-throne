@@ -33,6 +33,7 @@ type ShopItem = {
 type RegularChallengeMode = 'free';
 type SeasonChallengeMode = 'random' | 'season_free' | 'season_watson_melee' | 'season_vantage_sniper' | 'season_wraith_knife';
 type ChallengeMode = RegularChallengeMode | SeasonChallengeMode;
+type IngamePlatform = 'steam' | 'ea';
 
 type IncomingChallengeRequest = {
   id: string;
@@ -89,7 +90,7 @@ const SHOP_ITEMS: ShopItem[] = [
 ];
 
 const SEASON_MODE_MENU: { mode: SeasonChallengeMode; label: string; description: string }[] = [
-  { mode: 'random', label: '랜덤 대전', description: '기존 시즌 랜덤 규칙' },
+  { mode: 'random', label: '랜덤 대전', description: '레전드/무기 랜덤 선택' },
   { mode: 'season_free', label: '자유 대전', description: '레전드/무기 자유 선택' },
   { mode: 'season_watson_melee', label: '왓슨 근접전', description: '왓슨 고정 · 무기 없음' },
   { mode: 'season_vantage_sniper', label: '벤티지 스나이퍼전', description: '벤티지 · 크레이버/센티넬 고정' },
@@ -130,6 +131,11 @@ function App() {
   const [profileTab, setProfileTab] = useState<'overview' | 'details'>('overview');
   const [myProfileTab, setMyProfileTab] = useState<'overview' | 'items'>('overview');
   const [copyStatus, setCopyStatus] = useState(false);
+  const [ingameNicknameDraft, setIngameNicknameDraft] = useState('');
+  const [ingamePlatformDraft, setIngamePlatformDraft] = useState<IngamePlatform>('steam');
+  const [savingIngameProfile, setSavingIngameProfile] = useState(false);
+  const [showIngameSetupModal, setShowIngameSetupModal] = useState(false);
+  const [ingameCopyStatus, setIngameCopyStatus] = useState(false);
   const [ownedItemIds, setOwnedItemIds] = useState<string[]>(['name_default', 'style_default', 'border_default']);
   const [equippedItems, setEquippedItems] = useState<{ nameColor: string; nameStyle: string; borderFx: string }>({
     nameColor: 'name_default',
@@ -282,6 +288,82 @@ function App() {
   const equippedNameClass = `${equippedNameColorClass} ${equippedNameStyleClass}`.trim();
   const equippedBorderFxClass = borderFxClassMap[equippedItems.borderFx] || borderFxClassMap.border_default;
   const normalizePlayerName = (value?: string | null) => (value || '').trim().toLowerCase();
+  const normalizeIngamePlatform = (value: unknown): IngamePlatform => {
+    const raw = String(value || '').trim().toLowerCase();
+    if (raw === 'ea' || raw === 'origin') return 'ea';
+    return 'steam';
+  };
+  const ingameProfileStorageKey = 'gt_ingame_profile_v1';
+  const readIngameProfileMap = (): Record<string, { nickname: string; platform: IngamePlatform }> => {
+    try {
+      const raw = localStorage.getItem(ingameProfileStorageKey);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return {};
+      const next: Record<string, { nickname: string; platform: IngamePlatform }> = {};
+      Object.entries(parsed).forEach(([k, v]) => {
+        const nickname = String((v as any)?.nickname || '').trim();
+        const platform = normalizeIngamePlatform((v as any)?.platform);
+        if (!k || !nickname) return;
+        next[k] = { nickname, platform };
+      });
+      return next;
+    } catch {
+      return {};
+    }
+  };
+  const writeIngameProfileMap = (map: Record<string, { nickname: string; platform: IngamePlatform }>) => {
+    try {
+      localStorage.setItem(ingameProfileStorageKey, JSON.stringify(map));
+    } catch {
+      // ignore local storage write errors
+    }
+  };
+  const saveIngameProfileToLocalMap = (opts: {
+    userId?: string | null;
+    displayName?: string | null;
+    nickname: string;
+    platform: IngamePlatform;
+  }) => {
+    const nickname = String(opts.nickname || '').trim();
+    if (!nickname) return;
+    const map = readIngameProfileMap();
+    const userId = String(opts.userId || '').trim();
+    const displayName = String(opts.displayName || '').trim();
+    if (userId) map[`id:${userId}`] = { nickname, platform: opts.platform };
+    if (displayName) map[`name:${displayName.toLowerCase()}`] = { nickname, platform: opts.platform };
+    writeIngameProfileMap(map);
+  };
+  const resolveIngameProfile = (row?: any): { nickname: string; platform: IngamePlatform } => {
+    const dbNickname = String(
+      row?.ingame_nickname ||
+      row?.game_nickname ||
+      row?.battle_nickname ||
+      row?.in_game_nickname ||
+      ''
+    ).trim();
+    const dbPlatform = normalizeIngamePlatform(
+      row?.ingame_platform ||
+      row?.game_platform ||
+      row?.battle_platform ||
+      row?.in_game_platform
+    );
+    if (dbNickname) return { nickname: dbNickname, platform: dbPlatform };
+    const map = readIngameProfileMap();
+    const byId = row?.id ? map[`id:${String(row.id).trim()}`] : null;
+    if (byId?.nickname) return byId;
+    const byName = row?.display_name ? map[`name:${String(row.display_name).trim().toLowerCase()}`] : null;
+    if (byName?.nickname) return byName;
+    return { nickname: '', platform: 'steam' };
+  };
+  const getPlatformLabel = (platform?: unknown) => normalizeIngamePlatform(platform) === 'ea' ? 'EA' : 'STEAM CODE';
+  const getPlayerIngameNickname = (row?: any) => {
+    const resolved = resolveIngameProfile(row);
+    return resolved.nickname || String(row?.display_name || '').trim();
+  };
+  const currentUserIngameProfile = resolveIngameProfile(profile);
+  const currentUserIngameNickname = currentUserIngameProfile.nickname;
+  const currentUserIngamePlatform = currentUserIngameProfile.platform;
   const getCosmeticStateForUser = (name?: string | null) => {
     if (isCurrentUserDisplayName(name)) {
       return equippedItems;
@@ -496,6 +578,7 @@ function App() {
   const suppressNextDeletePopupChallengeIdRef = useRef<string | null>(null);
   const statusPopupTimerRef = useRef<number | null>(null);
   const statusPopupFadeTimerRef = useRef<number | null>(null);
+  const ingameCopyTimerRef = useRef<number | null>(null);
   const rankCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const activeScrollTargetRef = useRef<HTMLElement | null>(null);
@@ -588,6 +671,15 @@ function App() {
       if (statusPopupFadeTimerRef.current) window.clearTimeout(statusPopupFadeTimerRef.current);
     };
   }, [statusPopup]);
+
+  useEffect(() => {
+    return () => {
+      if (ingameCopyTimerRef.current) {
+        window.clearTimeout(ingameCopyTimerRef.current);
+        ingameCopyTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -890,6 +982,16 @@ function App() {
       borderFx: (profile as any).equipped_border_fx || 'border_default',
     });
   }, [profile?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !profile) {
+      setShowIngameSetupModal(false);
+      return;
+    }
+    setIngameNicknameDraft(currentUserIngameNickname || '');
+    setIngamePlatformDraft(currentUserIngamePlatform);
+    setShowIngameSetupModal(!currentUserIngameNickname);
+  }, [user?.id, profile?.id, currentUserIngameNickname, currentUserIngamePlatform]);
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -1374,6 +1476,7 @@ function App() {
 
     const base = profiles.map((r) => {
       const key = normalize(r.display_name || r.id);
+      const ingame = resolveIngameProfile(r);
       const s = sim[key] || {
         regularMatches: 0,
         regularWins: 0,
@@ -1396,6 +1499,8 @@ function App() {
         losses: r.losses || 0,
         win_rate: (r.wins + r.losses) > 0 ? (((r.wins) / (r.wins + r.losses)) * 100).toFixed(1) + '%' : '0.0%',
         avatar_url: r.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.id}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
+        ingame_nickname: ingame.nickname,
+        ingame_platform: ingame.platform,
         gc: typeof r.gc === 'number' ? r.gc : 1000,
         regular_rp: s.regularRp,
         season_sp: s.seasonSp,
@@ -1503,12 +1608,75 @@ function App() {
 
   const fetchProfile = async (id: string) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', id).single();
-    if (data) setProfile(data);
+    if (data) {
+      const resolvedIngame = resolveIngameProfile(data);
+      setProfile({
+        ...data,
+        ingame_nickname: resolvedIngame.nickname,
+        ingame_platform: resolvedIngame.platform,
+      });
+    }
   };
 
   const handleLogin = async () => { playSFX('click'); await supabase.auth.signInWithOAuth({ provider: 'discord' }); };
   const handleLogout = async () => { playSFX('click'); await supabase.auth.signOut(); setProfile(null); };
+  const persistIngameProfile = async (nicknameRaw: string, platformRaw: IngamePlatform) => {
+    if (!user?.id) return false;
+    const nickname = String(nicknameRaw || '').trim();
+    if (!nickname) {
+      showStatusPopup('error', '입력 필요', '인게임 닉네임을 입력해주세요.');
+      return false;
+    }
+    const platform = normalizeIngamePlatform(platformRaw);
+    setSavingIngameProfile(true);
+    try {
+      saveIngameProfileToLocalMap({
+        userId: user.id,
+        displayName: currentUserName || profile?.display_name || '',
+        nickname,
+        platform,
+      });
 
+      const payloadCandidates: any[] = [
+        { ingame_nickname: nickname, ingame_platform: platform },
+        { game_nickname: nickname, game_platform: platform },
+        { battle_nickname: nickname, battle_platform: platform },
+        { in_game_nickname: nickname, in_game_platform: platform },
+      ];
+
+      let syncedToDb = false;
+      let lastError: any = null;
+      for (const payload of payloadCandidates) {
+        const { error } = await supabase.from('profiles').update(payload).eq('id', user.id);
+        if (!error) {
+          syncedToDb = true;
+          break;
+        }
+        lastError = error;
+      }
+
+      setProfile((prev: any) => (prev ? { ...prev, ingame_nickname: nickname, ingame_platform: platform } : prev));
+      setRankers((prev) =>
+        prev.map((r) =>
+          r.id === user.id ? { ...r, ingame_nickname: nickname, ingame_platform: platform } : r
+        )
+      );
+      setIngameNicknameDraft(nickname);
+      setIngamePlatformDraft(platform);
+      setShowIngameSetupModal(false);
+
+      if (!syncedToDb && lastError) {
+        console.warn('[ingame-profile-sync] DB 컬럼 동기화 실패. local fallback 사용:', lastError.message);
+      }
+      showStatusPopup('success', '저장 완료', '인게임 닉네임 정보가 저장되었습니다.', {
+        autoCloseMs: 2200,
+        hideConfirm: true,
+      });
+      return true;
+    } finally {
+      setSavingIngameProfile(false);
+    }
+  };
   const grantDailyLoginRewardIfNeeded = async () => {
     if (!user?.id || !profile) return;
     const todayKst = getKstDateKey();
@@ -2466,8 +2634,19 @@ function App() {
   };
 
   const copyPlayerName = (name: string) => {
-    if (!name) return; playSFX('click'); navigator.clipboard.writeText(name); setCopyStatus(true); 
-    setEntryOpponent(name); setActiveMenu('home'); setMatchPhase('idle'); setTimeout(() => { setCopyStatus(false); setSelectedPlayer(null); }, 500);
+    if (!name) return;
+    const row = rankers.find((r) => r.display_name === name) || selectedPlayer || profile;
+    const ingameNickname = getPlayerIngameNickname(row) || name;
+    playSFX('click');
+    navigator.clipboard.writeText(ingameNickname);
+    setCopyStatus(true);
+    setEntryOpponent(name);
+    setActiveMenu('home');
+    setMatchPhase('idle');
+    setTimeout(() => {
+      setCopyStatus(false);
+      setSelectedPlayer(null);
+    }, 650);
   };
 
   const handleProfileClick = (name: string) => {
@@ -4283,6 +4462,71 @@ function App() {
                         </div>
                       </div>
                       <p className="text-cyan-400 font-bold text-sm sm:text-base lg:text-lg mb-5 tracking-wide whitespace-normal break-all">{user?.email || "로그인이 필요합니다"}</p>
+                      <div className="mb-5 rounded-2xl border border-cyan-400/35 bg-black/35 p-3 sm:p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                          <p className="text-cyan-300 font-black text-sm sm:text-base">인게임 닉네임</p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onMouseEnter={() => playSFX('hover')}
+                              onClick={() => setIngamePlatformDraft('steam')}
+                              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-black border transition-all cursor-pointer ${ingamePlatformDraft === 'steam' ? 'bg-cyan-500/20 border-cyan-400/60 text-cyan-200' : 'bg-white/5 border-white/15 text-slate-400 hover:text-white'}`}
+                            >
+                              {ingamePlatformDraft === 'steam' ? '✓ ' : ''}STEAM CODE
+                            </button>
+                            <button
+                              onMouseEnter={() => playSFX('hover')}
+                              onClick={() => setIngamePlatformDraft('ea')}
+                              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-black border transition-all cursor-pointer ${ingamePlatformDraft === 'ea' ? 'bg-fuchsia-500/20 border-fuchsia-400/60 text-fuchsia-200' : 'bg-white/5 border-white/15 text-slate-400 hover:text-white'}`}
+                            >
+                              {ingamePlatformDraft === 'ea' ? '✓ ' : ''}EA
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            value={ingameNicknameDraft}
+                            onChange={(e) => setIngameNicknameDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !(e.nativeEvent as any).isComposing) {
+                                e.preventDefault();
+                                void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft);
+                              }
+                            }}
+                            placeholder="인게임 닉네임을 입력하세요"
+                            className="flex-1 rounded-xl border border-white/15 bg-black/45 px-3 py-2.5 text-white font-bold text-sm sm:text-base outline-none focus:border-cyan-400/70"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onMouseEnter={() => playSFX('hover')}
+                              onClick={() => {
+                                const quickName = ingameNicknameDraft.trim() || currentUserIngameNickname || (currentUserName || '');
+                                if (!quickName) return;
+                                playSFX('click');
+                                navigator.clipboard.writeText(quickName);
+                                setIngameCopyStatus(true);
+                                if (ingameCopyTimerRef.current) window.clearTimeout(ingameCopyTimerRef.current);
+                                ingameCopyTimerRef.current = window.setTimeout(() => setIngameCopyStatus(false), 1100);
+                              }}
+                              className="px-3 py-2.5 rounded-xl border border-cyan-400/50 bg-cyan-500/15 text-cyan-300 font-black text-sm sm:text-base cursor-pointer hover:bg-cyan-500/25"
+                            >
+                              {ingameCopyStatus ? '복사됨!' : '인게임'}
+                            </button>
+                            <button
+                              onMouseEnter={() => playSFX('hover')}
+                              onClick={() => void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft)}
+                              disabled={savingIngameProfile || !ingameNicknameDraft.trim()}
+                              className={`px-4 py-2.5 rounded-xl border font-black text-sm sm:text-base transition-all ${savingIngameProfile || !ingameNicknameDraft.trim() ? 'border-slate-700 text-slate-500 bg-slate-800/50 cursor-not-allowed' : 'border-emerald-400/55 text-emerald-300 bg-emerald-500/15 hover:bg-emerald-500/25 cursor-pointer'}`}
+                            >
+                              {savingIngameProfile ? '저장중...' : '저장'}
+                            </button>
+                          </div>
+                        </div>
+                        {currentUserIngameNickname && (
+                          <p className="mt-2 text-xs sm:text-sm text-slate-300 font-bold">
+                            현재 연결: <span className="text-cyan-300">{getPlatformLabel(currentUserIngamePlatform)}</span> · <span className="text-white">{currentUserIngameNickname}</span>
+                          </p>
+                        )}
+                      </div>
                       <div className="sm:hidden flex flex-col gap-2 mb-5">
                         <span className={`inline-flex items-center gap-2 text-sm font-bold px-3 py-1.5 rounded-full border border-white/20 ${currentUserRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                           {currentUserRegularInfo?.icon || <Shield size={14} className="text-slate-300" />}
@@ -4462,7 +4706,12 @@ function App() {
                 <img src={selectedPlayer.avatar_url} className={`w-24 h-24 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-[2rem] sm:rounded-[2.5rem] lg:rounded-[3rem] border-4 ${getCardAvatarBorderFxForUser(selectedPlayer.display_name)} shrink-0`} alt="p" />
                  <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <div className="flex items-center justify-between gap-4 min-w-0">
-                      <h2 className={`italic font-black text-3xl sm:text-4xl lg:text-5xl whitespace-normal break-all leading-tight ${getNameClassForUser(selectedPlayer.display_name)}`}>{selectedPlayer.display_name}</h2>
+                      <div className="min-w-0">
+                        <h2 className={`italic font-black text-3xl sm:text-4xl lg:text-5xl whitespace-normal break-all leading-tight ${getNameClassForUser(selectedPlayer.display_name)}`}>{selectedPlayer.display_name}</h2>
+                        <p className="mt-1 text-cyan-300 text-sm sm:text-base font-bold whitespace-normal break-all">
+                          인게임 ({getPlatformLabel(selectedPlayer?.ingame_platform)}): {getPlayerIngameNickname(selectedPlayer)}
+                        </p>
+                      </div>
                       <div className="flex flex-col gap-2 items-end shrink-0">
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                           {selectedPlayerRegularInfo?.icon}
@@ -4563,7 +4812,7 @@ function App() {
                className="w-full bg-cyan-600/20 hover:bg-cyan-600/40 border-2 border-cyan-400/50 text-cyan-400 py-4 sm:py-6 rounded-[1.4rem] sm:rounded-[2rem] font-bold text-lg sm:text-2xl flex items-center justify-center gap-3 sm:gap-4 active:scale-95 shadow-lg cursor-pointer transition-all mt-4"
               >
                {copyStatus ? <Check size={24}/> : <Copy size={24}/>}
-               {copyStatus ? 'NICKNAME COPIED & READY!' : `COPY NICKNAME & BATTLE`}
+               {copyStatus ? '복사 완료! 대결 준비!' : '대결신청 및 인게임 닉네임 복사'}
              </button>
              
              {profileTab === 'details' && (
@@ -4607,26 +4856,26 @@ function App() {
             className="w-full max-w-lg rounded-[2rem] border border-cyan-400/70 p-6 sm:p-7 bg-[#0a0f1d] shadow-2xl"
             style={{ animation: 'popup-in 260ms ease-out' }}
           >
-            <h4 className="text-2xl font-black mb-3 text-cyan-300">대전 신청 도착</h4>
-	            <div className="space-y-2 text-slate-200 text-base sm:text-lg leading-relaxed">
+            <h4 className="text-3xl sm:text-4xl font-black mb-3 text-cyan-300">대전 신청 도착</h4>
+	            <div className="space-y-2 text-slate-200 text-lg sm:text-xl leading-relaxed">
 	              <p>
 	                <span className="font-black text-pink-300">{incomingChallenge.challengerName}</span> 님이
 	                <span className="font-black text-cyan-300"> {getModeDisplayName(incomingChallenge.mode)}</span>을 신청했습니다.
 	              </p>
-	              <p className="text-sm text-slate-400">배팅 금액: <span className="font-black text-emerald-300">{incomingChallenge.betGc} GC</span></p>
+	              <p className="text-base sm:text-lg text-slate-400">배팅 금액: <span className="font-black text-emerald-300">{incomingChallenge.betGc} GC</span></p>
 	            </div>
 	            <div className="mt-6 grid grid-cols-2 gap-3">
 	              <button
 	                onMouseEnter={() => playSFX('hover')}
 	                onClick={handleDeclineIncomingChallenge}
-	                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-rose-400/50 text-rose-300 font-bold bg-black/50 hover:bg-rose-500/20 cursor-pointer"
+	                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-rose-400/50 text-rose-300 text-lg sm:text-xl font-bold bg-black/50 hover:bg-rose-500/20 cursor-pointer"
 	              >
 	                거절
 	              </button>
 	              <button
 	                onMouseEnter={() => playSFX('hover')}
 	                onClick={handleAcceptIncomingChallenge}
-	                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-cyan-400/50 text-cyan-300 font-bold bg-black/50 hover:bg-cyan-500/20 cursor-pointer"
+	                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-cyan-400/50 text-cyan-300 text-lg sm:text-xl font-bold bg-black/50 hover:bg-cyan-500/20 cursor-pointer"
 	              >
 	                수락
 	              </button>
@@ -4687,6 +4936,59 @@ function App() {
         </div>
       )}
 
+      {showIngameSetupModal && (
+        <div className="fixed inset-0 z-[292] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xl rounded-[2rem] border border-cyan-400/70 p-6 sm:p-7 bg-[#0a0f1d] shadow-2xl"
+            style={{ animation: 'popup-in 260ms ease-out' }}
+          >
+            <h4 className="text-3xl sm:text-4xl font-black mb-3 text-cyan-300">인게임 닉네임 설정</h4>
+            <p className="text-slate-200 text-lg sm:text-xl leading-relaxed mb-5">
+              첫 이용을 위해 인게임 닉네임과 플랫폼을 입력해주세요.
+            </p>
+            <div className="flex items-center gap-2 mb-3">
+              <button
+                onMouseEnter={() => playSFX('hover')}
+                onClick={() => setIngamePlatformDraft('steam')}
+                className={`px-3 py-2 rounded-xl text-sm sm:text-base font-black border transition-all cursor-pointer ${ingamePlatformDraft === 'steam' ? 'bg-cyan-500/20 border-cyan-400/60 text-cyan-200' : 'bg-white/5 border-white/15 text-slate-400 hover:text-white'}`}
+              >
+                {ingamePlatformDraft === 'steam' ? '✓ ' : ''}STEAM CODE
+              </button>
+              <button
+                onMouseEnter={() => playSFX('hover')}
+                onClick={() => setIngamePlatformDraft('ea')}
+                className={`px-3 py-2 rounded-xl text-sm sm:text-base font-black border transition-all cursor-pointer ${ingamePlatformDraft === 'ea' ? 'bg-fuchsia-500/20 border-fuchsia-400/60 text-fuchsia-200' : 'bg-white/5 border-white/15 text-slate-400 hover:text-white'}`}
+              >
+                {ingamePlatformDraft === 'ea' ? '✓ ' : ''}EA
+              </button>
+            </div>
+            <input
+              value={ingameNicknameDraft}
+              onChange={(e) => setIngameNicknameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !(e.nativeEvent as any).isComposing) {
+                  e.preventDefault();
+                  void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft);
+                }
+              }}
+              placeholder="인게임 닉네임 입력"
+              className="w-full rounded-xl border border-white/15 bg-black/45 px-4 py-3 text-white font-bold text-lg outline-none focus:border-cyan-400/70"
+            />
+            <div className="mt-5 flex justify-end">
+              <button
+                onMouseEnter={() => playSFX('hover')}
+                onClick={() => void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft)}
+                disabled={savingIngameProfile || !ingameNicknameDraft.trim()}
+                className={`hvr-grow hvr-glow px-6 py-3 rounded-xl border font-black text-lg sm:text-xl transition-all ${savingIngameProfile || !ingameNicknameDraft.trim() ? 'border-slate-700 text-slate-500 bg-slate-800/50 cursor-not-allowed' : 'border-cyan-400/60 text-cyan-300 bg-black/50 hover:bg-cyan-500/20 cursor-pointer'}`}
+              >
+                {savingIngameProfile ? '저장중...' : '확인'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {statusPopup && (
         <div className="fixed inset-0 z-[280] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setStatusPopup(null)}>
           <div
@@ -4694,16 +4996,16 @@ function App() {
             className={`w-full max-w-lg rounded-[2rem] border p-6 sm:p-7 bg-[#0a0f1d] shadow-2xl ${statusPopup.type === 'success' ? 'border-emerald-400/70' : statusPopup.type === 'error' ? 'border-rose-400/70' : 'border-cyan-400/70'} ${statusPopupFading ? 'animate-[popup-fade_340ms_ease-out_forwards]' : ''}`}
             style={statusPopupFading ? undefined : { animation: 'popup-in 260ms ease-out' }}
           >
-            <h4 className={`text-2xl font-black mb-3 ${statusPopup.type === 'success' ? 'text-emerald-300' : statusPopup.type === 'error' ? 'text-rose-300' : 'text-cyan-300'}`}>
+            <h4 className={`text-3xl sm:text-4xl font-black mb-3 ${statusPopup.type === 'success' ? 'text-emerald-300' : statusPopup.type === 'error' ? 'text-rose-300' : 'text-cyan-300'}`}>
               {statusPopup.title}
             </h4>
-            <p className="text-slate-200 text-base sm:text-lg leading-relaxed whitespace-pre-line">{statusPopup.message}</p>
+            <p className="text-slate-200 text-lg sm:text-xl leading-relaxed whitespace-pre-line">{statusPopup.message}</p>
             {!statusPopup.hideConfirm && (
               <div className="mt-6 flex justify-end">
                 <button
                   onMouseEnter={() => playSFX('hover')}
                   onClick={() => { playSFX('click'); setStatusPopup(null); }}
-                  className="hvr-grow hvr-buzz px-5 py-2.5 rounded-xl border border-cyan-400/50 text-cyan-300 font-bold bg-black/50 hover:bg-cyan-500/20 cursor-pointer"
+                  className="hvr-grow hvr-buzz px-5 py-2.5 rounded-xl border border-cyan-400/50 text-cyan-300 text-lg sm:text-xl font-bold bg-black/50 hover:bg-cyan-500/20 cursor-pointer"
                 >
                   확인
                 </button>
