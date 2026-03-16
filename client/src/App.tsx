@@ -34,6 +34,7 @@ type RegularChallengeMode = 'free';
 type SeasonChallengeMode = 'random' | 'season_free' | 'season_watson_melee' | 'season_vantage_sniper' | 'season_wraith_knife';
 type ChallengeMode = RegularChallengeMode | SeasonChallengeMode;
 type IngamePlatform = 'steam' | 'ea';
+type WinTarget = 3 | 5 | 11 | 21;
 
 type IncomingChallengeRequest = {
   id: string;
@@ -98,6 +99,7 @@ const SEASON_MODE_MENU: { mode: SeasonChallengeMode; label: string; description:
 ];
 
 const KNOWN_CHALLENGE_MODES: ChallengeMode[] = ['free', 'random', 'season_free', 'season_watson_melee', 'season_vantage_sniper', 'season_wraith_knife'];
+const WIN_TARGET_OPTIONS: WinTarget[] = [3, 5, 11, 21];
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -117,6 +119,7 @@ function App() {
   
   const [myWins, setMyWins] = useState<number | null>(null);
   const [myLosses, setMyLosses] = useState<number | null>(null);
+  const [winTarget, setWinTarget] = useState<WinTarget>(3);
   const [waitingForScore, setWaitingForScore] = useState(false);
   const [homeRankingHeight, setHomeRankingHeight] = useState<number | null>(null);
   
@@ -227,6 +230,61 @@ function App() {
       legend: String(legend || '').trim(),
       weapons: [String(weapons?.[0] || '').trim(), String(weapons?.[1] || '').trim()] as [string, string],
     };
+  };
+  const rememberManualLoadout = (mode: ChallengeMode | string, legendRaw: string, weaponsRaw: string[]) => {
+    const modeKey = normalizeChallengeMode(mode);
+    if (modeKey !== 'free' && modeKey !== 'season_free') return;
+    const legend = String(legendRaw || '').trim();
+    const weapons: [string, string] = [String(weaponsRaw?.[0] || '').trim(), String(weaponsRaw?.[1] || '').trim()];
+    if (!legend && !weapons[0] && !weapons[1]) return;
+    manualLoadoutRef.current[modeKey] = { legend, weapons };
+  };
+  const getManualLoadout = (mode: ChallengeMode | string): { legend: string; weapons: [string, string] } | null => {
+    const modeKey = normalizeChallengeMode(mode);
+    if (modeKey !== 'free' && modeKey !== 'season_free') return null;
+    const loadout = manualLoadoutRef.current[modeKey];
+    if (!loadout.legend && !loadout.weapons[0] && !loadout.weapons[1]) return null;
+    return { legend: loadout.legend, weapons: [...loadout.weapons] as [string, string] };
+  };
+  const applyDefaultLoadoutForMode = (mode: ChallengeMode | string) => {
+    const fixed = getFixedSeasonLoadout(mode);
+    if (fixed) {
+      setEntryLegend(fixed.legend);
+      setEntryWeapons([...fixed.weapons]);
+      return;
+    }
+    const saved = getManualLoadout(mode);
+    setEntryLegend(saved?.legend || '');
+    setEntryWeapons(saved ? [...saved.weapons] : ['', '']);
+  };
+  const inferWinTargetFromScores = (...scoreValues: Array<number | null | undefined>): WinTarget => {
+    const numeric = scoreValues
+      .map((value) => (typeof value === 'number' && Number.isFinite(value) ? value : Number(value)))
+      .filter((value) => Number.isFinite(value) && value >= 0);
+    const maxScore = numeric.length > 0 ? Math.max(...numeric) : 0;
+    if (maxScore >= 21) return 21;
+    if (maxScore >= 11) return 11;
+    if (maxScore >= 5) return 5;
+    return 3;
+  };
+  const isSubmittedScorePair = (winRaw: number | null | undefined, loseRaw: number | null | undefined) => {
+    const win = Number(winRaw);
+    const lose = Number(loseRaw);
+    return Number.isFinite(win) && Number.isFinite(lose) && win >= 0 && lose >= 0 && (win + lose > 0);
+  };
+  const isTerminalScoreSelection = (
+    winsRaw: number | null | undefined,
+    lossesRaw: number | null | undefined,
+    target: WinTarget
+  ) => {
+    if (winsRaw === null || winsRaw === undefined || lossesRaw === null || lossesRaw === undefined) return false;
+    const wins = Number(winsRaw);
+    const losses = Number(lossesRaw);
+    if (!Number.isFinite(wins) || !Number.isFinite(losses)) return false;
+    if (wins < 0 || losses < 0) return false;
+    if (wins > target || losses > target) return false;
+    if (wins === losses) return false;
+    return wins === target || losses === target;
   };
   const getModeAccent = (mode: ChallengeMode | string) => {
     const m = normalizeChallengeMode(mode);
@@ -590,6 +648,13 @@ function App() {
   const statusPopupTimerRef = useRef<number | null>(null);
   const statusPopupFadeTimerRef = useRef<number | null>(null);
   const autoScoreSubmitKeyRef = useRef('');
+  const manualLoadoutRef = useRef<{
+    free: { legend: string; weapons: [string, string] };
+    season_free: { legend: string; weapons: [string, string] };
+  }>({
+    free: { legend: '', weapons: ['', ''] },
+    season_free: { legend: '', weapons: ['', ''] },
+  });
   const rankCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const activeScrollTargetRef = useRef<HTMLElement | null>(null);
@@ -628,6 +693,14 @@ function App() {
   useEffect(() => { incomingChallengeRef.current = incomingChallenge; }, [incomingChallenge]);
   useEffect(() => { entryLegendRef.current = entryLegend; }, [entryLegend]);
   useEffect(() => { entryWeaponsRef.current = entryWeapons; }, [entryWeapons]);
+  useEffect(() => {
+    const modeSource = matchPhase === 'scoring' && activeMatch ? activeMatch.mode : entryMode;
+    rememberManualLoadout(modeSource, entryLegend, entryWeapons);
+  }, [entryLegend, entryWeapons, entryMode, activeMatch?.mode, matchPhase]);
+  useEffect(() => {
+    if (myWins !== null && myWins > winTarget) setMyWins(winTarget);
+    if (myLosses !== null && myLosses > winTarget) setMyLosses(winTarget);
+  }, [winTarget, myWins, myLosses]);
   useEffect(() => {
     const onPointerDown = (e: Event) => {
       const target = e.target as HTMLElement | null;
@@ -813,9 +886,11 @@ function App() {
 
       if (data.c_ready && data.t_ready) {
         setIncomingChallenge(null);
+        setWinTarget(inferWinTargetFromScores(data.c_win, data.c_lose, data.t_win, data.t_lose));
         setMatchPhase('scoring');
       } else if (modeRaw.includes('_accepted') || modeRaw.includes('_accepting') || modeRaw.includes('_settling')) {
         setIncomingChallenge(null);
+        setWinTarget(inferWinTargetFromScores(data.c_win, data.c_lose, data.t_win, data.t_lose));
         setMatchPhase('scoring');
       } else if (isC) {
         setIncomingChallenge(null);
@@ -1203,6 +1278,8 @@ function App() {
                     }
                    if (currentPhase === 'scoring') {
                        setActiveMatch(prev => prev ? { ...prev, oppLegend: prev.isChallenger ? updated.t_legend : updated.legend, oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons } : prev);
+                       const inferredTarget = inferWinTargetFromScores(updated.c_win, updated.c_lose, updated.t_win, updated.t_lose);
+                       setWinTarget((prev) => (prev === inferredTarget ? prev : inferredTarget));
                    }
                    const prevRow: any = payload.old || {};
                    const hadAnyScoreBefore =
@@ -1256,8 +1333,7 @@ function App() {
                        setWaitingForScore(false);
                        setMyWins(null);
                        setMyLosses(null);
-                       setEntryLegend('');
-                       setEntryWeapons(['', '']);
+                       applyDefaultLoadoutForMode(currentMatch.mode);
                        setRerollCount(0);
                        clearRandomDraftState(currentMatch.id, currentMatch.isChallenger, currentUserName);
                        fetchData();
@@ -1469,8 +1545,11 @@ function App() {
         const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
         const nextSeasonStreak = winnerState.seasonWinStreak + 1;
         const seasonMultiplier = nextSeasonStreak >= 3 ? Math.pow(1.2, nextSeasonStreak - 2) : 1;
-        winnerState.seasonSp += Math.round(baseGain * seasonMultiplier);
-        loserState.seasonSp += loserWonAnyRound ? 15 : 10;
+        const extraWinRounds = Math.max(0, winnerScore - 3);
+        const winnerRoundBonus = extraWinRounds * 5;
+        const loserRoundBonus = extraWinRounds * 3;
+        winnerState.seasonSp += Math.round(baseGain * seasonMultiplier) + winnerRoundBonus;
+        loserState.seasonSp += (loserWonAnyRound ? 15 : 10) + loserRoundBonus;
 
         winnerState.seasonWinStreak = nextSeasonStreak;
         loserState.seasonWinStreak = 0;
@@ -1898,9 +1977,16 @@ function App() {
     const nextMode: ChallengeMode = mode === 'free' ? 'free' : seasonSubMode;
     setEntryMode(nextMode);
     const fixed = getFixedSeasonLoadout(nextMode);
-    setEntryLegend(fixed?.legend || '');
-    setEntryWeapons(fixed ? [...fixed.weapons] : ['', '']);
+    if (fixed) {
+      setEntryLegend(fixed.legend);
+      setEntryWeapons([...fixed.weapons]);
+    } else {
+      const saved = getManualLoadout(nextMode);
+      setEntryLegend(saved?.legend || '');
+      setEntryWeapons(saved ? [...saved.weapons] : ['', '']);
+    }
     setRerollCount(0);
+    setWinTarget(3);
     if (mode === 'free') {
       if (betAmount < REGULAR_TICKET_COST) setBetAmount(REGULAR_TICKET_COST);
     } else {
@@ -1914,9 +2000,16 @@ function App() {
     if (isRegularMode(entryMode)) return;
     setEntryMode(nextMode);
     const fixed = getFixedSeasonLoadout(nextMode);
-    setEntryLegend(fixed?.legend || '');
-    setEntryWeapons(fixed ? [...fixed.weapons] : ['', '']);
+    if (fixed) {
+      setEntryLegend(fixed.legend);
+      setEntryWeapons([...fixed.weapons]);
+    } else {
+      const saved = getManualLoadout(nextMode);
+      setEntryLegend(saved?.legend || '');
+      setEntryWeapons(saved ? [...saved.weapons] : ['', '']);
+    }
     setRerollCount(0);
+    setWinTarget(3);
   };
 
   const handleReroll = async () => {
@@ -2033,6 +2126,10 @@ function App() {
       weapons: challengerWeapons,
       t_legend: targetLegend || null,
       t_weapons: targetWeapons,
+      c_win: null,
+      c_lose: null,
+      t_win: null,
+      t_lose: null,
     };
   };
   const ensureChallengeAccepted = async (
@@ -2193,8 +2290,7 @@ function App() {
         setIncomingChallenge(null);
         setMatchPhase('idle');
         setActiveMatch(null);
-        setEntryLegend('');
-        setEntryWeapons(['', '']);
+        applyDefaultLoadoutForMode(entryMode);
         return;
       }
     }
@@ -2256,8 +2352,9 @@ function App() {
       });
     } else {
       const preset = getFixedSeasonLoadout(baseMode);
-      const nextLegend = preset?.legend || '';
-      const nextWeapons = preset ? [...preset.weapons] : ['', ''];
+      const saved = getManualLoadout(baseMode);
+      const nextLegend = preset?.legend || saved?.legend || '';
+      const nextWeapons = preset ? [...preset.weapons] : saved ? [...saved.weapons] : ['', ''];
       setEntryLegend(nextLegend);
       setEntryWeapons(nextWeapons);
       setRerollCount(0);
@@ -2282,6 +2379,7 @@ function App() {
         hideConfirm: true,
       });
     }
+    setWinTarget(inferWinTargetFromScores(existing?.c_win, existing?.c_lose, existing?.t_win, existing?.t_lose));
     setMatchPhase('scoring');
   };
 
@@ -2299,8 +2397,7 @@ function App() {
     setMatchPhase('idle');
     setActiveMatch(null);
     setEntryOpponent(String(pending.challengerName || '').trim());
-    setEntryLegend('');
-    setEntryWeapons(['', '']);
+    applyDefaultLoadoutForMode(entryMode);
     setRerollCount(0);
     const challengerDisplay = String(pending.challengerName || '').trim() || '상대방';
     showStatusPopup('info', '대전 거절', `${challengerDisplay}님에게 잔뜩 쫄았쥬~ㅋㅋㅋㅋ`, { autoCloseMs: 3000, hideConfirm: true });
@@ -2385,8 +2482,9 @@ function App() {
           }
       } else {
           const preset = getFixedSeasonLoadout(dbMode);
-          const nextLegend = preset?.legend || '';
-          const nextWeapons = preset ? [...preset.weapons] : ['', ''];
+          const saved = getManualLoadout(dbMode);
+          const nextLegend = preset?.legend || saved?.legend || '';
+          const nextWeapons = preset ? [...preset.weapons] : saved ? [...saved.weapons] : ['', ''];
           setEntryLegend(nextLegend);
           setEntryWeapons(nextWeapons);
           setRerollCount(0);
@@ -2399,6 +2497,7 @@ function App() {
           hideConfirm: true,
         });
       }
+      setWinTarget(inferWinTargetFromScores(acceptedRow?.c_win, acceptedRow?.c_lose, acceptedRow?.t_win, acceptedRow?.t_lose));
       setMatchPhase('scoring');
     } else {
       if (isRegularMode(entryMode)) {
@@ -2414,8 +2513,9 @@ function App() {
       if (newChall) {
         setRerollCount(0);
         const preset = getFixedSeasonLoadout(modeToInsert);
-        const nextLegend = preset?.legend || '';
-        const nextWeapons = preset ? [...preset.weapons] : ['', ''];
+        const saved = getManualLoadout(modeToInsert);
+        const nextLegend = preset?.legend || saved?.legend || '';
+        const nextWeapons = preset ? [...preset.weapons] : saved ? [...saved.weapons] : ['', ''];
         setEntryLegend(nextLegend);
         setEntryWeapons(nextWeapons);
         setActiveMatch({ id: newChall.id, mode: modeToInsert, opponent: entryOpponent.trim(), legend: nextLegend, weapons: nextWeapons, isChallenger: true });
@@ -2454,6 +2554,15 @@ function App() {
       showStatusPopup('error', '입력 필요', '레전드와 무기를 모두 설정하세요.');
       return;
     }
+    if (!isTerminalScoreSelection(myWins, myLosses, winTarget)) {
+      playSFX('error');
+      showStatusPopup(
+        'error',
+        '스코어 입력 안내',
+        `현재 승리 목표는 ${winTarget}승입니다. 한쪽이 ${winTarget}승에 도달한 최종 스코어를 입력해주세요.`
+      );
+      return;
+    }
     playSFX('click');
     
     const isC = activeMatch.isChallenger;
@@ -2486,8 +2595,10 @@ function App() {
     }
 
     if (updatedData) {
-      const hasC = updatedData.c_win !== null && updatedData.c_lose !== null;
-      const hasT = updatedData.t_win !== null && updatedData.t_lose !== null;
+      const resolvedTarget = inferWinTargetFromScores(updatedData.c_win, updatedData.c_lose, updatedData.t_win, updatedData.t_lose);
+      setWinTarget((prev) => (prev === resolvedTarget ? prev : resolvedTarget));
+      const hasC = isSubmittedScorePair(updatedData.c_win, updatedData.c_lose);
+      const hasT = isSubmittedScorePair(updatedData.t_win, updatedData.t_lose);
       if (hasC && hasT) {
         if (updatedData.c_win === updatedData.t_lose && updatedData.c_lose === updatedData.t_win) {
           const challengeMode = String(updatedData.mode || '').trim();
@@ -2527,98 +2638,108 @@ function App() {
             return;
           }
 
-          const challengerWon = updatedData.c_win > updatedData.c_lose;
+          const challengerScore = Number(updatedData.c_win || 0);
+          const targetScore = Number(updatedData.t_win || 0);
+          const challengerWon = challengerScore > targetScore;
+          const winnerScore = Math.max(challengerScore, targetScore);
+          const loserScore = Math.min(challengerScore, targetScore);
+          const extraWinRounds = Math.max(0, winnerScore - 3);
           const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', challengerName).single();
           const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', targetName).single();
           let currentPointLabel = isRegularMode(baseMode) ? 'RP (정규포인트)' : 'SP (시즌포인트)';
           let currentPointDelta = 0;
           let currentGcDelta = 0;
 
-          if (cProfile && tProfile) {
-            const cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
-            const tUpdates: any = { wins: tProfile.wins + (challengerWon ? 0 : 1), losses: tProfile.losses + (challengerWon ? 1 : 0) };
+          if (!cProfile || !tProfile) {
+            await supabase.from('challenges').update({ mode: acceptedMode }).eq('id', activeMatch.id).eq('mode', settlingMode);
+            showStatusPopup('error', '결과 반영 실패', '참가자 프로필을 찾지 못해 보상 반영을 완료하지 못했습니다. 다시 시도해주세요.');
+            setWaitingForScore(false);
+            return;
+          }
+          const cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
+          const tUpdates: any = { wins: tProfile.wins + (challengerWon ? 0 : 1), losses: tProfile.losses + (challengerWon ? 1 : 0) };
 
-            const bet = Math.max(0, Math.floor(Number(updatedData.bet_gc || 0)));
-            const cGc = typeof cProfile.gc === 'number' ? cProfile.gc : 1000;
-            const tGc = typeof tProfile.gc === 'number' ? tProfile.gc : 1000;
-            const isRegular = isRegularMode(baseMode);
+          const bet = Math.max(0, Math.floor(Number(updatedData.bet_gc || 0)));
+          const cGc = typeof cProfile.gc === 'number' ? cProfile.gc : 1000;
+          const tGc = typeof tProfile.gc === 'number' ? tProfile.gc : 1000;
+          const isRegular = isRegularMode(baseMode);
 
-            if (isRegular) {
-              // 정규전: 티켓(200)은 소멸, 초과 배팅만 승자가 획득
-              const transferable = Math.max(0, bet - REGULAR_TICKET_COST) * 2;
-              if (challengerWon) {
-                cUpdates.gc = cGc + transferable;
-                tUpdates.gc = tGc;
-              } else {
-                cUpdates.gc = cGc;
-                tUpdates.gc = tGc + transferable;
-              }
+          if (isRegular) {
+            // 정규전: 티켓(200)은 소멸, 초과 배팅만 승자가 획득
+            const transferable = Math.max(0, bet - REGULAR_TICKET_COST) * 2;
+            if (challengerWon) {
+              cUpdates.gc = cGc + transferable;
+              tUpdates.gc = tGc;
             } else {
-              // 시즌전: 배팅 전체 팟(양쪽)을 승자가 획득
-              const transferable = bet * 2;
-              if (challengerWon) {
-                cUpdates.gc = cGc + transferable;
-                tUpdates.gc = tGc;
-              } else {
-                cUpdates.gc = cGc;
-                tUpdates.gc = tGc + transferable;
-              }
+              cUpdates.gc = cGc;
+              tUpdates.gc = tGc + transferable;
             }
-
-            const currentNameNorm = (currentUserName || '').trim().toLowerCase();
-            const challengerNorm = (challengerName || '').trim().toLowerCase();
-            const isCurrentChallenger = currentNameNorm === challengerNorm;
-            const didCurrentWin = winnerName?.trim() === (currentUserName || '').trim();
-            const myScore = isCurrentChallenger ? Number(updatedData.c_win || 0) : Number(updatedData.t_win || 0);
-            const myRowBefore: any = regularRankMap.get(normalizeName(currentUserName));
-
-            if (isRegularMode(baseMode)) {
-              const myTierBefore = getRegularTierLevelByName(currentUserName);
-              const oppTierBefore = getRegularTierLevelByName(isCurrentChallenger ? targetName : challengerName);
-              if (didCurrentWin) {
-                const myRegularWinsBefore = Number(myRowBefore?.regular_wins || 0);
-                if (myRegularWinsBefore <= 0) {
-                  currentPointDelta = REGULAR_FIRST_WIN_BASE_BY_TIER_LEVEL[oppTierBefore] ?? 25;
-                } else {
-                  const isSweep = myScore === 3;
-                  const isHigherTierWin = oppTierBefore > myTierBefore;
-                  const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
-                  const nextStreak = Number(myRowBefore?.regular_win_streak || 0) + 1;
-                  const streakMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
-                  currentPointDelta = Math.round(baseGain * streakMultiplier);
-                }
-              } else {
-                currentPointDelta = -(15 - (myScore > 0 ? 5 : 0));
-              }
+          } else {
+            // 시즌전: 배팅 전체 팟(양쪽)을 승자가 획득
+            const transferable = bet * 2;
+            if (challengerWon) {
+              cUpdates.gc = cGc + transferable;
+              tUpdates.gc = tGc;
             } else {
-              if (didCurrentWin) {
-                const myTierBefore = typeof myRowBefore?.season_tier_level === 'number' ? myRowBefore.season_tier_level : 0;
-                const oppTierBefore = typeof regularRankMap.get(normalizeName(isCurrentChallenger ? targetName : challengerName))?.season_tier_level === 'number'
-                  ? regularRankMap.get(normalizeName(isCurrentChallenger ? targetName : challengerName))?.season_tier_level
-                  : 0;
-                const isSweep = myScore === 3;
-                const isHigherTierWin = Number(oppTierBefore || 0) > Number(myTierBefore || 0);
+              cUpdates.gc = cGc;
+              tUpdates.gc = tGc + transferable;
+            }
+          }
+
+          const currentNameNorm = (currentUserName || '').trim().toLowerCase();
+          const challengerNorm = (challengerName || '').trim().toLowerCase();
+          const isCurrentChallenger = currentNameNorm === challengerNorm;
+          const didCurrentWin = winnerName?.trim() === (currentUserName || '').trim();
+          const myScore = isCurrentChallenger ? challengerScore : targetScore;
+          const oppScore = isCurrentChallenger ? targetScore : challengerScore;
+          const myRowBefore: any = regularRankMap.get(normalizeName(currentUserName));
+
+          if (isRegularMode(baseMode)) {
+            const myTierBefore = getRegularTierLevelByName(currentUserName);
+            const oppTierBefore = getRegularTierLevelByName(isCurrentChallenger ? targetName : challengerName);
+            if (didCurrentWin) {
+              const myRegularWinsBefore = Number(myRowBefore?.regular_wins || 0);
+              if (myRegularWinsBefore <= 0) {
+                currentPointDelta = REGULAR_FIRST_WIN_BASE_BY_TIER_LEVEL[oppTierBefore] ?? 25;
+              } else {
+                const isSweep = loserScore === 0;
+                const isHigherTierWin = oppTierBefore > myTierBefore;
                 const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
-                const nextStreak = Number(myRowBefore?.season_win_streak || 0) + 1;
-                const seasonMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
-                currentPointDelta = Math.round(baseGain * seasonMultiplier);
-              } else {
-                currentPointDelta = myScore > 0 ? 15 : 10;
+                const nextStreak = Number(myRowBefore?.regular_win_streak || 0) + 1;
+                const streakMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
+                currentPointDelta = Math.round(baseGain * streakMultiplier);
               }
+            } else {
+              currentPointDelta = -(15 - (myScore > 0 ? 5 : 0));
             }
-
-            currentGcDelta = isCurrentChallenger
-              ? (Number(cUpdates.gc ?? cGc) - cGc)
-              : (Number(tUpdates.gc ?? tGc) - tGc);
-
-            const { error: cErr } = await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
-            const { error: tErr } = await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
-            if (cErr || tErr) {
-              await supabase.from('challenges').update({ mode: acceptedMode }).eq('id', activeMatch.id).eq('mode', settlingMode);
-              showStatusPopup('error', '결과 반영 실패', cErr?.message || tErr?.message || '프로필 업데이트 중 오류가 발생했습니다.');
-              setWaitingForScore(false);
-              return;
+          } else {
+            if (didCurrentWin) {
+              const myTierBefore = typeof myRowBefore?.season_tier_level === 'number' ? myRowBefore.season_tier_level : 0;
+              const oppTierBefore = typeof regularRankMap.get(normalizeName(isCurrentChallenger ? targetName : challengerName))?.season_tier_level === 'number'
+                ? regularRankMap.get(normalizeName(isCurrentChallenger ? targetName : challengerName))?.season_tier_level
+                : 0;
+              const isSweep = oppScore === 0;
+              const isHigherTierWin = Number(oppTierBefore || 0) > Number(myTierBefore || 0);
+              const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
+              const nextStreak = Number(myRowBefore?.season_win_streak || 0) + 1;
+              const seasonMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
+              currentPointDelta = Math.round(baseGain * seasonMultiplier) + (extraWinRounds * 5);
+            } else {
+              currentPointDelta = (myScore > 0 ? 15 : 10) + (extraWinRounds * 3);
             }
+          }
+
+          currentGcDelta = isCurrentChallenger
+            ? (Number(cUpdates.gc ?? cGc) - cGc)
+            : (Number(tUpdates.gc ?? tGc) - tGc);
+
+          const { error: cErr } = await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
+          const { error: tErr } = await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
+          if (cErr || tErr) {
+            await supabase.from('challenges').update({ mode: acceptedMode }).eq('id', activeMatch.id).eq('mode', settlingMode);
+            showStatusPopup('error', '결과 반영 실패', cErr?.message || tErr?.message || '프로필 업데이트 중 오류가 발생했습니다.');
+            setWaitingForScore(false);
+            return;
           }
 
           suppressNextDeletePopupChallengeIdRef.current = activeMatch.id;
@@ -2650,8 +2771,7 @@ function App() {
           setWaitingForScore(false);
           setMyWins(null);
           setMyLosses(null);
-          setEntryLegend('');
-          setEntryWeapons(['', '']);
+          applyDefaultLoadoutForMode(activeMatch.mode);
           fetchData();
           fetchRankers();
           if (user?.id) fetchProfile(user.id);
@@ -2673,14 +2793,13 @@ function App() {
         }
       }
     } else {
-      playSFX('success');
-      if (activeMatch && currentUserName) clearRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName);
-      setRerollCount(0);
-      setMatchPhase('idle');
-      setActiveMatch(null);
-      setWaitingForScore(false);
-      setMyWins(null);
-      setMyLosses(null);
+      const latest = await fetchChallengeById(activeMatch.id);
+      if (!latest) {
+        setWaitingForScore(false);
+        showStatusPopup('info', '매치 종료', '대전이 이미 종료되었습니다.');
+        return;
+      }
+      setWaitingForScore(true);
     }
   };
 
@@ -2692,15 +2811,25 @@ function App() {
     const legend = String(entryLegend || '').trim();
     const weapon1 = String(entryWeapons?.[0] || '').trim();
     const weapon2 = String(entryWeapons?.[1] || '').trim();
-    if (myWins === null || myLosses === null || !legend || !weapon1 || !weapon2 || waitingForScore) {
-      if (myWins === null || myLosses === null) autoScoreSubmitKeyRef.current = '';
+    if (
+      myWins === null ||
+      myLosses === null ||
+      !isTerminalScoreSelection(myWins, myLosses, winTarget) ||
+      !legend ||
+      !weapon1 ||
+      !weapon2 ||
+      waitingForScore
+    ) {
+      if (myWins === null || myLosses === null || !isTerminalScoreSelection(myWins, myLosses, winTarget)) {
+        autoScoreSubmitKeyRef.current = '';
+      }
       return;
     }
-    const submitKey = `${activeMatch.id}|${legend}|${weapon1}|${weapon2}|${myWins}|${myLosses}`;
+    const submitKey = `${activeMatch.id}|${legend}|${weapon1}|${weapon2}|${myWins}|${myLosses}|${winTarget}`;
     if (autoScoreSubmitKeyRef.current === submitKey) return;
     autoScoreSubmitKeyRef.current = submitKey;
     void handleReportScore();
-  }, [matchPhase, activeMatch?.id, entryLegend, entryWeapons, myWins, myLosses, waitingForScore]);
+  }, [matchPhase, activeMatch?.id, entryLegend, entryWeapons, myWins, myLosses, winTarget, waitingForScore]);
 
   const copyPlayerName = (name: string) => {
     if (!name) return;
@@ -4014,25 +4143,53 @@ function App() {
                            </div>
                            
                            <div className="flex flex-col gap-4 pt-4 mt-2">
+                              <div className="flex flex-col gap-2 px-3">
+                                <span className="text-slate-300 text-sm font-bold tracking-wide">승리 목표</span>
+                                <div className="flex flex-wrap gap-2">
+                                  {WIN_TARGET_OPTIONS.map((target) => (
+                                    <button
+                                      key={`target-${target}`}
+                                      onMouseEnter={() => playSFX('hover')}
+                                      onClick={() => {
+                                        playSFX('click');
+                                        setWinTarget(target);
+                                        if (myWins !== null && myWins > target) setMyWins(target);
+                                        if (myLosses !== null && myLosses > target) setMyLosses(target);
+                                      }}
+                                      className={`px-4 py-2 rounded-xl border font-black text-sm sm:text-base transition-all cursor-pointer ${
+                                        winTarget === target
+                                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-300 shadow-[0_0_16px_rgba(34,211,238,0.35)]'
+                                          : 'bg-black/50 text-slate-300 border-white/10 hover:border-cyan-400/50'
+                                      }`}
+                                    >
+                                      {target}승
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
                               <div className="flex items-center justify-between px-3">
                                 <span className="text-cyan-400 font-bold text-xl tracking-widest">나의 승리</span>
-                                <div className="flex gap-3">
-                                  {[0, 1, 2, 3].map(num => (
-                                    <button key={`w${num}`} onMouseEnter={() => playSFX('hover')} onClick={() => { setMyWins(num); playSFX('click'); }} className={`w-14 h-14 rounded-2xl font-bold text-2xl transition-all border-2 cursor-pointer ${myWins === num ? 'bg-cyan-500 border-white text-black shadow-[0_0_20px_cyan]' : 'bg-black/60 border-white/10 text-white hover:border-cyan-400/50'}`}>{num}</button>
+                                <div className="flex flex-wrap gap-2 justify-end max-w-[360px]">
+                                  {Array.from({ length: winTarget + 1 }, (_, idx) => idx).map(num => (
+                                    <button key={`w${num}`} onMouseEnter={() => playSFX('hover')} onClick={() => { setMyWins(num); playSFX('click'); }} className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl font-bold text-lg sm:text-xl transition-all border-2 cursor-pointer ${myWins === num ? 'bg-cyan-500 border-white text-black shadow-[0_0_16px_cyan]' : 'bg-black/60 border-white/10 text-white hover:border-cyan-400/50'}`}>{num}</button>
                                   ))}
                                 </div>
                               </div>
                               <div className="flex items-center justify-between px-3 mb-3">
                                 <span className="text-pink-400 font-bold text-xl tracking-widest">나의 패배</span>
-                                <div className="flex gap-3">
-                                  {[0, 1, 2, 3].map(num => (
-                                    <button key={`l${num}`} onMouseEnter={() => playSFX('hover')} onClick={() => { setMyLosses(num); playSFX('click'); }} className={`w-14 h-14 rounded-2xl font-bold text-2xl transition-all border-2 cursor-pointer ${myLosses === num ? 'bg-pink-500 border-white text-black shadow-[0_0_20px_pink]' : 'bg-black/60 border-white/10 text-white hover:border-pink-400/50'}`}>{num}</button>
+                                <div className="flex flex-wrap gap-2 justify-end max-w-[360px]">
+                                  {Array.from({ length: winTarget + 1 }, (_, idx) => idx).map(num => (
+                                    <button key={`l${num}`} onMouseEnter={() => playSFX('hover')} onClick={() => { setMyLosses(num); playSFX('click'); }} className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl font-bold text-lg sm:text-xl transition-all border-2 cursor-pointer ${myLosses === num ? 'bg-pink-500 border-white text-black shadow-[0_0_16px_pink]' : 'bg-black/60 border-white/10 text-white hover:border-pink-400/50'}`}>{num}</button>
                                   ))}
                                 </div>
                               </div>
                               <div className="px-3 py-2 rounded-xl border border-white/10 bg-black/30 text-center">
-                                <p className={`font-black text-base sm:text-lg ${waitingForScore ? 'text-yellow-300 animate-pulse' : (myWins !== null && myLosses !== null) ? 'text-emerald-300' : 'text-slate-400'}`}>
-                                  {waitingForScore ? '결과를 업로드하고 있습니다...' : (myWins !== null && myLosses !== null) ? '점수가 자동으로 업로드되고 있습니다...' : '승/패 점수를 입력해주세요.'}
+                                <p className={`font-black text-base sm:text-lg ${waitingForScore ? 'text-yellow-300 animate-pulse' : isTerminalScoreSelection(myWins, myLosses, winTarget) ? 'text-emerald-300' : 'text-slate-400'}`}>
+                                  {waitingForScore
+                                    ? '결과를 업로드하고 있습니다...'
+                                    : isTerminalScoreSelection(myWins, myLosses, winTarget)
+                                      ? '점수가 자동으로 업로드되고 있습니다...'
+                                      : `승리 목표(${winTarget}승)에 맞춰 승/패 점수를 입력해주세요.`}
                                 </p>
                               </div>
                            </div>
