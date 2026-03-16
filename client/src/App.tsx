@@ -169,7 +169,7 @@ function App() {
   const [cooldownNowMs, setCooldownNowMs] = useState(() => Date.now());
   const [starRainActive, setStarRainActive] = useState(false);
   const [starRainParticles, setStarRainParticles] = useState<
-    { id: number; left: number; delay: number; duration: number; size: number; drift: number }[]
+    { id: number; left: number; delay: number; duration: number; size: number; drift: number; kind: 'star' | 'meteor' }[]
   >([]);
 
   const [bgmEnabled, setBgmEnabled] = useState(localStorage.getItem('bgmEnabled') !== 'false');
@@ -681,6 +681,8 @@ function App() {
   const statusPopupTimerRef = useRef<number | null>(null);
   const statusPopupFadeTimerRef = useRef<number | null>(null);
   const starRainTimerRef = useRef<number | null>(null);
+  const starRainClickCountRef = useRef(0);
+  const lastResultPopupMatchIdRef = useRef<string>('');
   const scoringSessionChallengeIdRef = useRef<string | null>(null);
   const autoScoreSubmitKeyRef = useRef('');
   const manualLoadoutRef = useRef<{
@@ -880,14 +882,29 @@ function App() {
 
   const triggerStarRain = () => {
     playSFX('click');
-    const particles = Array.from({ length: 90 }, (_, idx) => ({
+    starRainClickCountRef.current += 1;
+    const meteorMode = starRainClickCountRef.current >= 5;
+    const starParticles = Array.from({ length: 90 }, (_, idx) => ({
       id: idx + 1,
       left: Math.random() * 100,
       delay: Math.random() * 1.5,
       duration: 2.2 + Math.random() * 2.4,
       size: 8 + Math.random() * 10,
       drift: -70 + Math.random() * 140,
+      kind: 'star' as const,
     }));
+    const meteorParticles = meteorMode
+      ? Array.from({ length: 28 }, (_, idx) => ({
+          id: 1000 + idx + 1,
+          left: Math.random() * 100,
+          delay: Math.random() * 1.3,
+          duration: 1.2 + Math.random() * 1.3,
+          size: 18 + Math.random() * 16,
+          drift: -180 + Math.random() * 360,
+          kind: 'meteor' as const,
+        }))
+      : [];
+    const particles = [...starParticles, ...meteorParticles];
     setStarRainParticles(particles);
     setStarRainActive(true);
     if (starRainTimerRef.current) {
@@ -1331,9 +1348,48 @@ function App() {
   }, [activeMenu, matchPhase, logs.length, rankers.length, miniRankMode, miniSearchQuery]);
 
   useEffect(() => {
-    const matchLogChannel = supabase.channel('matches_realtime_sync').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' }, payload => { fetchData(); fetchRankers(); }).subscribe();
-    return () => { supabase.removeChannel(matchLogChannel); };
-  }, []);
+    const normalize = (value: unknown) => String(value || '').trim().toLowerCase();
+    const matchLogChannel = supabase
+      .channel('matches_realtime_sync')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' }, payload => {
+        fetchData();
+        fetchRankers();
+        const row: any = payload.new || {};
+        const me = normalize(currentUserName);
+        if (!me) return;
+        const left = normalize(row.left_player_name || row.left_player);
+        const right = normalize(row.right_player_name || row.right_player);
+        const isParticipant = left === me || right === me;
+        if (!isParticipant) return;
+
+        const stableMatchId = getMatchStableId(row);
+        if (lastResultPopupMatchIdRef.current === stableMatchId) return;
+        lastResultPopupMatchIdRef.current = stableMatchId;
+
+        const active = activeMatchRef.current;
+        if (active?.id) {
+          // 결과 insert 직후 들어오는 challenge delete 팝업 중복 차단
+          suppressNextDeletePopupChallengeIdRef.current = active.id;
+        }
+
+        const leftScore = Number(row.score_left || 0);
+        const rightScore = Number(row.score_right || 0);
+        const isMeLeft = left === me;
+        const myScore = isMeLeft ? leftScore : rightScore;
+        const oppScore = isMeLeft ? rightScore : leftScore;
+        const didWin = normalize(row.winner_name) === me;
+        triggerResultFx(didWin, didWin ? '전투 승리! 순위가 갱신되었습니다.' : '전투 종료! 결과가 반영되었습니다.');
+        showStatusPopup(
+          didWin ? 'success' : 'info',
+          didWin ? '전투 승리! 결과 반영 완료' : '전투 종료! 결과 반영 완료',
+          `스코어 ${myScore} : ${oppScore}\n결과가 정상 반영되었습니다.`
+        );
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(matchLogChannel);
+    };
+  }, [currentUserName]);
 
   useEffect(() => {
     const profilesChannel = supabase
@@ -1449,8 +1505,9 @@ function App() {
 	                        suppressNextDeletePopupChallengeIdRef.current = null;
 	                        playSFX('success');
 	                       if (!suppressPopup) {
-                            const wasSenderWaiting =
-                              String(deletedRow?.challenger_name || '').trim() === String(currentUserName || '').trim();
+                           const wasSenderWaiting =
+                              Boolean(currentMatch?.isChallenger) ||
+                              normalizeName(deletedRow?.challenger_name) === normalizeName(currentUserName);
                             if (wasSenderWaiting) {
                               const targetDisplay = String(deletedRow?.target_name || '').trim() || '상대방';
                               showStatusPopup('error', '매치 종료', `(${targetDisplay}님이 잔뜩 쫄아서 거절했습니다 ㅋㅋㅋㅋㅋ)`);
@@ -1471,8 +1528,9 @@ function App() {
                        if(user) fetchProfile(user.id);
                    } else if (currentPhase !== 'idle') {
                        playSFX('click');
-                       const wasSenderWaiting =
-                         String(deletedRow?.challenger_name || '').trim() === String(currentUserName || '').trim();
+                        const wasSenderWaiting =
+                          Boolean(currentMatch?.isChallenger) ||
+                          normalizeName(deletedRow?.challenger_name) === normalizeName(currentUserName);
                         if (wasSenderWaiting) {
                           const targetDisplay = String(deletedRow?.target_name || '').trim() || '상대방';
                           showStatusPopup('error', '매치 종료', `(${targetDisplay}님이 잔뜩 쫄아서 거절했습니다 ㅋㅋㅋㅋㅋ)`);
@@ -2764,7 +2822,11 @@ function App() {
             score_left: Number(updatedData.c_win), score_right: Number(updatedData.t_win), winner_name: String(winnerName), winner_rank_num: Number(winnerRankNum)
           };
 
-          const { error: matchErr } = await supabase.from('matches').insert([matchPayload]);
+          const { data: insertedMatchRow, error: matchErr } = await supabase
+            .from('matches')
+            .insert([matchPayload])
+            .select()
+            .maybeSingle();
           if (matchErr) {
             await supabase.from('challenges').update({ mode: acceptedMode }).eq('id', activeMatch.id).eq('mode', settlingMode);
             showStatusPopup('error', '저장 실패', `데이터베이스 저장에 실패했습니다: ${matchErr.message}`);
@@ -2893,6 +2955,7 @@ function App() {
           };
           const pointDeltaLine = formatDeltaLine(currentPointLabel, currentPointDelta);
           const gcDeltaLine = formatDeltaLine('GC (갤럭시 코인)', currentGcDelta);
+          lastResultPopupMatchIdRef.current = getMatchStableId(insertedMatchRow || matchPayload);
           showStatusPopup(
             didWin ? 'success' : 'info',
             didWin ? '전투 승리! 결과 반영 완료' : '전투 종료! 결과 반영 완료',
@@ -2986,9 +3049,23 @@ function App() {
     }, 650);
   };
 
-  const handleProfileClick = (name: string) => {
-    const profile = rankers.find(r => r.display_name === name);
-    if (profile) { playSFX('click'); setSelectedPlayer(profile); setProfileTab('overview'); }
+  const handleProfileClick = async (name: string) => {
+    const found = rankers.find(r => r.display_name === name);
+    if (!found) return;
+    playSFX('click');
+    setSelectedPlayer(found);
+    setProfileTab('overview');
+    try {
+      const { data: fresh } = await supabase.from('profiles').select('*').eq('id', found.id).maybeSingle();
+      if (!fresh) return;
+      const merged = { ...found, ...fresh };
+      const resolved = resolveIngameProfile(merged);
+      const hydrated = { ...merged, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform };
+      setSelectedPlayer((prev) => (prev && prev.id === found.id ? hydrated : prev));
+      setRankers((prev) => prev.map((row) => (row.id === found.id ? { ...row, ...hydrated } : row)));
+    } catch {
+      // ignore hydration failure
+    }
   };
 
   const buildPlayerCombatStats = (playerName?: string | null) => {
@@ -3864,6 +3941,13 @@ function App() {
         animation-timing-function: linear;
         animation-fill-mode: forwards;
       }
+      .star-rain-item.meteor {
+        color: rgba(251, 191, 36, 0.98);
+        text-shadow:
+          0 0 10px rgba(251, 146, 60, 0.92),
+          0 0 22px rgba(248, 113, 113, 0.7),
+          0 0 32px rgba(34, 211, 238, 0.36);
+      }
     `}</style>
   );
 
@@ -3875,7 +3959,7 @@ function App() {
           {starRainParticles.map((particle) => (
             <span
               key={`star-rain-${particle.id}`}
-              className="star-rain-item"
+              className={`star-rain-item ${particle.kind === 'meteor' ? 'meteor' : ''}`}
               style={{
                 left: `${particle.left}%`,
                 animationDelay: `${particle.delay}s`,
@@ -3884,7 +3968,7 @@ function App() {
                 ['--drift' as any]: `${particle.drift}px`,
               }}
             >
-              ✦
+              {particle.kind === 'meteor' ? '☄' : '✦'}
             </span>
           ))}
         </div>
@@ -4416,7 +4500,7 @@ function App() {
                               const grandRank = getGrandRankInfo(regularIdx, (r as any).regular_tier_level); if (!grandRank) return null;
                               const challengeUi = getRegularChallengeUiState(r.display_name);
                               return (
-                                <div ref={setRankCardRef('mini', 'free', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${rankCardFxByTier((r as any).regular_tier_level || 0)}`}>
+                                <div ref={setRankCardRef('mini', 'free', r.display_name)} key={r.id} onMouseEnter={() => playSFX('hover')} onClick={() => { void handleProfileClick(r.display_name); }} className={`rank-card-stable w-full h-[148px] sm:h-[156px] p-3 sm:p-4 rounded-[1.3rem] sm:rounded-[1.45rem] cursor-pointer transition-all relative overflow-hidden ${rankCardFxByTier((r as any).regular_tier_level || 0)}`}>
                                   <span className="absolute left-3 sm:left-4 top-3 text-[1.5rem] sm:text-[2rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.45)]">
                                     {regularIdx === null ? '-' : `${regularIdx + 1}위`}
                                   </span>
@@ -4691,7 +4775,7 @@ function App() {
                            ref={setRankCardRef('main', 'free', r.display_name)}
                            key={r.id}
                            onMouseEnter={() => playSFX('hover')}
-                           onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }}
+                          onClick={() => { void handleProfileClick(r.display_name); }}
                            className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${rankCardFxByTier((r as any).regular_tier_level || 0)} hover:brightness-110 mt-10`}
                          >
 	                            <div className="absolute w-full flex justify-center z-20 pointer-events-none" style={{ top: 0 }}>
@@ -4810,7 +4894,7 @@ function App() {
 
                            return (
                              <div key={r.id} className={spanClass}>
-                                <div ref={setRankCardRef('main', 'random', r.display_name)} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${seasonCardFxByTier((r as any).season_tier_level || 0)} hover:brightness-110 mt-10`}>
+                                <div ref={setRankCardRef('main', 'random', r.display_name)} onMouseEnter={() => playSFX('hover')} onClick={() => { void handleProfileClick(r.display_name); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${seasonCardFxByTier((r as any).season_tier_level || 0)} hover:brightness-110 mt-10`}>
                                    {seasonIdx === 0 && <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-[3rem] pointer-events-none"></div>}
                                    
                                     <span className={`absolute left-4 sm:left-5 top-3 sm:top-4 ${rankTextClass} leading-[0.9] tracking-tight font-black text-cyan-200 drop-shadow-[0_0_14px_rgba(34,211,238,0.5)] z-20`}>
