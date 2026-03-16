@@ -109,6 +109,7 @@ function App() {
   const [entryMode, setEntryMode] = useState<ChallengeMode>('free');
   const [seasonSubMode, setSeasonSubMode] = useState<SeasonChallengeMode>('random');
   const [entryOpponent, setEntryOpponent] = useState('');
+  const [showRecentOpponentsDropdown, setShowRecentOpponentsDropdown] = useState(false);
   const [entryLegend, setEntryLegend] = useState('');
   const [entryWeapons, setEntryWeapons] = useState<string[]>(['', '']);
   const [betAmount, setBetAmount] = useState<number>(200); 
@@ -174,6 +175,7 @@ function App() {
 
   const currentUserName = profile?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name;
   const currentUserAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || profile?.avatar_url || null;
+  const lastOpponentStorageKey = user?.id ? `gt_last_opponent_v1_${user.id}` : null;
   const DISCORD_GUILD_ID = (import.meta.env.VITE_DISCORD_GUILD_ID as string | undefined)?.trim();
   const REGULAR_TICKET_COST = 200;
   const SEASON_TICKET_COST = 0;
@@ -697,6 +699,24 @@ function App() {
     const modeSource = matchPhase === 'scoring' && activeMatch ? activeMatch.mode : entryMode;
     rememberManualLoadout(modeSource, entryLegend, entryWeapons);
   }, [entryLegend, entryWeapons, entryMode, activeMatch?.mode, matchPhase]);
+  useEffect(() => {
+    if (!lastOpponentStorageKey) return;
+    try {
+      const saved = localStorage.getItem(lastOpponentStorageKey) || '';
+      const safe = String(saved).trim();
+      if (safe && !String(entryOpponent || '').trim()) {
+        setEntryOpponent(safe);
+      }
+    } catch {}
+  }, [lastOpponentStorageKey]);
+  useEffect(() => {
+    if (!lastOpponentStorageKey) return;
+    try {
+      const safe = String(entryOpponent || '').trim();
+      if (safe) localStorage.setItem(lastOpponentStorageKey, safe);
+      else localStorage.removeItem(lastOpponentStorageKey);
+    } catch {}
+  }, [lastOpponentStorageKey, entryOpponent]);
   useEffect(() => {
     if (myWins !== null && myWins > winTarget) setMyWins(winTarget);
     if (myLosses !== null && myLosses > winTarget) setMyLosses(winTarget);
@@ -1317,9 +1337,8 @@ function App() {
 	                        const suppressPopup = suppressNextDeletePopupChallengeIdRef.current === deletedRow.id;
 	                        suppressNextDeletePopupChallengeIdRef.current = null;
 	                        playSFX('success');
-	                        if (!suppressPopup) {
+	                       if (!suppressPopup) {
                             const wasSenderWaiting =
-                              currentPhase === 'waiting_sync' &&
                               String(deletedRow?.challenger_name || '').trim() === String(currentUserName || '').trim();
                             if (wasSenderWaiting) {
                               const targetDisplay = String(deletedRow?.target_name || '').trim() || '상대방';
@@ -1341,7 +1360,14 @@ function App() {
                        if(user) fetchProfile(user.id);
                    } else if (currentPhase !== 'idle') {
                        playSFX('click');
-                       showStatusPopup('info', '매치 종료', '매치가 취소되었거나 정상적으로 종료되었습니다.');
+                       const wasSenderWaiting =
+                         String(deletedRow?.challenger_name || '').trim() === String(currentUserName || '').trim();
+                       if (wasSenderWaiting) {
+                         const targetDisplay = String(deletedRow?.target_name || '').trim() || '상대방';
+                         showStatusPopup('error', '매치 종료', `${targetDisplay}님이 잔뜩 쫄았습니다 ㅋㅋㅋㅋㅋ`);
+                       } else {
+                         showStatusPopup('info', '매치 종료', '매치가 취소되었거나 정상적으로 종료되었습니다.');
+                       }
                        setRerollCount(0);
                        clearRandomDraftState(currentMatch.id, currentMatch.isChallenger, currentUserName);
                        setMatchPhase('idle');
@@ -1519,6 +1545,7 @@ function App() {
         const losePenalty = 15 - (loserWonAnyRound ? 5 : 0);
         loserState.regularRp = Math.max(0, loserState.regularRp - losePenalty);
         loserState.regularWinStreak = 0;
+        loserState.regularDefenseStack = 0;
 
         if (topBefore === winner && winner === right) {
           winnerState.regularDefenseStack += 1;
@@ -1553,6 +1580,7 @@ function App() {
 
         winnerState.seasonWinStreak = nextSeasonStreak;
         loserState.seasonWinStreak = 0;
+        loserState.seasonDefenseStack = 0;
 
         if (topBefore === winner && winner === right) {
           winnerState.seasonDefenseStack += 1;
@@ -3885,13 +3913,15 @@ function App() {
                            <div className="flex flex-col items-center text-center mb-1">
                                <Target size={46} className="text-cyan-400 drop-shadow-[0_0_15px_cyan] mb-3" />
                                <h4 className="text-xl sm:text-2xl font-bold text-white tracking-widest">타겟과 모드를 설정하세요</h4>
-                              <p className="text-slate-400 text-sm mt-2">닉네임 입력 후 바로 대전 모드/배팅을 설정하고 신청할 수 있습니다.</p>
                            </div>
-                            <div className="bg-black/60 p-4 rounded-2xl border border-white/10 shadow-inner">
+                            <div className="bg-black/60 p-4 rounded-2xl border border-white/10 shadow-inner relative">
                                <p className="text-xs text-slate-500 font-bold mb-2 pl-2">TARGET NICKNAME</p>
                                 <input
                                  value={entryOpponent}
                                  onChange={(e) => setEntryOpponent(e.target.value)}
+                                 onFocus={() => setShowRecentOpponentsDropdown(true)}
+                                 onClick={() => setShowRecentOpponentsDropdown(true)}
+                                 onBlur={() => window.setTimeout(() => setShowRecentOpponentsDropdown(false), 120)}
                                  onKeyDown={(e) => {
                                    if (e.key === 'Enter' && !(e.nativeEvent as any).isComposing) {
                                      e.preventDefault();
@@ -3901,24 +3931,29 @@ function App() {
                                  placeholder="상대방 닉네임 직접 입력"
                                   className="w-full bg-transparent outline-none text-white font-bold text-lg sm:text-xl select-text pl-2"
                                 />
+                                {showRecentOpponentsDropdown && recentOpponents.length > 0 && (
+                                  <div className="absolute left-3 right-3 top-[84px] z-30 rounded-xl border border-cyan-400/35 bg-[#070b16]/95 backdrop-blur-lg p-2 shadow-[0_0_18px_rgba(34,211,238,0.22)] max-h-56 overflow-y-auto custom-scrollbar">
+                                    <p className="text-[11px] text-slate-400 font-black px-2 pb-1">최근 대전 상대</p>
+                                    <div className="space-y-1">
+                                      {recentOpponents.map((op) => (
+                                        <button
+                                          key={op}
+                                          onMouseEnter={() => playSFX('hover')}
+                                          onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            playSFX('click');
+                                            setEntryOpponent(op);
+                                            setShowRecentOpponentsDropdown(false);
+                                          }}
+                                          className="w-full text-left px-3 py-2 rounded-lg border border-white/10 bg-black/35 text-cyan-200 text-sm font-bold hover:border-cyan-400/55 hover:bg-cyan-500/20 transition-all cursor-pointer"
+                                        >
+                                          {op}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                             </div>
-                            {recentOpponents.length > 0 && (
-                              <div className="bg-black/45 p-3 rounded-2xl border border-white/10">
-                                <p className="text-xs text-slate-400 font-black mb-2">최근 대전 상대</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {recentOpponents.map((op) => (
-                                    <button
-                                      key={op}
-                                      onMouseEnter={() => playSFX('hover')}
-                                      onClick={() => { playSFX('click'); setEntryOpponent(op); }}
-                                      className="px-3 py-1.5 rounded-lg border border-cyan-400/45 bg-cyan-500/15 text-cyan-200 text-xs sm:text-sm font-bold hover:bg-cyan-500 hover:text-black transition-all cursor-pointer"
-                                    >
-                                      {op}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
                            <div className="flex gap-2 p-1.5 bg-black/50 rounded-2xl border border-white/5">
                               <button
                                 onMouseEnter={() => playSFX('hover')}
@@ -4788,7 +4823,21 @@ function App() {
                         </div>
                         {currentUserIngameNickname && (
                           <p className="mt-2 text-xs sm:text-sm text-slate-300 font-bold">
-                            현재 연결: <span className="text-cyan-300">{getPlatformLabel(currentUserIngamePlatform)}</span> · <span className="text-white">{currentUserIngameNickname}</span>
+                            현재 연결: <span className="text-cyan-300">{getPlatformLabel(currentUserIngamePlatform)}</span> ·{' '}
+                            <button
+                              onMouseEnter={() => playSFX('hover')}
+                              onClick={() => {
+                                playSFX('click');
+                                navigator.clipboard.writeText(currentUserIngameNickname);
+                                const copyMessage = currentUserIngamePlatform === 'ea'
+                                  ? 'EA닉네임이 복사되었습니다.'
+                                  : '친구코드가 복사되었습니다.';
+                                showStatusPopup('success', '복사 완료', copyMessage, { autoCloseMs: 1000, hideConfirm: true });
+                              }}
+                              className="text-white hover:text-cyan-200 transition-colors cursor-pointer"
+                            >
+                              {currentUserIngameNickname}
+                            </button>
                           </p>
                         )}
                       </div>
@@ -4983,7 +5032,10 @@ function App() {
                               return;
                             }
                             navigator.clipboard.writeText(selectedPlayerIngameValue);
-                            showStatusPopup('success', '복사 완료', `${selectedPlayerIngameLabel}가 복사되었습니다.`, { autoCloseMs: 1200, hideConfirm: true });
+                            const copyMessage = selectedPlayerIngameProfile.platform === 'ea'
+                              ? 'EA닉네임이 복사되었습니다.'
+                              : '친구코드가 복사되었습니다.';
+                            showStatusPopup('success', '복사 완료', copyMessage, { autoCloseMs: 1000, hideConfirm: true });
                           }}
                           className="mt-1 text-cyan-300 text-sm sm:text-base font-bold whitespace-normal break-all text-left hover:text-cyan-200 transition-colors cursor-pointer"
                         >
@@ -4994,14 +5046,14 @@ function App() {
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                           {selectedPlayerRegularInfo?.icon}
                           {selectedPlayerRegularInfo
-                            ? `${selectedPlayerRegularInfo.title} ${selectedPlayerRegularInfo.num ? `${selectedPlayerRegularInfo.num}위` : '-위'} · ${selectedPlayer?.regular_rp ?? 0} RP (자유)`
-                            : `루키 -위 · ${selectedPlayer?.regular_rp ?? 0} RP (자유)`}
+                            ? `${selectedPlayerRegularInfo.title} ${selectedPlayerRegularInfo.num ? `${selectedPlayerRegularInfo.num}위` : '-위'} · ${selectedPlayer?.regular_rp ?? 0} RP (정규)`
+                            : `루키 -위 · ${selectedPlayer?.regular_rp ?? 0} RP (정규)`}
                         </span>
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerSeasonInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                            <span>{selectedPlayerSeasonInfo?.icon || '🪐'}</span>
                            {selectedPlayerSeasonInfo
-                             ? `${selectedPlayerSeasonInfo.name} ${typeof selectedPlayerSeasonInfo.index === 'number' ? `${selectedPlayerSeasonInfo.index + 1}위` : '-위'} · ${selectedPlayer?.season_sp ?? 0} SP (랜덤)`
-                             : `보이드 -위 · ${selectedPlayer?.season_sp ?? 0} SP (랜덤)`}
+                             ? `${selectedPlayerSeasonInfo.name} ${typeof selectedPlayerSeasonInfo.index === 'number' ? `${selectedPlayerSeasonInfo.index + 1}위` : '-위'} · ${selectedPlayer?.season_sp ?? 0} SP (시즌)`
+                             : `보이드 -위 · ${selectedPlayer?.season_sp ?? 0} SP (시즌)`}
                         </span>
                       </div>
                     </div>
