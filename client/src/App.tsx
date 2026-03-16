@@ -545,15 +545,33 @@ function App() {
 
   const checkActiveChallenge = async (username: string) => {
     if (!username) return;
-    const { data: cData } = await supabase.from('challenges').select('*').eq('challenger_name', username).maybeSingle();
-    const { data: tData } = await supabase.from('challenges').select('*').eq('target_name', username).maybeSingle();
-    const data = cData || tData;
+    const { data: cRows } = await supabase
+      .from('challenges')
+      .select('*')
+      .eq('challenger_name', username)
+      .order('created_at', { ascending: false })
+      .limit(3);
+    const { data: tRows } = await supabase
+      .from('challenges')
+      .select('*')
+      .eq('target_name', username)
+      .order('created_at', { ascending: false })
+      .limit(3);
+    const data = [...(cRows || []), ...(tRows || [])]
+      .sort((a: any, b: any) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime())[0];
 
     if (data) {
       const isC = data.challenger_name === username;
       const opp = isC ? data.target_name : data.challenger_name;
       const amIReady = isC ? data.c_ready : data.t_ready;
-      const isRandomAccepted = data.mode.includes('random') && data.mode.includes('_accepted');
+      const modeRaw = String(data.mode || '');
+      const baseMode = modeRaw
+        .replace('_accepted', '')
+        .replace('_accepting', '')
+        .replace('_settling', '')
+        .replace('_refunding', '')
+        .trim() as 'free' | 'random';
+      const isRandomAccepted = baseMode === 'random' && (modeRaw.includes('_accepted') || modeRaw.includes('_accepting'));
       const savedRandomDraft = isRandomAccepted ? readRandomDraftState(data.id, isC, username) : null;
       
       let localLegend = isC ? (data.legend || '') : (data.t_legend || '');
@@ -582,13 +600,13 @@ function App() {
       }
       setRerollCount(isRandomAccepted ? (savedRandomDraft?.rerollCount || 0) : 0);
 
-      setActiveMatch({ id: data.id, mode: data.mode, opponent: opp, legend: localLegend, weapons: localWeapons, oppLegend: isC ? data.t_legend : data.legend, oppWeapons: isC ? data.t_weapons : data.weapons, isChallenger: isC });
-      setEntryOpponent(opp); setEntryMode(data.mode.replace('_accepted', '') as 'free' | 'random'); setBetAmount(data.bet_gc || 0);
+      setActiveMatch({ id: data.id, mode: baseMode, opponent: opp, legend: localLegend, weapons: localWeapons, oppLegend: isC ? data.t_legend : data.legend, oppWeapons: isC ? data.t_weapons : data.weapons, isChallenger: isC });
+      setEntryOpponent(opp); setEntryMode(baseMode); setBetAmount(data.bet_gc || 0);
 
       if (data.c_ready && data.t_ready) {
         setIncomingChallenge(null);
         setMatchPhase('scoring');
-      } else if (data.mode.includes('_accepted')) {
+      } else if (modeRaw.includes('_accepted') || modeRaw.includes('_accepting') || modeRaw.includes('_settling')) {
         setIncomingChallenge(null);
         setMatchPhase(amIReady ? 'waiting_ready' : 'picking');
       } else if (isC) {
@@ -952,7 +970,11 @@ function App() {
            if (payload.eventType === 'UPDATE') {
                const updated = payload.new;
                const pendingIncoming = incomingChallengeRef.current;
-               if (pendingIncoming && updated.id === pendingIncoming.id && updated.mode.includes('_accepted')) {
+               if (
+                 pendingIncoming &&
+                 updated.id === pendingIncoming.id &&
+                 (updated.mode.includes('_accepted') || updated.mode.includes('_accepting') || updated.mode.includes('_settling'))
+               ) {
                  setIncomingChallenge(null);
                }
                if (currentMatch && updated.id === currentMatch.id) {
@@ -1616,6 +1638,163 @@ function App() {
     return { ok: true, message: mode === 'free' ? '정규 티켓/배팅이 즉시 차감되었습니다.' : '시즌 배팅이 즉시 차감되었습니다.' };
   };
 
+  const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+  const fetchChallengeById = async (challengeId: string) => {
+    const { data, error } = await supabase.from('challenges').select('*').eq('id', challengeId).maybeSingle();
+    if (error) return null;
+    return data;
+  };
+  const waitForChallengeAcceptance = async (
+    challengeId: string,
+    baseMode: 'free' | 'random',
+    timeoutMs = 4200
+  ) => {
+    const started = Date.now();
+    const acceptingMode = `${baseMode}_accepting`;
+    const acceptedMode = `${baseMode}_accepted`;
+    while (Date.now() - started < timeoutMs) {
+      const latest = await fetchChallengeById(challengeId);
+      if (!latest) return null;
+      const mode = String(latest.mode || '').trim();
+      if (mode === acceptedMode || mode === baseMode) return latest;
+      if (mode !== acceptingMode) return latest;
+      await sleep(180);
+    }
+    return fetchChallengeById(challengeId);
+  };
+  const buildAcceptedChallengePayload = (challengeRow: any, baseMode: 'free' | 'random') => {
+    let challengerLegend = challengeRow.legend || '';
+    let challengerWeapons = Array.isArray(challengeRow.weapons) ? challengeRow.weapons : ['', ''];
+    let targetLegend = challengeRow.t_legend || '';
+    let targetWeapons = Array.isArray(challengeRow.t_weapons) ? challengeRow.t_weapons : ['', ''];
+
+    if (baseMode === 'random') {
+      if (!challengerLegend) challengerLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
+      if (!challengerWeapons[0] || !challengerWeapons[1]) challengerWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+      if (!targetLegend) targetLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
+      if (!targetWeapons[0] || !targetWeapons[1]) targetWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
+    }
+
+    return {
+      mode: `${baseMode}_accepted`,
+      legend: challengerLegend || null,
+      weapons: challengerWeapons,
+      t_legend: targetLegend || null,
+      t_weapons: targetWeapons,
+    };
+  };
+  const ensureChallengeAccepted = async (
+    challengeRow: any,
+    baseMode: 'free' | 'random',
+    challengerName: string,
+    targetName: string
+  ): Promise<{ ok: boolean; row?: any; justAccepted?: boolean; stakeMessage?: string; message?: string }> => {
+    const acceptedMode = `${baseMode}_accepted`;
+    const acceptingMode = `${baseMode}_accepting`;
+    let current = challengeRow;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (!current) return { ok: false, message: '대전 신청 정보를 찾을 수 없습니다.' };
+      const mode = String(current.mode || '').trim();
+      if (mode === acceptedMode) {
+        return { ok: true, row: current, justAccepted: false, stakeMessage: '' };
+      }
+      if (mode === acceptingMode) {
+        const waited = await waitForChallengeAcceptance(current.id, baseMode);
+        if (!waited) return { ok: false, message: '상대의 수락 처리 중 신청이 종료되었습니다.' };
+        current = waited;
+        continue;
+      }
+      if (mode !== baseMode) {
+        return { ok: false, message: '대전 상태가 변경되어 수락을 진행할 수 없습니다.' };
+      }
+
+      const { data: lockedRows, error: lockErr } = await supabase
+        .from('challenges')
+        .update({ mode: acceptingMode })
+        .eq('id', current.id)
+        .eq('mode', baseMode)
+        .select();
+      if (lockErr) return { ok: false, message: lockErr.message };
+
+      if (!Array.isArray(lockedRows) || lockedRows.length === 0) {
+        const waited = await waitForChallengeAcceptance(current.id, baseMode);
+        if (!waited) return { ok: false, message: '상대의 수락 처리 중 신청이 종료되었습니다.' };
+        current = waited;
+        continue;
+      }
+
+      const lockedRow = lockedRows[0];
+      const stake = Math.max(0, Math.floor(Number(lockedRow.bet_gc || 0)));
+      const stakeLock = await lockChallengeStakeOnAccept(baseMode, stake, challengerName, targetName);
+      if (!stakeLock.ok) {
+        await supabase.from('challenges').update({ mode: baseMode }).eq('id', lockedRow.id).eq('mode', acceptingMode);
+        return { ok: false, message: `GC 차감 처리 중 오류가 발생했습니다.\n${stakeLock.message}` };
+      }
+
+      const acceptPayload = buildAcceptedChallengePayload(lockedRow, baseMode);
+      const { data: acceptedRows, error: acceptErr } = await supabase
+        .from('challenges')
+        .update(acceptPayload)
+        .eq('id', lockedRow.id)
+        .eq('mode', acceptingMode)
+        .select();
+      if (acceptErr || !Array.isArray(acceptedRows) || acceptedRows.length === 0) {
+        await refundLockedStakeIfNeeded({ ...lockedRow, mode: acceptedMode });
+        await supabase.from('challenges').update({ mode: baseMode }).eq('id', lockedRow.id).eq('mode', acceptingMode);
+        return { ok: false, message: acceptErr?.message || '수락 상태 반영 중 충돌이 발생했습니다.' };
+      }
+      return { ok: true, row: acceptedRows[0], justAccepted: true, stakeMessage: stakeLock.message };
+    }
+
+    return { ok: false, message: '동시 처리 충돌로 수락이 지연되고 있습니다. 잠시 후 다시 시도해주세요.' };
+  };
+  const cancelChallengeRowSafely = async (challengeRow: any) => {
+    if (!challengeRow?.id) return;
+    const modeRaw = String(challengeRow.mode || '').trim();
+    if (!modeRaw) return;
+    const baseMode = modeRaw.replace('_accepted', '').replace('_accepting', '').replace('_refunding', '') as 'free' | 'random';
+    const acceptedMode = `${baseMode}_accepted`;
+    const refundingMode = `${baseMode}_refunding`;
+
+    if (modeRaw === acceptedMode) {
+      const { data: lockRows } = await supabase
+        .from('challenges')
+        .update({ mode: refundingMode })
+        .eq('id', challengeRow.id)
+        .eq('mode', acceptedMode)
+        .select();
+      if (!Array.isArray(lockRows) || lockRows.length === 0) return;
+      await refundLockedStakeIfNeeded({ ...lockRows[0], mode: acceptedMode });
+      await supabase.from('challenges').delete().eq('id', challengeRow.id);
+      return;
+    }
+
+    await supabase.from('challenges').delete().eq('id', challengeRow.id).eq('mode', modeRaw);
+  };
+  const acquireSettlementLock = async (challengeId: string, currentMode: string) => {
+    const baseMode = currentMode.replace('_accepted', '').replace('_settling', '') as 'free' | 'random';
+    const acceptedMode = `${baseMode}_accepted`;
+    const settlingMode = `${baseMode}_settling`;
+    if (currentMode === settlingMode) return { ok: false, settling: true, baseMode };
+    const { data: lockRows, error } = await supabase
+      .from('challenges')
+      .update({ mode: settlingMode })
+      .eq('id', challengeId)
+      .eq('mode', acceptedMode)
+      .select();
+    if (error) return { ok: false, settling: false, baseMode, message: error.message };
+    if (Array.isArray(lockRows) && lockRows.length > 0) return { ok: true, settling: false, baseMode };
+    const latest = await fetchChallengeById(challengeId);
+    if (!latest) return { ok: false, settling: false, baseMode, message: '이미 처리되었습니다.' };
+    return {
+      ok: false,
+      settling: String(latest.mode || '') === settlingMode,
+      baseMode,
+      message: '다른 클라이언트가 먼저 결과를 처리 중입니다.',
+    };
+  };
+
   const refundLockedStakeIfNeeded = async (challengeRow: any) => {
     if (!challengeRow) return;
     const mode = String(challengeRow.mode || '').toLowerCase();
@@ -1650,8 +1829,9 @@ function App() {
       return;
     }
 
-    const alreadyAccepted = String(existing.mode || '').includes('_accepted');
-    const baseMode = existing.mode.replace('_accepted', '').trim() as 'free' | 'random';
+    const modeRaw = String(existing.mode || '').trim();
+    const alreadyAccepted = modeRaw.includes('_accepted');
+    const baseMode = modeRaw.replace('_accepted', '').replace('_accepting', '').trim() as 'free' | 'random';
     if (!alreadyAccepted && baseMode === 'free') {
       const remainMs = getRegularCooldownRemainingMs(existing.challenger_name);
       if (remainMs > 0) {
@@ -1692,62 +1872,33 @@ function App() {
       }
     }
 
-    const stake = Math.max(0, Math.floor(Number(existing.bet_gc || 0)));
-    const stakeLock = alreadyAccepted
-      ? { ok: true, message: '' }
-      : await lockChallengeStakeOnAccept(baseMode, stake, challengerName, targetName);
-    if (!stakeLock.ok) {
+    const acceptance = await ensureChallengeAccepted(existing, baseMode, challengerName, targetName);
+    if (!acceptance.ok || !acceptance.row) {
       playSFX('error');
-      showStatusPopup('error', '수락 실패', `GC 차감 처리 중 오류가 발생했습니다.\n${stakeLock.message}`);
+      showStatusPopup('error', '수락 실패', acceptance.message || '대전 수락 처리 중 충돌이 발생했습니다.');
       return;
     }
-
-    let challengerLegend = existing.legend || '';
-    let challengerWeapons = Array.isArray(existing.weapons) ? existing.weapons : ['', ''];
-    let targetLegend = existing.t_legend || '';
-    let targetWeapons = Array.isArray(existing.t_weapons) ? existing.t_weapons : ['', ''];
+    const acceptedRow = acceptance.row;
+    const stake = Math.max(0, Math.floor(Number(acceptedRow.bet_gc || 0)));
 
     if (baseMode === 'random') {
-      if (!challengerLegend) challengerLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
-      if (!challengerWeapons[0] || !challengerWeapons[1]) challengerWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
-      if (!targetLegend) targetLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
-      if (!targetWeapons[0] || !targetWeapons[1]) targetWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
-    }
-
-    const updatePayload: any = {
-      mode: `${baseMode}_accepted`,
-      legend: challengerLegend || null,
-      weapons: challengerWeapons,
-      t_legend: targetLegend || null,
-      t_weapons: targetWeapons,
-    };
-
-    if (!alreadyAccepted) {
-      const { error: updateError } = await supabase.from('challenges').update(updatePayload).eq('id', existing.id);
-      if (updateError) {
-        await refundLockedStakeIfNeeded({ ...existing, mode: `${baseMode}_accepted` });
-        playSFX('error');
-        showStatusPopup('error', '수락 실패', `대전 수락 처리 중 오류가 발생했습니다: ${updateError.message}`);
-        return;
-      }
-    }
-
-    if (baseMode === 'random') {
-      const saved = readRandomDraftState(existing.id, false, currentUserName);
-      const nextLegend = saved?.legend || targetLegend || '';
-      const nextWeapons = saved?.weapons?.length === 2 ? saved.weapons : targetWeapons;
+      const saved = readRandomDraftState(acceptedRow.id, false, currentUserName);
+      const dbLegend = String(acceptedRow.t_legend || '');
+      const dbWeapons = Array.isArray(acceptedRow.t_weapons) ? acceptedRow.t_weapons : ['', ''];
+      const nextLegend = saved?.legend || dbLegend || '';
+      const nextWeapons = saved?.weapons?.length === 2 ? saved.weapons : dbWeapons;
       setEntryLegend(nextLegend);
       setEntryWeapons(nextWeapons);
       setRerollCount(saved?.rerollCount ?? 0);
       setActiveMatch({
-        id: existing.id,
+        id: acceptedRow.id,
         mode: baseMode,
         opponent: challengerName,
         legend: nextLegend,
         weapons: nextWeapons,
         isChallenger: false,
       });
-      writeRandomDraftState(existing.id, false, currentUserName, {
+      writeRandomDraftState(acceptedRow.id, false, currentUserName, {
         rerollCount: saved?.rerollCount ?? 0,
         legend: nextLegend,
         weapons: nextWeapons,
@@ -1770,8 +1921,8 @@ function App() {
     setEntryOpponent(challengerName);
     setEntryMode(baseMode);
     setBetAmount(stake);
-    if (!alreadyAccepted) {
-      showStatusPopup('success', '대전 수락', stakeLock.message || '대전이 성사되었습니다.');
+    if (acceptance.justAccepted) {
+      showStatusPopup('success', '대전 수락', acceptance.stakeMessage || '대전이 성사되었습니다.');
     }
     setMatchPhase('picking');
   };
@@ -1812,7 +1963,14 @@ function App() {
       return alert('정규 랭크전은 동일 티어 또는 1단계 상위 티어에게만 도전할 수 있습니다. (루키는 예외)');
     }
 
-    const { data: existing } = await supabase.from('challenges').select('*').eq('challenger_name', entryOpponent.trim()).eq('target_name', currentUserName.trim()).limit(1).maybeSingle();
+    const { data: existing } = await supabase
+      .from('challenges')
+      .select('*')
+      .eq('challenger_name', entryOpponent.trim())
+      .eq('target_name', currentUserName.trim())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
     
     if (existing) {
       if (entryMode === 'free') {
@@ -1823,8 +1981,9 @@ function App() {
         }
       }
       playSFX('click');
-      const alreadyAccepted = String(existing.mode || '').includes('_accepted');
-      const dbMode = existing.mode.replace('_accepted', '').trim();
+      const modeRaw = String(existing.mode || '').trim();
+      const alreadyAccepted = modeRaw.includes('_accepted');
+      const dbMode = modeRaw.replace('_accepted', '').replace('_accepting', '').trim();
       if (dbMode !== entryMode.trim()) { playSFX('error'); return alert(`상대방이 [${existing.mode.includes('free') ? '자유' : '랜덤'}대전]을 신청했습니다. 모드를 맞춰주세요!`); }
       if (existing.bet_gc !== betAmount) { playSFX('error'); return alert(`상대방이 배팅금 [${existing.bet_gc} GC]를 걸었습니다. 배팅금을 맞춰주세요!`); }
       if (!alreadyAccepted && entryMode === 'free' && !canAcceptIncomingByRegularRule(entryOpponent.trim())) {
@@ -1837,58 +1996,38 @@ function App() {
         playSFX('error');
         return alert(`정규 랭크전 최소 티켓 금액은 ${REGULAR_TICKET_COST}GC입니다.`);
       }
-      const stakeLock = alreadyAccepted
-        ? { ok: true, message: '' }
-        : await lockChallengeStakeOnAccept(entryMode, stake, existing.challenger_name, existing.target_name);
-      if (!stakeLock.ok) {
+      const acceptance = await ensureChallengeAccepted(
+        existing,
+        entryMode,
+        String(existing.challenger_name || '').trim(),
+        String(existing.target_name || '').trim()
+      );
+      if (!acceptance.ok || !acceptance.row) {
         playSFX('error');
-        return alert(`GC 차감 실패: ${stakeLock.message}`);
+        return alert(`수락 처리 실패: ${acceptance.message || '동시 처리 충돌이 발생했습니다.'}`);
       }
+      const acceptedRow = acceptance.row;
 
-      let challengerLegend = existing.legend || '';
-      let challengerWeapons = Array.isArray(existing.weapons) ? existing.weapons : ['', ''];
-      let targetLegend = existing.t_legend || '';
-      let targetWeapons = Array.isArray(existing.t_weapons) ? existing.t_weapons : ['', ''];
-      
       if (entryMode === 'random') {
-          if (!challengerLegend) challengerLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
-          if (!challengerWeapons[0] || !challengerWeapons[1]) challengerWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
-          if (!targetLegend) targetLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
-          if (!targetWeapons[0] || !targetWeapons[1]) targetWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
-          const saved = currentUserName ? readRandomDraftState(existing.id, false, currentUserName) : null;
-          const nextLegend = saved?.legend || targetLegend;
-          const nextWeapons = saved?.weapons?.length === 2 ? saved.weapons : targetWeapons;
+          const saved = currentUserName ? readRandomDraftState(acceptedRow.id, false, currentUserName) : null;
+          const dbLegend = String(acceptedRow.t_legend || '');
+          const dbWeapons = Array.isArray(acceptedRow.t_weapons) ? acceptedRow.t_weapons : ['', ''];
+          const nextLegend = saved?.legend || dbLegend;
+          const nextWeapons = saved?.weapons?.length === 2 ? saved.weapons : dbWeapons;
           setEntryLegend(nextLegend);
           setEntryWeapons(nextWeapons);
           setRerollCount(saved?.rerollCount ?? 0);
-          setActiveMatch({ id: existing.id, mode: entryMode, opponent: entryOpponent.trim(), legend: nextLegend, weapons: nextWeapons, isChallenger: false });
+          setActiveMatch({ id: acceptedRow.id, mode: entryMode, opponent: entryOpponent.trim(), legend: nextLegend, weapons: nextWeapons, isChallenger: false });
           if (currentUserName) {
-            writeRandomDraftState(existing.id, false, currentUserName, { rerollCount: saved?.rerollCount ?? 0, legend: nextLegend, weapons: nextWeapons });
+            writeRandomDraftState(acceptedRow.id, false, currentUserName, { rerollCount: saved?.rerollCount ?? 0, legend: nextLegend, weapons: nextWeapons });
           }
       } else {
           setRerollCount(0);
-          setActiveMatch({ id: existing.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: false });
-      }
-      if (!alreadyAccepted) {
-        const { error: acceptErr } = await supabase
-          .from('challenges')
-          .update({
-            mode: `${entryMode}_accepted`,
-            legend: challengerLegend || null,
-            weapons: challengerWeapons,
-            t_legend: targetLegend || null,
-            t_weapons: targetWeapons,
-          })
-          .eq('id', existing.id);
-        if (acceptErr) {
-          await refundLockedStakeIfNeeded({ ...existing, mode: `${entryMode}_accepted` });
-          playSFX('error');
-          return alert(`수락 처리 중 오류: ${acceptErr.message}`);
-        }
+          setActiveMatch({ id: acceptedRow.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: false });
       }
       setIncomingChallenge(null);
-      if (!alreadyAccepted) {
-        showStatusPopup('success', '대전 수락', stakeLock.message || '대전이 성사되었습니다.');
+      if (acceptance.justAccepted) {
+        showStatusPopup('success', '대전 수락', acceptance.stakeMessage || '대전이 성사되었습니다.');
       }
       setMatchPhase('picking');
     } else {
@@ -1933,10 +2072,9 @@ function App() {
       .or(`challenger_name.eq."${currentUserName?.trim()}",target_name.eq."${currentUserName?.trim()}"`);
     if (Array.isArray(challengeRows) && challengeRows.length > 0) {
       for (const row of challengeRows) {
-        await refundLockedStakeIfNeeded(row);
+        await cancelChallengeRowSafely(row);
       }
     }
-    await supabase.from('challenges').delete().or(`challenger_name.eq."${currentUserName?.trim()}",target_name.eq."${currentUserName?.trim()}"`);
     if (activeMatch && currentUserName) clearRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName);
     setRerollCount(0);
     setMatchPhase('idle'); setActiveMatch(null);
@@ -1962,81 +2100,132 @@ function App() {
     }
 
     if (updatedData) {
-        const hasC = updatedData.c_win !== null && updatedData.c_lose !== null; const hasT = updatedData.t_win !== null && updatedData.t_lose !== null;
-        if (hasC && hasT) {
-            if (updatedData.c_win === updatedData.t_lose && updatedData.c_lose === updatedData.t_win) {
-                const challengerName = isC ? currentUserName : activeMatch.opponent; const targetName = isC ? activeMatch.opponent : currentUserName;
-                const winnerName = updatedData.c_win > updatedData.c_lose ? challengerName : targetName;
-                const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
-                
-                const matchPayload = {
-                    match_type: String(updatedData.mode.replace('_accepted', '')),
-                    left_player: challengerName, right_player: targetName,    
-                    left_player_name: challengerName, right_player_name: targetName,
-                    left_legend: String(updatedData.legend || '미선택'), left_weapons: Array.isArray(updatedData.weapons) ? updatedData.weapons : ['미선택', '미선택'],
-                    right_legend: String(updatedData.t_legend || '미선택'), right_weapons: Array.isArray(updatedData.t_weapons) ? updatedData.t_weapons : ['미선택', '미선택'],
-                    score_left: Number(updatedData.c_win), score_right: Number(updatedData.t_win), winner_name: String(winnerName), winner_rank_num: Number(winnerRankNum)
-                };
-
-                const { error: matchErr } = await supabase.from('matches').insert([matchPayload]);
-                if (matchErr) {
-                  showStatusPopup('error', '저장 실패', `데이터베이스 저장에 실패했습니다: ${matchErr.message}`);
-                  setWaitingForScore(false);
-                  return;
-                }
-
-                const challengerWon = updatedData.c_win > updatedData.c_lose;
-                const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', challengerName).single();
-                const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', targetName).single();
-
-                if (cProfile && tProfile) {
-                    let cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
-                    let tUpdates: any = { wins: tProfile.wins + (challengerWon ? 0 : 1), losses: tProfile.losses + (challengerWon ? 1 : 0) };
-
-                    const bet = Math.max(0, Math.floor(Number(updatedData.bet_gc || 0)));
-                    const cGc = typeof cProfile.gc === 'number' ? cProfile.gc : 1000;
-                    const tGc = typeof tProfile.gc === 'number' ? tProfile.gc : 1000;
-                    const isRegular = String(updatedData.mode || '').includes('free');
-
-                    if (isRegular) {
-                      // 정규전: 티켓(200)은 소멸, 초과 배팅만 승자가 획득
-                      const transferable = Math.max(0, bet - REGULAR_TICKET_COST) * 2;
-                      if (challengerWon) {
-                        cUpdates.gc = cGc + transferable;
-                        tUpdates.gc = tGc;
-                      } else {
-                        cUpdates.gc = cGc;
-                        tUpdates.gc = tGc + transferable;
-                      }
-                    } else {
-                      // 시즌전: 배팅 전체 팟(양쪽)을 승자가 획득
-                      const transferable = bet * 2;
-                      if (challengerWon) {
-                        cUpdates.gc = cGc + transferable;
-                        tUpdates.gc = tGc;
-                      } else {
-                        cUpdates.gc = cGc;
-                        tUpdates.gc = tGc + transferable;
-                      }
-                    }
-                    await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id); await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
-                }
-                const didWin = winnerName?.trim() === (currentUserName || '').trim();
-                triggerResultFx(didWin, didWin ? '전투 승리! 순위가 갱신되었습니다.' : '전투 종료! 결과가 반영되었습니다.');
-                showStatusPopup(didWin ? 'success' : 'info', didWin ? '승리' : '결과 반영', didWin ? '축하합니다. 승리 기록과 순위 변동이 적용되었습니다.' : '전투 결과와 랭킹 정보가 업데이트되었습니다.');
-                if (currentUserName) clearRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName);
-                setRerollCount(0);
-                await supabase.from('challenges').delete().eq('id', activeMatch.id);
+      const hasC = updatedData.c_win !== null && updatedData.c_lose !== null;
+      const hasT = updatedData.t_win !== null && updatedData.t_lose !== null;
+      if (hasC && hasT) {
+        if (updatedData.c_win === updatedData.t_lose && updatedData.c_lose === updatedData.t_win) {
+          const challengeMode = String(updatedData.mode || '').trim();
+          const settlement = await acquireSettlementLock(activeMatch.id, challengeMode);
+          if (!settlement.ok) {
+            setWaitingForScore(false);
+            if (settlement.settling) {
+              showStatusPopup('info', '결과 처리 중', '상대방이 먼저 결과를 확정 중입니다. 잠시 후 자동 반영됩니다.');
             } else {
-                playSFX('error');
-                showStatusPopup(
-                  'error',
-                  '스코어 불일치',
-                  `도전자(${updatedData.c_win}승 ${updatedData.c_lose}패) / 타겟(${updatedData.t_win}승 ${updatedData.t_lose}패) 입력값이 달라 초기화됩니다.`
-                );
-                setWaitingForScore(false); setMyWins(null); setMyLosses(null); await supabase.from('challenges').update({ c_win: null, c_lose: null, t_win: null, t_lose: null }).eq('id', activeMatch.id);
+              showStatusPopup('info', '결과 반영 대기', settlement.message || '결과가 이미 처리되었습니다.');
             }
+            return;
+          }
+
+          const baseMode = settlement.baseMode;
+          const settlingMode = `${baseMode}_settling`;
+          const acceptedMode = `${baseMode}_accepted`;
+          const challengerName = isC ? currentUserName : activeMatch.opponent;
+          const targetName = isC ? activeMatch.opponent : currentUserName;
+          const winnerName = updatedData.c_win > updatedData.c_lose ? challengerName : targetName;
+          const winnerRankNum = rankers.findIndex(r => r.display_name === winnerName) + 1 || 99;
+          
+          const matchPayload = {
+            match_type: String(baseMode),
+            left_player: challengerName, right_player: targetName,    
+            left_player_name: challengerName, right_player_name: targetName,
+            left_legend: String(updatedData.legend || '미선택'), left_weapons: Array.isArray(updatedData.weapons) ? updatedData.weapons : ['미선택', '미선택'],
+            right_legend: String(updatedData.t_legend || '미선택'), right_weapons: Array.isArray(updatedData.t_weapons) ? updatedData.t_weapons : ['미선택', '미선택'],
+            score_left: Number(updatedData.c_win), score_right: Number(updatedData.t_win), winner_name: String(winnerName), winner_rank_num: Number(winnerRankNum)
+          };
+
+          const { error: matchErr } = await supabase.from('matches').insert([matchPayload]);
+          if (matchErr) {
+            await supabase.from('challenges').update({ mode: acceptedMode }).eq('id', activeMatch.id).eq('mode', settlingMode);
+            showStatusPopup('error', '저장 실패', `데이터베이스 저장에 실패했습니다: ${matchErr.message}`);
+            setWaitingForScore(false);
+            return;
+          }
+
+          const challengerWon = updatedData.c_win > updatedData.c_lose;
+          const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', challengerName).single();
+          const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', targetName).single();
+
+          if (cProfile && tProfile) {
+            const cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
+            const tUpdates: any = { wins: tProfile.wins + (challengerWon ? 0 : 1), losses: tProfile.losses + (challengerWon ? 1 : 0) };
+
+            const bet = Math.max(0, Math.floor(Number(updatedData.bet_gc || 0)));
+            const cGc = typeof cProfile.gc === 'number' ? cProfile.gc : 1000;
+            const tGc = typeof tProfile.gc === 'number' ? tProfile.gc : 1000;
+            const isRegular = String(baseMode).includes('free');
+
+            if (isRegular) {
+              // 정규전: 티켓(200)은 소멸, 초과 배팅만 승자가 획득
+              const transferable = Math.max(0, bet - REGULAR_TICKET_COST) * 2;
+              if (challengerWon) {
+                cUpdates.gc = cGc + transferable;
+                tUpdates.gc = tGc;
+              } else {
+                cUpdates.gc = cGc;
+                tUpdates.gc = tGc + transferable;
+              }
+            } else {
+              // 시즌전: 배팅 전체 팟(양쪽)을 승자가 획득
+              const transferable = bet * 2;
+              if (challengerWon) {
+                cUpdates.gc = cGc + transferable;
+                tUpdates.gc = tGc;
+              } else {
+                cUpdates.gc = cGc;
+                tUpdates.gc = tGc + transferable;
+              }
+            }
+            const { error: cErr } = await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
+            const { error: tErr } = await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
+            if (cErr || tErr) {
+              await supabase.from('challenges').update({ mode: acceptedMode }).eq('id', activeMatch.id).eq('mode', settlingMode);
+              showStatusPopup('error', '결과 반영 실패', cErr?.message || tErr?.message || '프로필 업데이트 중 오류가 발생했습니다.');
+              setWaitingForScore(false);
+              return;
+            }
+          }
+
+          const { error: deleteErr } = await supabase.from('challenges').delete().eq('id', activeMatch.id);
+          if (deleteErr) {
+            await supabase.from('challenges').update({ mode: acceptedMode }).eq('id', activeMatch.id).eq('mode', settlingMode);
+            showStatusPopup('error', '마무리 실패', `매치 종료 처리 중 오류가 발생했습니다: ${deleteErr.message}`);
+            setWaitingForScore(false);
+            return;
+          }
+
+          const didWin = winnerName?.trim() === (currentUserName || '').trim();
+          triggerResultFx(didWin, didWin ? '전투 승리! 순위가 갱신되었습니다.' : '전투 종료! 결과가 반영되었습니다.');
+          showStatusPopup(didWin ? 'success' : 'info', didWin ? '승리' : '결과 반영', didWin ? '축하합니다. 승리 기록과 순위 변동이 적용되었습니다.' : '전투 결과와 랭킹 정보가 업데이트되었습니다.');
+          if (currentUserName) clearRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName);
+          setRerollCount(0);
+          setMatchPhase('idle');
+          setActiveMatch(null);
+          setWaitingForScore(false);
+          setMyWins(null);
+          setMyLosses(null);
+          setEntryOpponent('');
+          setEntryLegend('');
+          setEntryWeapons(['', '']);
+          fetchData();
+          fetchRankers();
+          if (user?.id) fetchProfile(user.id);
+        } else {
+          playSFX('error');
+          showStatusPopup(
+            'error',
+            '스코어 불일치',
+            `도전자(${updatedData.c_win}승 ${updatedData.c_lose}패) / 타겟(${updatedData.t_win}승 ${updatedData.t_lose}패) 입력값이 달라 초기화됩니다.`
+          );
+          setWaitingForScore(false);
+          setMyWins(null);
+          setMyLosses(null);
+          await supabase
+            .from('challenges')
+            .update({ c_win: null, c_lose: null, t_win: null, t_lose: null })
+            .eq('id', activeMatch.id)
+            .eq('mode', String(updatedData.mode || ''));
         }
+      }
     } else {
       playSFX('success');
       if (activeMatch && currentUserName) clearRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName);
@@ -2439,7 +2628,7 @@ function App() {
     if (safe < 3) return 0;
     return 100 + (safe - 3) * 50;
   };
-  const getDefenseBonusGC = (stack?: number) => (stack || 0) * 100;
+  const getDefenseBonusGC = (stack?: number) => (stack || 0) * 200;
   const getRegularInnerGlowStyle = (idx: number): React.CSSProperties => {
     if (idx === 0) {
       return {
@@ -2694,9 +2883,9 @@ function App() {
                 {leftSeasonInfo?.icon || <Star size={18} className="text-slate-300" />}
               </span>
             </div>
-            <p className="text-sm font-bold text-pink-400 truncate">{log.left_legend || '미선택'}</p>
-            <p className="text-sm font-bold text-cyan-300 leading-tight">{log.left_weapons?.[0] || '미선택'}</p>
-            <p className="text-sm font-bold text-cyan-300 leading-tight">{log.left_weapons?.[1] || '미선택'}</p>
+            <p className="text-sm font-bold text-pink-400 leading-tight whitespace-normal break-words">{log.left_legend || '미선택'}</p>
+            <p className="text-sm font-bold text-cyan-300 leading-tight whitespace-normal break-words">{log.left_weapons?.[0] || '미선택'}</p>
+            <p className="text-sm font-bold text-cyan-300 leading-tight whitespace-normal break-words">{log.left_weapons?.[1] || '미선택'}</p>
           </button>
 
           <div className="flex flex-col items-center py-1">
@@ -2723,9 +2912,9 @@ function App() {
               <span className={`font-bold text-lg sm:text-xl whitespace-normal break-all leading-tight ${getNameClassForUser(rightP)}`}>{rightP}</span>
               <img src={getAvatarFallback(rightP, rankers)} className={`w-8 h-8 rounded-full border shrink-0 ${getCardAvatarBorderFxForUser(rightP)}`} alt="right-player" />
             </div>
-            <p className="text-sm font-bold text-pink-400 truncate">{log.right_legend || '미선택'}</p>
-            <p className="text-sm font-bold text-cyan-300 leading-tight">{log.right_weapons?.[0] || '미선택'}</p>
-            <p className="text-sm font-bold text-cyan-300 leading-tight">{log.right_weapons?.[1] || '미선택'}</p>
+            <p className="text-sm font-bold text-pink-400 leading-tight whitespace-normal break-words">{log.right_legend || '미선택'}</p>
+            <p className="text-sm font-bold text-cyan-300 leading-tight whitespace-normal break-words">{log.right_weapons?.[0] || '미선택'}</p>
+            <p className="text-sm font-bold text-cyan-300 leading-tight whitespace-normal break-words">{log.right_weapons?.[1] || '미선택'}</p>
           </button>
         </div>
       </div>
@@ -3150,8 +3339,8 @@ function App() {
                                  <div className="flex flex-col gap-3 mt-3">
                                     <div className="bg-black/60 p-5 rounded-2xl text-center text-xl font-bold text-cyan-400 border border-white/10 shadow-inner">{entryLegend || '랜덤 레전드 대기중...'}</div>
                                     <div className="flex gap-3">
-                                       <span className="flex-1 bg-black/60 p-5 rounded-2xl text-center text-base font-bold text-pink-400 border border-white/10 truncate shadow-inner">{entryWeapons[0] || '랜덤 무기 대기중...'}</span>
-                                       <span className="flex-1 bg-black/60 p-5 rounded-2xl text-center text-base font-bold text-pink-400 border border-white/10 truncate shadow-inner">{entryWeapons[1] || '랜덤 무기 대기중...'}</span>
+                                       <span className="flex-1 bg-black/60 p-5 rounded-2xl text-center text-base font-bold text-pink-400 border border-white/10 whitespace-normal break-words leading-snug shadow-inner">{entryWeapons[0] || '랜덤 무기 대기중...'}</span>
+                                       <span className="flex-1 bg-black/60 p-5 rounded-2xl text-center text-base font-bold text-pink-400 border border-white/10 whitespace-normal break-words leading-snug shadow-inner">{entryWeapons[1] || '랜덤 무기 대기중...'}</span>
                                     </div>
                                  </div>
                               </div>
