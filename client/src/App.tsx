@@ -2923,8 +2923,20 @@ function App() {
 
   const globalFontStyle = (
     <style>{`
-      @import url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansMedium.woff');
-      @import url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff');
+      @font-face {
+        font-family: 'GmarketSansMedium';
+        src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansMedium.woff') format('woff');
+        font-weight: 500;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'GmarketSansBold';
+        src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff') format('woff');
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+      }
       @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Rajdhani:wght@600;700&family=Exo+2:wght@700;800&family=Do+Hyeon&family=Jua&display=swap');
       
       body, div, span, p, h1, h2, h3, h4, button, input, select {
@@ -3155,7 +3167,7 @@ function App() {
                     <div className="flex-1 overflow-y-auto space-y-3 sm:space-y-4 custom-scrollbar pr-1 sm:pr-2 pt-2 animate-in fade-in">
                         {onlineRankers.length > 0 ? onlineRankers.map((ou, i) => {
                           const regularIdx = typeof ou.regular_display_index === 'number' ? ou.regular_display_index : null;
-                          const rankInfo = getGrandRankInfo(regularIdx, (r as any).regular_tier_level);
+                          const rankInfo = getGrandRankInfo(regularIdx, (ou as any).regular_tier_level);
                           const seasonInfo = getSeasonRankInfoByName(ou.display_name);
                           const challengeUi = getRegularChallengeUiState(ou.display_name);
                           return (
