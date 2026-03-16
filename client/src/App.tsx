@@ -425,6 +425,16 @@ function App() {
     writeIngameProfileMap(map);
   };
   const resolveIngameProfile = (row?: any): { nickname: string; platform: IngamePlatform } => {
+    const encodedPlatformRaw = String(row?.favorite_legend || '').trim();
+    const encodedNicknameRaw = String(row?.favorite_weapon || '').trim();
+    const encodedPlatformMatch = encodedPlatformRaw.match(/^INGAME_PLATFORM:(steam|ea)$/i);
+    const encodedNicknameMatch = encodedNicknameRaw.match(/^INGAME_CODE:(.+)$/i);
+    if (encodedNicknameMatch?.[1]) {
+      return {
+        nickname: encodedNicknameMatch[1].trim(),
+        platform: normalizeIngamePlatform(encodedPlatformMatch?.[1] || 'steam'),
+      };
+    }
     const nicknameCandidates = [
       row?.ingame_nickname,
       row?.in_game_nickname,
@@ -682,7 +692,10 @@ function App() {
   const statusPopupFadeTimerRef = useRef<number | null>(null);
   const starRainTimerRef = useRef<number | null>(null);
   const starRainClickCountRef = useRef(0);
+  const starRainParticleSeqRef = useRef(0);
+  const resultPopupChannelRef = useRef<any>(null);
   const lastResultPopupMatchIdRef = useRef<string>('');
+  const ingameProfileBackfillRef = useRef<string>('');
   const scoringSessionChallengeIdRef = useRef<string | null>(null);
   const autoScoreSubmitKeyRef = useRef('');
   const manualLoadoutRef = useRef<{
@@ -884,8 +897,8 @@ function App() {
     playSFX('click');
     starRainClickCountRef.current += 1;
     const meteorMode = starRainClickCountRef.current >= 5;
-    const starParticles = Array.from({ length: 90 }, (_, idx) => ({
-      id: idx + 1,
+    const starParticles = Array.from({ length: 90 }, () => ({
+      id: ++starRainParticleSeqRef.current,
       left: Math.random() * 100,
       delay: Math.random() * 1.5,
       duration: 2.2 + Math.random() * 2.4,
@@ -894,18 +907,18 @@ function App() {
       kind: 'star' as const,
     }));
     const meteorParticles = meteorMode
-      ? Array.from({ length: 28 }, (_, idx) => ({
-          id: 1000 + idx + 1,
+      ? Array.from({ length: 12 }, () => ({
+          id: ++starRainParticleSeqRef.current,
           left: Math.random() * 100,
-          delay: Math.random() * 1.3,
-          duration: 1.2 + Math.random() * 1.3,
-          size: 18 + Math.random() * 16,
-          drift: -180 + Math.random() * 360,
+          delay: Math.random() * 1.1,
+          duration: 1.8 + Math.random() * 1.6,
+          size: 52 + Math.random() * 48,
+          drift: -360 + Math.random() * 720,
           kind: 'meteor' as const,
         }))
       : [];
     const particles = [...starParticles, ...meteorParticles];
-    setStarRainParticles(particles);
+    setStarRainParticles((prev) => [...prev, ...particles]);
     setStarRainActive(true);
     if (starRainTimerRef.current) {
       window.clearTimeout(starRainTimerRef.current);
@@ -1192,6 +1205,37 @@ function App() {
     setIngamePlatformDraft(currentUserIngamePlatform);
     setShowIngameSetupModal(!currentUserIngameNickname);
   }, [user?.id, profile?.id, currentUserIngameNickname, currentUserIngamePlatform]);
+  useEffect(() => {
+    if (!user?.id || !profile) return;
+    const nickname = String(currentUserIngameNickname || '').trim();
+    if (!nickname) return;
+    const encodedPlatformRaw = String((profile as any).favorite_legend || '').trim();
+    const encodedNicknameRaw = String((profile as any).favorite_weapon || '').trim();
+    const hasEncodedProfile =
+      /^INGAME_PLATFORM:(steam|ea)$/i.test(encodedPlatformRaw) &&
+      /^INGAME_CODE:/i.test(encodedNicknameRaw);
+    if (hasEncodedProfile) return;
+
+    const syncKey = `${user.id}:${currentUserIngamePlatform}:${nickname}`;
+    if (ingameProfileBackfillRef.current === syncKey) return;
+    ingameProfileBackfillRef.current = syncKey;
+
+    (async () => {
+      try {
+        await supabase
+          .from('profiles')
+          .update({
+            favorite_legend: `INGAME_PLATFORM:${currentUserIngamePlatform}`,
+            favorite_weapon: `INGAME_CODE:${nickname}`,
+          })
+          .eq('id', user.id);
+        fetchRankers();
+        if (user?.id) fetchProfile(user.id);
+      } catch {
+        // ignore backfill failure
+      }
+    })();
+  }, [user?.id, profile?.id, (profile as any)?.favorite_legend, (profile as any)?.favorite_weapon, currentUserIngameNickname, currentUserIngamePlatform]);
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -1348,46 +1392,68 @@ function App() {
   }, [activeMenu, matchPhase, logs.length, rankers.length, miniRankMode, miniSearchQuery]);
 
   useEffect(() => {
-    const normalize = (value: unknown) => String(value || '').trim().toLowerCase();
     const matchLogChannel = supabase
       .channel('matches_realtime_sync')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' }, payload => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' }, () => {
         fetchData();
         fetchRankers();
-        const row: any = payload.new || {};
-        const me = normalize(currentUserName);
-        if (!me) return;
-        const left = normalize(row.left_player_name || row.left_player);
-        const right = normalize(row.right_player_name || row.right_player);
-        const isParticipant = left === me || right === me;
-        if (!isParticipant) return;
-
-        const stableMatchId = getMatchStableId(row);
-        if (lastResultPopupMatchIdRef.current === stableMatchId) return;
-        lastResultPopupMatchIdRef.current = stableMatchId;
-
-        const active = activeMatchRef.current;
-        if (active?.id) {
-          // 결과 insert 직후 들어오는 challenge delete 팝업 중복 차단
-          suppressNextDeletePopupChallengeIdRef.current = active.id;
-        }
-
-        const leftScore = Number(row.score_left || 0);
-        const rightScore = Number(row.score_right || 0);
-        const isMeLeft = left === me;
-        const myScore = isMeLeft ? leftScore : rightScore;
-        const oppScore = isMeLeft ? rightScore : leftScore;
-        const didWin = normalize(row.winner_name) === me;
-        triggerResultFx(didWin, didWin ? '전투 승리! 순위가 갱신되었습니다.' : '전투 종료! 결과가 반영되었습니다.');
-        showStatusPopup(
-          didWin ? 'success' : 'info',
-          didWin ? '전투 승리! 결과 반영 완료' : '전투 종료! 결과 반영 완료',
-          `스코어 ${myScore} : ${oppScore}\n결과가 정상 반영되었습니다.`
-        );
       })
       .subscribe();
     return () => {
       supabase.removeChannel(matchLogChannel);
+    };
+  }, []);
+
+  useEffect(() => {
+    const normalize = (value: unknown) => String(value || '').trim().toLowerCase();
+    const formatDeltaLine = (label: string, delta: number) => {
+      if (delta >= 0) return `${label} +${delta}획득!`;
+      return `${label} ${Math.abs(delta)}차감`;
+    };
+    const resultPopupChannel = supabase
+      .channel('match_result_popup_sync')
+      .on('broadcast', { event: 'match_result' }, ({ payload }: any) => {
+        const me = normalize(currentUserName);
+        if (!me) return;
+        const challenger = normalize(payload?.challengerName);
+        const target = normalize(payload?.targetName);
+        const isChallenger = challenger === me;
+        const isTarget = target === me;
+        if (!isChallenger && !isTarget) return;
+
+        const popupId = String(payload?.popupId || payload?.matchId || '').trim();
+        if (!popupId) return;
+        const dedupeKey = `result:${popupId}`;
+        if (lastResultPopupMatchIdRef.current === dedupeKey) return;
+        lastResultPopupMatchIdRef.current = dedupeKey;
+
+        const didWin = normalize(payload?.winnerName) === me;
+        const pointLabel = String(payload?.pointLabel || 'SP (시즌포인트)');
+        const pointDelta = Number(
+          isChallenger ? payload?.challengerPointDelta ?? 0 : payload?.targetPointDelta ?? 0
+        );
+        const gcDelta = Number(
+          isChallenger ? payload?.challengerGcDelta ?? 0 : payload?.targetGcDelta ?? 0
+        );
+        const cWin = Number(payload?.cWin ?? 0);
+        const tWin = Number(payload?.tWin ?? 0);
+        const myScore = isChallenger ? cWin : tWin;
+        const oppScore = isChallenger ? tWin : cWin;
+
+        triggerResultFx(didWin, didWin ? '전투 승리! 순위가 갱신되었습니다.' : '전투 종료! 결과가 반영되었습니다.');
+        showStatusPopup(
+          didWin ? 'success' : 'info',
+          didWin ? '전투 승리! 결과 반영 완료' : '전투 종료! 결과 반영 완료',
+          `스코어 ${myScore} : ${oppScore}\n${formatDeltaLine(pointLabel, pointDelta)}\n${formatDeltaLine('GC (갤럭시 코인)', gcDelta)}`
+        );
+      })
+      .subscribe();
+    resultPopupChannelRef.current = resultPopupChannel;
+    return () => {
+      if (resultPopupChannelRef.current === resultPopupChannel) {
+        resultPopupChannelRef.current = null;
+      }
+      supabase.removeChannel(resultPopupChannel);
     };
   }, [currentUserName]);
 
@@ -1509,7 +1575,10 @@ function App() {
                               Boolean(currentMatch?.isChallenger) ||
                               normalizeName(deletedRow?.challenger_name) === normalizeName(currentUserName);
                             if (wasSenderWaiting) {
-                              const targetDisplay = String(deletedRow?.target_name || '').trim() || '상대방';
+                              const targetDisplay =
+                                String(currentMatch?.opponent || '').trim() ||
+                                String(deletedRow?.target_name || '').trim() ||
+                                '상대방';
                               showStatusPopup('error', '매치 종료', `(${targetDisplay}님이 잔뜩 쫄아서 거절했습니다 ㅋㅋㅋㅋㅋ)`);
                             } else {
 	                            showStatusPopup('info', '매치 종료', '대전이 종료되었습니다.');
@@ -1532,7 +1601,10 @@ function App() {
                           Boolean(currentMatch?.isChallenger) ||
                           normalizeName(deletedRow?.challenger_name) === normalizeName(currentUserName);
                         if (wasSenderWaiting) {
-                          const targetDisplay = String(deletedRow?.target_name || '').trim() || '상대방';
+                          const targetDisplay =
+                            String(currentMatch?.opponent || '').trim() ||
+                            String(deletedRow?.target_name || '').trim() ||
+                            '상대방';
                           showStatusPopup('error', '매치 종료', `(${targetDisplay}님이 잔뜩 쫄아서 거절했습니다 ㅋㅋㅋㅋㅋ)`);
                         } else {
                           showStatusPopup('info', '매치 종료', '매치가 취소되었거나 정상적으로 종료되었습니다.');
@@ -1935,6 +2007,7 @@ function App() {
       });
 
       const payloadCandidates: any[] = [
+        { favorite_legend: `INGAME_PLATFORM:${platform}`, favorite_weapon: `INGAME_CODE:${nickname}` },
         { ingame_nickname: nickname, ingame_platform: platform },
         { in_game_nickname: nickname, in_game_platform: platform },
         { game_nickname: nickname, game_platform: platform },
@@ -2902,8 +2975,42 @@ function App() {
           const didCurrentWin = winnerName?.trim() === (currentUserName || '').trim();
           const myScore = isCurrentChallenger ? challengerScore : targetScore;
           const myRowBefore: any = regularRankMap.get(normalizeName(currentUserName));
+          let challengerPointDelta = 0;
+          let targetPointDelta = 0;
 
           if (isRegularMode(baseMode)) {
+            const challengerTierBefore = getRegularTierLevelByName(challengerName);
+            const targetTierBefore = getRegularTierLevelByName(targetName);
+            const challengerWinsBefore = Number(challengerRowBefore?.regular_wins || 0);
+            const targetWinsBefore = Number(targetRowBefore?.regular_wins || 0);
+            const challengerStreakBefore = Number(challengerRowBefore?.regular_win_streak || 0);
+            const targetStreakBefore = Number(targetRowBefore?.regular_win_streak || 0);
+            if (challengerWon) {
+              if (challengerWinsBefore <= 0) {
+                challengerPointDelta = REGULAR_FIRST_WIN_BASE_BY_TIER_LEVEL[targetTierBefore] ?? 25;
+              } else {
+                const isSweep = targetScore === 0;
+                const isHigherTierWin = targetTierBefore > challengerTierBefore;
+                const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
+                const nextStreak = challengerStreakBefore + 1;
+                const streakMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
+                challengerPointDelta = Math.round(baseGain * streakMultiplier);
+              }
+              targetPointDelta = -(15 - (targetScore > 0 ? 5 : 0));
+            } else {
+              if (targetWinsBefore <= 0) {
+                targetPointDelta = REGULAR_FIRST_WIN_BASE_BY_TIER_LEVEL[challengerTierBefore] ?? 25;
+              } else {
+                const isSweep = challengerScore === 0;
+                const isHigherTierWin = challengerTierBefore > targetTierBefore;
+                const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
+                const nextStreak = targetStreakBefore + 1;
+                const streakMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
+                targetPointDelta = Math.round(baseGain * streakMultiplier);
+              }
+              challengerPointDelta = -(15 - (challengerScore > 0 ? 5 : 0));
+            }
+
             const myTierBefore = getRegularTierLevelByName(currentUserName);
             const oppTierBefore = getRegularTierLevelByName(isCurrentChallenger ? targetName : challengerName);
             if (didCurrentWin) {
@@ -2922,6 +3029,13 @@ function App() {
               currentPointDelta = -(15 - (myScore > 0 ? 5 : 0));
             }
           } else {
+            if (challengerWon) {
+              challengerPointDelta = seasonWinnerReward.sp;
+              targetPointDelta = seasonLoserReward.sp;
+            } else {
+              challengerPointDelta = seasonLoserReward.sp;
+              targetPointDelta = seasonWinnerReward.sp;
+            }
             currentPointDelta = didCurrentWin ? seasonWinnerReward.sp : seasonLoserReward.sp;
           }
 
@@ -2955,12 +3069,38 @@ function App() {
           };
           const pointDeltaLine = formatDeltaLine(currentPointLabel, currentPointDelta);
           const gcDeltaLine = formatDeltaLine('GC (갤럭시 코인)', currentGcDelta);
-          lastResultPopupMatchIdRef.current = getMatchStableId(insertedMatchRow || matchPayload);
+          const popupId = getMatchStableId(insertedMatchRow || matchPayload);
+          lastResultPopupMatchIdRef.current = `result:${popupId}`;
           showStatusPopup(
             didWin ? 'success' : 'info',
             didWin ? '전투 승리! 결과 반영 완료' : '전투 종료! 결과 반영 완료',
             `스코어 ${updatedData.c_win} : ${updatedData.t_win}\n${pointDeltaLine}\n${gcDeltaLine}`
           );
+          try {
+            const broadcastChannel = resultPopupChannelRef.current;
+            if (broadcastChannel) {
+              await broadcastChannel.send({
+                type: 'broadcast',
+                event: 'match_result',
+                payload: {
+                  popupId,
+                  matchId: activeMatch.id,
+                  challengerName,
+                  targetName,
+                  winnerName,
+                  cWin: Number(updatedData.c_win || 0),
+                  tWin: Number(updatedData.t_win || 0),
+                  pointLabel: currentPointLabel,
+                  challengerPointDelta,
+                  targetPointDelta,
+                  challengerGcDelta: Number(cUpdates.gc ?? cGc) - cGc,
+                  targetGcDelta: Number(tUpdates.gc ?? tGc) - tGc,
+                },
+              });
+            }
+          } catch {
+            // ignore broadcast failure
+          }
           if (currentUserName) clearRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName);
           setRerollCount(0);
           setMatchPhase('idle');
@@ -3058,8 +3198,8 @@ function App() {
     try {
       const { data: fresh } = await supabase.from('profiles').select('*').eq('id', found.id).maybeSingle();
       if (!fresh) return;
-      const merged = { ...found, ...fresh };
-      const resolved = resolveIngameProfile(merged);
+      const merged = { ...fresh, ...found };
+      const resolved = resolveIngameProfile({ ...found, ...fresh });
       const hydrated = { ...merged, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform };
       setSelectedPlayer((prev) => (prev && prev.id === found.id ? hydrated : prev));
       setRankers((prev) => prev.map((row) => (row.id === found.id ? { ...row, ...hydrated } : row)));
