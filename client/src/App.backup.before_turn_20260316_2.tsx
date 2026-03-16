@@ -30,14 +30,10 @@ type ShopItem = {
   accentClass: string;
 };
 
-type RegularChallengeMode = 'free';
-type SeasonChallengeMode = 'random' | 'season_free' | 'season_watson_melee' | 'season_vantage_sniper' | 'season_wraith_knife';
-type ChallengeMode = RegularChallengeMode | SeasonChallengeMode;
-
 type IncomingChallengeRequest = {
   id: string;
   challengerName: string;
-  mode: ChallengeMode;
+  mode: 'free' | 'random';
   betGc: number;
 };
 
@@ -64,9 +60,6 @@ const SHOP_ITEMS: ShopItem[] = [
   { id: 'name_gold', category: 'nameColor', name: '솔라 골드', description: '왕좌 느낌 골드 닉네임', cost: 1500, preview: 'A', accentClass: 'text-yellow-300 drop-shadow-[0_0_12px_rgba(250,204,21,0.65)]' },
   { id: 'name_emerald', category: 'nameColor', name: '에메랄드 노바', description: '선명한 에메랄드 닉네임', cost: 1500, preview: 'A', accentClass: 'text-emerald-300 drop-shadow-[0_0_10px_rgba(52,211,153,0.65)]' },
   { id: 'name_royal', category: 'nameColor', name: '로열 바이올렛', description: '보랏빛 고급 닉네임', cost: 1500, preview: 'A', accentClass: 'text-violet-300 drop-shadow-[0_0_10px_rgba(167,139,250,0.65)]' },
-  { id: 'name_grad_solar', category: 'nameColor', name: '솔라 스펙트럼', description: '금빛-핑크 그라데이션 닉네임', cost: 7600, preview: 'A', accentClass: 'bg-gradient-to-r from-yellow-300 via-orange-300 to-pink-400 text-transparent bg-clip-text drop-shadow-[0_0_12px_rgba(251,191,36,0.5)]' },
-  { id: 'name_grad_nebula', category: 'nameColor', name: '네뷸라 플로우', description: '시안-보라 성운 그라데이션 닉네임', cost: 7600, preview: 'A', accentClass: 'bg-gradient-to-r from-cyan-300 via-sky-300 to-violet-400 text-transparent bg-clip-text drop-shadow-[0_0_12px_rgba(56,189,248,0.5)]' },
-  { id: 'name_grad_eclipse', category: 'nameColor', name: '이클립스 블러드', description: '붉은-보라 하이엔드 그라데이션 닉네임', cost: 7600, preview: 'A', accentClass: 'bg-gradient-to-r from-red-400 via-fuchsia-400 to-indigo-400 text-transparent bg-clip-text drop-shadow-[0_0_12px_rgba(244,63,94,0.5)]' },
 
   { id: 'style_default', category: 'nameStyle', name: '기본 폰트', description: '기본 전투 UI 폰트', cost: 0, preview: 'Aa', accentClass: 'text-white' },
   { id: 'style_orbit', category: 'nameStyle', name: '오비트 폰트', description: 'SF 느낌의 하이테크 폰트', cost: 3500, preview: 'Aa', accentClass: 'text-cyan-300' },
@@ -83,28 +76,14 @@ const SHOP_ITEMS: ShopItem[] = [
   { id: 'border_aurora', category: 'borderFx', name: '오로라 프리즘', description: '다색 오로라 테두리', cost: 4200, preview: '◎', accentClass: 'text-cyan-200 drop-shadow-[0_0_16px_rgba(34,211,238,0.8)]' },
   { id: 'border_plasma', category: 'borderFx', name: '플라즈마 라인', description: '전기 플라즈마 이펙트', cost: 4200, preview: '◎', accentClass: 'text-indigo-200 drop-shadow-[0_0_16px_rgba(129,140,248,0.8)]' },
   { id: 'border_void', category: 'borderFx', name: '보이드 섀도우', description: '암흑 성운 테두리', cost: 4200, preview: '◎', accentClass: 'text-slate-200 drop-shadow-[0_0_16px_rgba(148,163,184,0.75)]' },
-  { id: 'border_grad_prism', category: 'borderFx', name: '프리즘 레일', description: '시안-바이올렛 듀얼 링 이펙트', cost: 8300, preview: '◎', accentClass: 'text-cyan-200 drop-shadow-[0_0_18px_rgba(34,211,238,0.82)]' },
-  { id: 'border_grad_crown', category: 'borderFx', name: '크라운 아크', description: '골드-핑크 왕좌 그라데이션 링', cost: 8300, preview: '◎', accentClass: 'text-yellow-200 drop-shadow-[0_0_18px_rgba(250,204,21,0.82)]' },
-  { id: 'border_grad_abyss', category: 'borderFx', name: '어비스 코일', description: '로즈-바이올렛 심연 링 이펙트', cost: 8300, preview: '◎', accentClass: 'text-rose-200 drop-shadow-[0_0_18px_rgba(244,63,94,0.76)]' },
 ];
-
-const SEASON_MODE_MENU: { mode: SeasonChallengeMode; label: string; description: string }[] = [
-  { mode: 'random', label: '랜덤 대전', description: '기존 시즌 랜덤 규칙' },
-  { mode: 'season_free', label: '자유 대전', description: '레전드/무기 자유 선택' },
-  { mode: 'season_watson_melee', label: '왓슨 근접전', description: '왓슨 고정 · 무기 없음' },
-  { mode: 'season_vantage_sniper', label: '벤티지 스나이퍼전', description: '벤티지 · 크레이버/센티넬 고정' },
-  { mode: 'season_wraith_knife', label: '레이스 투척 나이프전', description: '레이스 · 투척 나이프 고정' },
-];
-
-const KNOWN_CHALLENGE_MODES: ChallengeMode[] = ['free', 'random', 'season_free', 'season_watson_melee', 'season_vantage_sniper', 'season_wraith_knife'];
 
 function App() {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [activeMenu, setActiveMenu] = useState('home');
   
-  const [entryMode, setEntryMode] = useState<ChallengeMode>('free');
-  const [seasonSubMode, setSeasonSubMode] = useState<SeasonChallengeMode>('random');
+  const [entryMode, setEntryMode] = useState<'free' | 'random'>('free');
   const [entryOpponent, setEntryOpponent] = useState('');
   const [entryLegend, setEntryLegend] = useState('');
   const [entryWeapons, setEntryWeapons] = useState<string[]>(['', '']);
@@ -146,9 +125,8 @@ function App() {
     { id: number; left: string; top: string; size: number; delay: string }[]
   >([]);
   const [statusPopup, setStatusPopup] = useState<
-    { type: 'success' | 'error' | 'info'; title: string; message: string; autoCloseMs?: number; hideConfirm?: boolean } | null
+    { type: 'success' | 'error' | 'info'; title: string; message: string } | null
   >(null);
-  const [statusPopupFading, setStatusPopupFading] = useState(false);
   const [incomingChallenge, setIncomingChallenge] = useState<IncomingChallengeRequest | null>(null);
   const [rewardChestQueue, setRewardChestQueue] = useState<PendingRewardChest[]>([]);
   const [activeRewardChest, setActiveRewardChest] = useState<PendingRewardChest | null>(null);
@@ -184,51 +162,6 @@ function App() {
   const cosmeticsStorageKey = user?.id ? `gt_cosmetics_v1_${user.id}` : null;
   const defaultOwnedIds = ['name_default', 'style_default', 'border_default'];
   const isCurrentUserDisplayName = (name?: string | null) => (name || '').trim() === (currentUserName || '').trim();
-  const normalizeChallengeMode = (modeRaw: unknown): ChallengeMode => {
-    const raw = String(modeRaw || '').trim();
-    const base = raw.replace(/_(accepted|accepting|settling|refunding)$/i, '').trim();
-    if (base === 'free' || base === 'random' || base === 'season_free' || base === 'season_watson_melee' || base === 'season_vantage_sniper' || base === 'season_wraith_knife') {
-      return base as ChallengeMode;
-    }
-    return 'free';
-  };
-  const isRegularMode = (mode: ChallengeMode | string) => normalizeChallengeMode(mode) === 'free';
-  const isRandomSeasonMode = (mode: ChallengeMode | string) => normalizeChallengeMode(mode) === 'random';
-  const isFreePickMode = (mode: ChallengeMode | string) => {
-    const m = normalizeChallengeMode(mode);
-    return m === 'free' || m === 'season_free';
-  };
-  const getModeDisplayName = (mode: ChallengeMode | string) => {
-    const m = normalizeChallengeMode(mode);
-    if (m === 'free') return '정규 대전';
-    if (m === 'random') return '시즌 대전 · 랜덤';
-    if (m === 'season_free') return '시즌 대전 · 자유';
-    if (m === 'season_watson_melee') return '시즌 대전 · 왓슨 근접전';
-    if (m === 'season_vantage_sniper') return '시즌 대전 · 벤티지 스나이퍼전';
-    if (m === 'season_wraith_knife') return '시즌 대전 · 레이스 투척 나이프전';
-    return '정규 대전';
-  };
-  const getFixedSeasonLoadout = (mode: ChallengeMode | string): { legend: string; weapons: [string, string] } | null => {
-    const m = normalizeChallengeMode(mode);
-    if (m === 'season_watson_melee') return { legend: '왓슨', weapons: ['없음', '없음'] };
-    if (m === 'season_vantage_sniper') return { legend: '벤티지', weapons: ['크레이버', '센티넬'] };
-    if (m === 'season_wraith_knife') return { legend: '레이스', weapons: ['투척 나이프', '투척 나이프'] };
-    return null;
-  };
-  const resolveModeLoadout = (mode: ChallengeMode | string, legend: string, weapons: string[]) => {
-    const fixed = getFixedSeasonLoadout(mode);
-    if (fixed) return { legend: fixed.legend, weapons: [...fixed.weapons] as [string, string] };
-    return {
-      legend: String(legend || '').trim(),
-      weapons: [String(weapons?.[0] || '').trim(), String(weapons?.[1] || '').trim()] as [string, string],
-    };
-  };
-  const getModeAccent = (mode: ChallengeMode | string) => {
-    const m = normalizeChallengeMode(mode);
-    return isRegularMode(m)
-      ? { panel: 'border-pink-400/50 bg-pink-400/5', badge: 'bg-pink-600 text-white' }
-      : { panel: 'border-cyan-400/50 bg-cyan-400/5', badge: 'bg-cyan-600 text-black' };
-  };
 
   const nameColorClassMap: Record<string, string> = {
     name_default: 'text-white',
@@ -237,9 +170,6 @@ function App() {
     name_gold: 'text-yellow-300 drop-shadow-[0_0_12px_rgba(250,204,21,0.65)]',
     name_emerald: 'text-emerald-300 drop-shadow-[0_0_10px_rgba(52,211,153,0.65)]',
     name_royal: 'text-violet-300 drop-shadow-[0_0_10px_rgba(167,139,250,0.65)]',
-    name_grad_solar: 'bg-gradient-to-r from-yellow-300 via-orange-300 to-pink-400 text-transparent bg-clip-text drop-shadow-[0_0_12px_rgba(251,191,36,0.5)]',
-    name_grad_nebula: 'bg-gradient-to-r from-cyan-300 via-sky-300 to-violet-400 text-transparent bg-clip-text drop-shadow-[0_0_12px_rgba(56,189,248,0.5)]',
-    name_grad_eclipse: 'bg-gradient-to-r from-red-400 via-fuchsia-400 to-indigo-400 text-transparent bg-clip-text drop-shadow-[0_0_12px_rgba(244,63,94,0.5)]',
   };
   const nameStyleClassMap: Record<string, string> = {
     style_default: '',
@@ -258,9 +188,6 @@ function App() {
     border_aurora: 'border-cyan-200 shadow-[0_0_18px_rgba(34,211,238,0.68)]',
     border_plasma: 'border-indigo-300 shadow-[0_0_18px_rgba(129,140,248,0.68)]',
     border_void: 'border-slate-300 shadow-[0_0_18px_rgba(148,163,184,0.58)]',
-    border_grad_prism: 'border-cyan-300 ring-2 ring-violet-300/55 shadow-[0_0_22px_rgba(34,211,238,0.6)]',
-    border_grad_crown: 'border-yellow-300 ring-2 ring-pink-300/55 shadow-[0_0_22px_rgba(250,204,21,0.62)]',
-    border_grad_abyss: 'border-rose-300 ring-2 ring-violet-300/55 shadow-[0_0_22px_rgba(244,63,94,0.58)]',
   };
   const rankCardFxByTier = (tierLevel: number) => {
     if (tierLevel >= 7) return 'border border-red-300/75 shadow-[0_0_24px_rgba(248,113,113,0.28)] bg-[linear-gradient(140deg,rgba(248,113,113,0.08),rgba(0,0,0,0.64)_50%,rgba(0,0,0,0.84))]';
@@ -494,8 +421,6 @@ function App() {
   const dailyRewardCheckingRef = useRef(false);
   const dailyRewardSessionCheckedRef = useRef('');
   const suppressNextDeletePopupChallengeIdRef = useRef<string | null>(null);
-  const statusPopupTimerRef = useRef<number | null>(null);
-  const statusPopupFadeTimerRef = useRef<number | null>(null);
   const rankCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const activeScrollTargetRef = useRef<HTMLElement | null>(null);
@@ -567,29 +492,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (statusPopupTimerRef.current) {
-      window.clearTimeout(statusPopupTimerRef.current);
-      statusPopupTimerRef.current = null;
-    }
-    if (statusPopupFadeTimerRef.current) {
-      window.clearTimeout(statusPopupFadeTimerRef.current);
-      statusPopupFadeTimerRef.current = null;
-    }
-    setStatusPopupFading(false);
-    if (!statusPopup?.autoCloseMs) return;
-    const fadeAfter = Math.max(0, statusPopup.autoCloseMs - 360);
-    statusPopupFadeTimerRef.current = window.setTimeout(() => setStatusPopupFading(true), fadeAfter);
-    statusPopupTimerRef.current = window.setTimeout(() => {
-      setStatusPopup(null);
-      setStatusPopupFading(false);
-    }, statusPopup.autoCloseMs);
-    return () => {
-      if (statusPopupTimerRef.current) window.clearTimeout(statusPopupTimerRef.current);
-      if (statusPopupFadeTimerRef.current) window.clearTimeout(statusPopupFadeTimerRef.current);
-    };
-  }, [statusPopup]);
-
-  useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (statusPopup) {
@@ -620,11 +522,9 @@ function App() {
   const showStatusPopup = (
     type: 'success' | 'error' | 'info',
     title: string,
-    message: string,
-    options?: { autoCloseMs?: number; hideConfirm?: boolean }
+    message: string
   ) => {
-    setStatusPopupFading(false);
-    setStatusPopup({ type, title, message, autoCloseMs: options?.autoCloseMs, hideConfirm: options?.hideConfirm });
+    setStatusPopup({ type, title, message });
   };
 
   const triggerResultFx = (didWin: boolean, message: string) => {
@@ -667,8 +567,13 @@ function App() {
       const opp = isC ? data.target_name : data.challenger_name;
       const amIReady = isC ? data.c_ready : data.t_ready;
       const modeRaw = String(data.mode || '');
-      const baseMode = normalizeChallengeMode(modeRaw);
-      const isRandomAccepted = isRandomSeasonMode(baseMode) && (modeRaw.includes('_accepted') || modeRaw.includes('_accepting'));
+      const baseMode = modeRaw
+        .replace('_accepted', '')
+        .replace('_accepting', '')
+        .replace('_settling', '')
+        .replace('_refunding', '')
+        .trim() as 'free' | 'random';
+      const isRandomAccepted = baseMode === 'random' && (modeRaw.includes('_accepted') || modeRaw.includes('_accepting'));
       const savedRandomDraft = isRandomAccepted ? readRandomDraftState(data.id, isC, username) : null;
       
       let localLegend = isC ? (data.legend || '') : (data.t_legend || '');
@@ -684,11 +589,6 @@ function App() {
           setEntryLegend(localLegend); setEntryWeapons(localWeapons);
           writeRandomDraftState(data.id, isC, username, { rerollCount: savedRandomDraft?.rerollCount || 0, legend: localLegend, weapons: localWeapons });
       } else {
-          const fixedLoadout = getFixedSeasonLoadout(baseMode);
-          if (fixedLoadout) {
-            localLegend = fixedLoadout.legend;
-            localWeapons = [...fixedLoadout.weapons];
-          }
           // 픽 단계에서 아직 Ready를 누르지 않았다면, 상대 업데이트로 내 로컬 선택값이 지워지지 않게 보존합니다.
           if (matchPhaseRef.current === 'scoring' && !amIReady) {
             const draftLegend = entryLegendRef.current || '';
@@ -703,10 +603,7 @@ function App() {
       setRerollCount(isRandomAccepted ? (savedRandomDraft?.rerollCount || 0) : 0);
 
       setActiveMatch({ id: data.id, mode: baseMode, opponent: opp, legend: localLegend, weapons: localWeapons, oppLegend: isC ? data.t_legend : data.legend, oppWeapons: isC ? data.t_weapons : data.weapons, isChallenger: isC });
-      setEntryOpponent(opp);
-      setEntryMode(baseMode);
-      if (!isRegularMode(baseMode)) setSeasonSubMode(baseMode as SeasonChallengeMode);
-      setBetAmount(data.bet_gc || 0);
+      setEntryOpponent(opp); setEntryMode(baseMode); setBetAmount(data.bet_gc || 0);
 
       if (data.c_ready && data.t_ready) {
         setIncomingChallenge(null);
@@ -718,7 +615,7 @@ function App() {
         setIncomingChallenge(null);
         setMatchPhase('waiting_sync');
       } else {
-        const baseMode = normalizeChallengeMode(data.mode);
+        const baseMode = data.mode.replace('_accepted', '').trim() as 'free' | 'random';
         setIncomingChallenge({
           id: data.id,
           challengerName: data.challenger_name,
@@ -1055,24 +952,23 @@ function App() {
     const channel = supabase.channel('unified_challenge_sync_' + currentUserName.replace(/[^a-zA-Z0-9]/g, ''))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'challenges' }, payload => {
            const currentMatch = activeMatchRef.current; const currentPhase = matchPhaseRef.current; const isWaiting = waitingForScoreRef.current;
-	           if (payload.eventType === 'INSERT') {
-	              const newChallenge = payload.new;
-	              if (newChallenge.target_name.trim() === currentUserName.trim()) {
-	                 const baseMode = normalizeChallengeMode(newChallenge.mode);
-	                 playSFX('matchStart');
-	                 setIncomingChallenge({
-	                   id: newChallenge.id,
-	                   challengerName: newChallenge.challenger_name,
+           if (payload.eventType === 'INSERT') {
+              const newChallenge = payload.new;
+              if (newChallenge.target_name.trim() === currentUserName.trim()) {
+                 const baseMode = newChallenge.mode.replace('_accepted', '').trim() as 'free' | 'random';
+                 playSFX('matchStart');
+                 setIncomingChallenge({
+                   id: newChallenge.id,
+                   challengerName: newChallenge.challenger_name,
                    mode: baseMode,
                    betGc: newChallenge.bet_gc || 0,
-	                 });
-	                 setEntryOpponent(newChallenge.challenger_name);
-	                 setEntryMode(baseMode);
-	                 if (!isRegularMode(baseMode)) setSeasonSubMode(baseMode as SeasonChallengeMode);
-	                 setBetAmount(newChallenge.bet_gc || 0);
-	                 setMatchPhase('idle');
-	              }
-	           }
+                 });
+                 setEntryOpponent(newChallenge.challenger_name);
+                 setEntryMode(baseMode);
+                 setBetAmount(newChallenge.bet_gc || 0);
+                 setMatchPhase('idle');
+              }
+           }
            if (payload.eventType === 'UPDATE') {
                const updated = payload.new;
                const pendingIncoming = incomingChallengeRef.current;
@@ -1105,29 +1001,22 @@ function App() {
                }
                checkActiveChallenge(currentUserName);
            }
-	           if (payload.eventType === 'DELETE') {
-	                const deletedRow = payload.old;
-	                const pendingIncoming = incomingChallengeRef.current;
-	                if (pendingIncoming && deletedRow.id === pendingIncoming.id) {
-	                    setIncomingChallenge(null);
-	                }
-	                if (currentMatch && deletedRow.id === currentMatch.id) {
-	                    if (currentPhase === 'scoring' || isWaiting || currentPhase === 'waiting_sync') {
-	                        const suppressPopup = suppressNextDeletePopupChallengeIdRef.current === deletedRow.id;
-	                        suppressNextDeletePopupChallengeIdRef.current = null;
-	                        playSFX('success');
-	                        if (!suppressPopup) {
-                            const wasSenderWaiting =
-                              currentPhase === 'waiting_sync' &&
-                              String(deletedRow?.challenger_name || '').trim() === String(currentUserName || '').trim();
-                            if (wasSenderWaiting) {
-                              showStatusPopup('error', '대전 거절', '상대방이 잔뜩 쫄았습니다 ㅋ');
-                            } else {
-	                            showStatusPopup('success', '업데이트 완료', '전투 결과가 성공적으로 반영되었습니다.');
-                            }
-	                        }
-	                       setMatchPhase('idle');
-	                       setActiveMatch(null);
+           if (payload.eventType === 'DELETE') {
+                const deletedRow = payload.old;
+                const pendingIncoming = incomingChallengeRef.current;
+                if (pendingIncoming && deletedRow.id === pendingIncoming.id) {
+                    setIncomingChallenge(null);
+                }
+                if (currentMatch && deletedRow.id === currentMatch.id) {
+                    if (currentPhase === 'scoring' || isWaiting) {
+                        const suppressPopup = suppressNextDeletePopupChallengeIdRef.current === deletedRow.id;
+                        suppressNextDeletePopupChallengeIdRef.current = null;
+                        playSFX('success');
+                        if (!suppressPopup) {
+                          showStatusPopup('success', '업데이트 완료', '전투 결과가 성공적으로 반영되었습니다.');
+                        }
+                       setMatchPhase('idle');
+                       setActiveMatch(null);
                        setWaitingForScore(false);
                        setMyWins(null);
                        setMyLosses(null);
@@ -1264,13 +1153,12 @@ function App() {
       (a: any, b: any) => new Date(a?.created_at || 0).getTime() - new Date(b?.created_at || 0).getTime()
     );
 
-	    sortedMatches.forEach((m: any) => {
-	      const modeRaw = String(m?.match_type || '').toLowerCase().trim();
-	      if (!KNOWN_CHALLENGE_MODES.includes(modeRaw as ChallengeMode)) return;
-	      const mode = normalizeChallengeMode(modeRaw);
-	      const left = normalize(m?.left_player_name || m?.left_player || '');
-	      const right = normalize(m?.right_player_name || m?.right_player || '');
-	      if (!left || !right) return;
+    sortedMatches.forEach((m: any) => {
+      const mode = String(m?.match_type || '').toLowerCase();
+      const left = normalize(m?.left_player_name || m?.left_player || '');
+      const right = normalize(m?.right_player_name || m?.right_player || '');
+      if (!left || !right) return;
+      if (!mode.includes('free') && !mode.includes('random')) return;
 
       ensure(left);
       ensure(right);
@@ -1288,7 +1176,7 @@ function App() {
       const winnerState = sim[winner];
       const loserState = sim[loser];
 
-	      if (isRegularMode(mode)) {
+      if (mode.includes('free')) {
         const topBefore = getRegularTopBefore();
         const winnerTierBefore = getRegularTierLevelBefore(winner);
         const loserTierBefore = getRegularTierLevelBefore(loser);
@@ -1684,30 +1572,13 @@ function App() {
       playSFX('click'); setEntryOpponent(name); setMatchPhase('idle');
   };
 
-  const handleModeChange = (mode: 'free' | 'season') => {
-    playSFX('click');
-    const nextMode: ChallengeMode = mode === 'free' ? 'free' : seasonSubMode;
-    setEntryMode(nextMode);
-    const fixed = getFixedSeasonLoadout(nextMode);
-    setEntryLegend(fixed?.legend || '');
-    setEntryWeapons(fixed ? [...fixed.weapons] : ['', '']);
-    setRerollCount(0);
+  const handleModeChange = (mode: 'free' | 'random') => {
+    playSFX('click'); setEntryMode(mode); setEntryLegend(''); setEntryWeapons(['', '']); setRerollCount(0);
     if (mode === 'free') {
       if (betAmount < REGULAR_TICKET_COST) setBetAmount(REGULAR_TICKET_COST);
-    } else if (betAmount < SEASON_TICKET_COST) {
-      setBetAmount(SEASON_TICKET_COST);
+    } else {
+      if (betAmount < SEASON_TICKET_COST) setBetAmount(SEASON_TICKET_COST);
     }
-  };
-
-  const handleSeasonSubModeChange = (nextMode: SeasonChallengeMode) => {
-    playSFX('click');
-    setSeasonSubMode(nextMode);
-    if (isRegularMode(entryMode)) return;
-    setEntryMode(nextMode);
-    const fixed = getFixedSeasonLoadout(nextMode);
-    setEntryLegend(fixed?.legend || '');
-    setEntryWeapons(fixed ? [...fixed.weapons] : ['', '']);
-    setRerollCount(0);
   };
 
   const handleReroll = async () => {
@@ -1741,7 +1612,7 @@ function App() {
   };
 
   const lockChallengeStakeOnAccept = async (
-    mode: ChallengeMode,
+    mode: 'free' | 'random',
     stakeEach: number,
     challengerName: string,
     targetName: string
@@ -1770,7 +1641,7 @@ function App() {
     }
     if (user?.id) fetchProfile(user.id);
     fetchRankers();
-    return { ok: true, message: isRegularMode(mode) ? '정규 티켓/배팅이 즉시 차감되었습니다.' : '시즌 배팅이 즉시 차감되었습니다.' };
+    return { ok: true, message: mode === 'free' ? '정규 티켓/배팅이 즉시 차감되었습니다.' : '시즌 배팅이 즉시 차감되었습니다.' };
   };
 
   const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -1781,7 +1652,7 @@ function App() {
   };
   const waitForChallengeAcceptance = async (
     challengeId: string,
-    baseMode: ChallengeMode,
+    baseMode: 'free' | 'random',
     timeoutMs = 4200
   ) => {
     const started = Date.now();
@@ -1797,25 +1668,17 @@ function App() {
     }
     return fetchChallengeById(challengeId);
   };
-  const buildAcceptedChallengePayload = (challengeRow: any, baseMode: ChallengeMode) => {
+  const buildAcceptedChallengePayload = (challengeRow: any, baseMode: 'free' | 'random') => {
     let challengerLegend = challengeRow.legend || '';
     let challengerWeapons = Array.isArray(challengeRow.weapons) ? challengeRow.weapons : ['', ''];
     let targetLegend = challengeRow.t_legend || '';
     let targetWeapons = Array.isArray(challengeRow.t_weapons) ? challengeRow.t_weapons : ['', ''];
 
-    if (isRandomSeasonMode(baseMode)) {
+    if (baseMode === 'random') {
       if (!challengerLegend) challengerLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
       if (!challengerWeapons[0] || !challengerWeapons[1]) challengerWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
       if (!targetLegend) targetLegend = ALL_LEGENDS[Math.floor(Math.random() * ALL_LEGENDS.length)];
       if (!targetWeapons[0] || !targetWeapons[1]) targetWeapons = [...ALL_WEAPONS].sort(() => 0.5 - Math.random()).slice(0, 2);
-    }
-
-    const fixedLoadout = getFixedSeasonLoadout(baseMode);
-    if (fixedLoadout) {
-      challengerLegend = fixedLoadout.legend;
-      challengerWeapons = [...fixedLoadout.weapons];
-      targetLegend = fixedLoadout.legend;
-      targetWeapons = [...fixedLoadout.weapons];
     }
 
     return {
@@ -1828,7 +1691,7 @@ function App() {
   };
   const ensureChallengeAccepted = async (
     challengeRow: any,
-    baseMode: ChallengeMode,
+    baseMode: 'free' | 'random',
     challengerName: string,
     targetName: string
   ): Promise<{ ok: boolean; row?: any; justAccepted?: boolean; stakeMessage?: string; message?: string }> => {
@@ -1896,7 +1759,7 @@ function App() {
     if (!challengeRow?.id) return;
     const modeRaw = String(challengeRow.mode || '').trim();
     if (!modeRaw) return;
-    const baseMode = normalizeChallengeMode(modeRaw);
+    const baseMode = modeRaw.replace('_accepted', '').replace('_accepting', '').replace('_refunding', '') as 'free' | 'random';
     const acceptedMode = `${baseMode}_accepted`;
     const refundingMode = `${baseMode}_refunding`;
 
@@ -1916,7 +1779,7 @@ function App() {
     await supabase.from('challenges').delete().eq('id', challengeRow.id).eq('mode', modeRaw);
   };
   const acquireSettlementLock = async (challengeId: string, currentMode: string) => {
-    const baseMode = normalizeChallengeMode(currentMode);
+    const baseMode = currentMode.replace('_accepted', '').replace('_settling', '') as 'free' | 'random';
     const acceptedMode = `${baseMode}_accepted`;
     const settlingMode = `${baseMode}_settling`;
     if (currentMode === settlingMode) return { ok: false, settling: true, baseMode };
@@ -1974,7 +1837,7 @@ function App() {
 
     const modeRaw = String(existing.mode || '').trim();
     const alreadyAccepted = modeRaw.includes('_accepted');
-    const baseMode = normalizeChallengeMode(modeRaw);
+    const baseMode = modeRaw.replace('_accepted', '').replace('_accepting', '').trim() as 'free' | 'random';
     if (!alreadyAccepted && baseMode === 'free') {
       const remainMs = getRegularCooldownRemainingMs(existing.challenger_name);
       if (remainMs > 0) {
@@ -2047,18 +1910,15 @@ function App() {
         weapons: nextWeapons,
       });
     } else {
-      const preset = getFixedSeasonLoadout(baseMode);
-      const nextLegend = preset?.legend || '';
-      const nextWeapons = preset ? [...preset.weapons] : ['', ''];
-      setEntryLegend(nextLegend);
-      setEntryWeapons(nextWeapons);
+      setEntryLegend('');
+      setEntryWeapons(['', '']);
       setRerollCount(0);
       setActiveMatch({
         id: existing.id,
         mode: baseMode,
         opponent: challengerName,
-        legend: nextLegend,
-        weapons: nextWeapons,
+        legend: '',
+        weapons: ['', ''],
         isChallenger: false,
       });
     }
@@ -2066,7 +1926,6 @@ function App() {
     setIncomingChallenge(null);
     setEntryOpponent(challengerName);
     setEntryMode(baseMode);
-    if (!isRegularMode(baseMode)) setSeasonSubMode(baseMode as SeasonChallengeMode);
     setBetAmount(stake);
     if (acceptance.justAccepted) {
       showStatusPopup('success', '대전 수락', acceptance.stakeMessage || '대전이 성사되었습니다.');
@@ -2091,7 +1950,7 @@ function App() {
     setEntryLegend('');
     setEntryWeapons(['', '']);
     setRerollCount(0);
-    showStatusPopup('info', '대전 거절', '당신은 잔뜩 쫄았습니까? ㅎ', { autoCloseMs: 3000, hideConfirm: true });
+    showStatusPopup('info', '대전 거절', `${pending.challengerName}님의 대전 신청을 거절했습니다.`);
   };
 
   const handleStartMatch = async () => {
@@ -2100,12 +1959,12 @@ function App() {
       playSFX('error');
       return alert('대상 닉네임을 찾을 수 없습니다. 접속 현황/랭킹에서 다시 선택해주세요.');
     }
-    if (isRegularMode(entryMode) && betAmount < REGULAR_TICKET_COST) {
+    if (entryMode === 'free' && betAmount < REGULAR_TICKET_COST) {
       playSFX('error');
       return alert(`정규 랭크전 티켓 포함 최소 금액은 ${REGULAR_TICKET_COST}GC 입니다.`);
     }
     if (betAmount > 0 && (!profile || (profile.gc ?? 1000) < betAmount)) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc ?? 1000} GC)`); }
-    if (isRegularMode(entryMode) && !canChallengeTargetByRegularRule(entryOpponent.trim())) {
+    if (entryMode === 'free' && !canChallengeTargetByRegularRule(entryOpponent.trim())) {
       playSFX('error');
       return alert('정규 랭크전은 동일 티어 또는 1단계 상위 티어에게만 도전할 수 있습니다. (루키는 예외)');
     }
@@ -2120,7 +1979,7 @@ function App() {
       .maybeSingle();
     
     if (existing) {
-      if (isRegularMode(entryMode)) {
+      if (entryMode === 'free') {
         const remainMs = getRegularCooldownRemainingMs(entryOpponent.trim());
         if (remainMs > 0) {
           playSFX('error');
@@ -2130,19 +1989,16 @@ function App() {
       playSFX('click');
       const modeRaw = String(existing.mode || '').trim();
       const alreadyAccepted = modeRaw.includes('_accepted');
-      const dbMode = normalizeChallengeMode(modeRaw);
-      if (dbMode !== normalizeChallengeMode(entryMode)) {
-        playSFX('error');
-        return alert(`상대방이 [${getModeDisplayName(dbMode)}]을 신청했습니다. 모드를 맞춰주세요!`);
-      }
+      const dbMode = modeRaw.replace('_accepted', '').replace('_accepting', '').trim();
+      if (dbMode !== entryMode.trim()) { playSFX('error'); return alert(`상대방이 [${existing.mode.includes('free') ? '자유' : '랜덤'}대전]을 신청했습니다. 모드를 맞춰주세요!`); }
       if (existing.bet_gc !== betAmount) { playSFX('error'); return alert(`상대방이 배팅금 [${existing.bet_gc} GC]를 걸었습니다. 배팅금을 맞춰주세요!`); }
-      if (!alreadyAccepted && isRegularMode(entryMode) && !canAcceptIncomingByRegularRule(entryOpponent.trim())) {
+      if (!alreadyAccepted && entryMode === 'free' && !canAcceptIncomingByRegularRule(entryOpponent.trim())) {
         playSFX('error');
         return alert('현재 정규 랭크 규칙상 해당 신청은 수락할 수 없습니다.');
       }
 
       const stake = Math.max(0, Math.floor(Number(existing.bet_gc || 0)));
-      if (!alreadyAccepted && isRegularMode(entryMode) && stake < REGULAR_TICKET_COST) {
+      if (!alreadyAccepted && entryMode === 'free' && stake < REGULAR_TICKET_COST) {
         playSFX('error');
         return alert(`정규 랭크전 최소 티켓 금액은 ${REGULAR_TICKET_COST}GC입니다.`);
       }
@@ -2158,7 +2014,7 @@ function App() {
       }
       const acceptedRow = acceptance.row;
 
-      if (isRandomSeasonMode(entryMode)) {
+      if (entryMode === 'random') {
           const saved = currentUserName ? readRandomDraftState(acceptedRow.id, false, currentUserName) : null;
           const dbLegend = String(acceptedRow.t_legend || '');
           const dbWeapons = Array.isArray(acceptedRow.t_weapons) ? acceptedRow.t_weapons : ['', ''];
@@ -2167,18 +2023,13 @@ function App() {
           setEntryLegend(nextLegend);
           setEntryWeapons(nextWeapons);
           setRerollCount(saved?.rerollCount ?? 0);
-          setActiveMatch({ id: acceptedRow.id, mode: dbMode, opponent: entryOpponent.trim(), legend: nextLegend, weapons: nextWeapons, isChallenger: false });
+          setActiveMatch({ id: acceptedRow.id, mode: entryMode, opponent: entryOpponent.trim(), legend: nextLegend, weapons: nextWeapons, isChallenger: false });
           if (currentUserName) {
             writeRandomDraftState(acceptedRow.id, false, currentUserName, { rerollCount: saved?.rerollCount ?? 0, legend: nextLegend, weapons: nextWeapons });
           }
       } else {
-          const preset = getFixedSeasonLoadout(dbMode);
-          const nextLegend = preset?.legend || '';
-          const nextWeapons = preset ? [...preset.weapons] : ['', ''];
-          setEntryLegend(nextLegend);
-          setEntryWeapons(nextWeapons);
           setRerollCount(0);
-          setActiveMatch({ id: acceptedRow.id, mode: dbMode, opponent: entryOpponent.trim(), legend: nextLegend, weapons: nextWeapons, isChallenger: false });
+          setActiveMatch({ id: acceptedRow.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: false });
       }
       setIncomingChallenge(null);
       if (acceptance.justAccepted) {
@@ -2186,7 +2037,7 @@ function App() {
       }
       setMatchPhase('scoring');
     } else {
-      if (isRegularMode(entryMode)) {
+      if (entryMode === 'free') {
         const remainMs = getRegularCooldownRemainingMs(entryOpponent.trim());
         if (remainMs > 0) {
           playSFX('error');
@@ -2194,18 +2045,12 @@ function App() {
         }
       }
       playSFX('click');
-      const modeToInsert = normalizeChallengeMode(entryMode);
-      const { data: newChall } = await supabase.from('challenges').insert([{ challenger_name: currentUserName.trim(), target_name: entryOpponent.trim(), mode: modeToInsert, bet_gc: betAmount }]).select().single();
+      const { data: newChall } = await supabase.from('challenges').insert([{ challenger_name: currentUserName.trim(), target_name: entryOpponent.trim(), mode: entryMode, bet_gc: betAmount }]).select().single();
       if (newChall) {
         setRerollCount(0);
-        const preset = getFixedSeasonLoadout(modeToInsert);
-        const nextLegend = preset?.legend || '';
-        const nextWeapons = preset ? [...preset.weapons] : ['', ''];
-        setEntryLegend(nextLegend);
-        setEntryWeapons(nextWeapons);
-        setActiveMatch({ id: newChall.id, mode: modeToInsert, opponent: entryOpponent.trim(), legend: nextLegend, weapons: nextWeapons, isChallenger: true });
+        setActiveMatch({ id: newChall.id, mode: entryMode, opponent: entryOpponent.trim(), legend: '', weapons: ['', ''], isChallenger: true });
         setMatchPhase('waiting_sync');
-        showStatusPopup('info', '대전 신청 완료', '상대방에게 도전장을 보냈습니다.', { autoCloseMs: 3000, hideConfirm: true });
+        showStatusPopup('info', '대전 신청 완료', `${entryOpponent.trim()}님에게 대전 신청을 보냈습니다. 수락/거절 응답을 기다려주세요.`);
       }
     }
   };
@@ -2251,7 +2096,7 @@ function App() {
       return;
     }
     setActiveMatch((prev) => (prev ? { ...prev, legend: nextLegend, weapons: nextWeapons } : prev));
-    if (currentUserName && isRandomSeasonMode(activeMatch.mode)) {
+    if (currentUserName && activeMatch.mode.includes('random')) {
       writeRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName, {
         rerollCount,
         legend: nextLegend,
@@ -2314,7 +2159,7 @@ function App() {
           const challengerWon = updatedData.c_win > updatedData.c_lose;
           const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', challengerName).single();
           const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', targetName).single();
-          let currentPointLabel = isRegularMode(baseMode) ? 'RP (정규)' : 'SP (시즌)';
+          let currentPointLabel = String(baseMode).includes('free') ? 'RP (자유)' : 'SP (랜덤)';
           let currentPointDelta = 0;
           let currentGcDelta = 0;
 
@@ -2325,7 +2170,7 @@ function App() {
             const bet = Math.max(0, Math.floor(Number(updatedData.bet_gc || 0)));
             const cGc = typeof cProfile.gc === 'number' ? cProfile.gc : 1000;
             const tGc = typeof tProfile.gc === 'number' ? tProfile.gc : 1000;
-            const isRegular = isRegularMode(baseMode);
+            const isRegular = String(baseMode).includes('free');
 
             if (isRegular) {
               // 정규전: 티켓(200)은 소멸, 초과 배팅만 승자가 획득
@@ -2356,7 +2201,7 @@ function App() {
             const myScore = isCurrentChallenger ? Number(updatedData.c_win || 0) : Number(updatedData.t_win || 0);
             const myRowBefore: any = regularRankMap.get(normalizeName(currentUserName));
 
-            if (isRegularMode(baseMode)) {
+            if (String(baseMode).includes('free')) {
               const myTierBefore = getRegularTierLevelByName(currentUserName);
               const oppTierBefore = getRegularTierLevelByName(isCurrentChallenger ? targetName : challengerName);
               if (didCurrentWin) {
@@ -2528,8 +2373,8 @@ function App() {
       if (isWin) wins += 1;
       else losses += 1;
 
-	      if (isRegularMode(String(m.match_type || ''))) freeMatches += 1;
-	      else randomMatches += 1;
+      if ((m.match_type || '').includes('free')) freeMatches += 1;
+      else randomMatches += 1;
 
       const myLeg = isLeft ? m.left_legend : m.right_legend;
       const myWep = isLeft ? m.left_weapons : m.right_weapons;
@@ -2982,12 +2827,12 @@ function App() {
     const me = normalizeName(currentUserName);
     const target = normalizeName(targetName);
     if (!me || !target || me === target) return 0;
-	    let latestMatchTs = 0;
-	    for (const m of logs) {
-	      const type = normalizeChallengeMode(String(m?.match_type || '').toLowerCase());
-	      if (!isRegularMode(type)) continue;
-	      const left = normalizeName((m?.left_player_name || m?.left_player || '') as string);
-	      const right = normalizeName((m?.right_player_name || m?.right_player || '') as string);
+    let latestMatchTs = 0;
+    for (const m of logs) {
+      const type = String(m?.match_type || '').toLowerCase();
+      if (!type.includes('free')) continue;
+      const left = normalizeName((m?.left_player_name || m?.left_player || '') as string);
+      const right = normalizeName((m?.right_player_name || m?.right_player || '') as string);
       const isPair = (left === me && right === target) || (left === target && right === me);
       if (!isPair) continue;
       const ts = new Date(m?.created_at || 0).getTime();
@@ -3099,8 +2944,7 @@ function App() {
     const rightSeasonInfo = getSeasonRankInfoByName(rightP);
     
     const isLeftWinner = log.winner_name === leftP;
-    const modeLabel = getModeDisplayName(log.match_type);
-    const isRegularLogMode = isRegularMode(log.match_type);
+    const modeLabel = log.match_type === 'free' ? '자유 대전' : '랜덤 대전';
     const leftResult = isLeftWinner ? 'WIN' : 'LOSE';
     const rightResult = isLeftWinner ? 'LOSE' : 'WIN';
     const leftScore = log.score_left ?? 0;
@@ -3130,7 +2974,7 @@ function App() {
           </button>
 
           <div className="flex flex-col items-center py-1">
-            <span className={`px-4 py-1.5 rounded-lg text-xs font-black tracking-widest ${isRegularLogMode ? 'bg-pink-600 text-white' : 'bg-cyan-600 text-black'}`}>
+            <span className={`px-4 py-1.5 rounded-lg text-xs font-black tracking-widest ${log.match_type === 'free' ? 'bg-pink-600 text-white' : 'bg-cyan-600 text-black'}`}>
               {modeLabel}
             </span>
             <div className="flex items-center justify-center gap-1.5 mt-1">
@@ -3245,14 +3089,10 @@ function App() {
         60% { transform: translateX(-1px) rotate(-1deg); }
         100% { transform: translateX(0) rotate(0); }
       }
-	      @keyframes popup-in {
-	        0% { opacity: 0; transform: translateY(16px) scale(0.96); }
-	        100% { opacity: 1; transform: translateY(0) scale(1); }
-	      }
-	      @keyframes popup-fade {
-	        0% { opacity: 1; transform: translateY(0) scale(1); }
-	        100% { opacity: 0; transform: translateY(12px) scale(0.98); }
-	      }
+      @keyframes popup-in {
+        0% { opacity: 0; transform: translateY(16px) scale(0.96); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+      }
       @keyframes fx-win-pulse {
         0% { opacity: 0; transform: scale(0.86); }
         20% { opacity: 1; transform: scale(1); }
@@ -3492,60 +3332,30 @@ function App() {
                                />
                            </div>
                            <div className="flex gap-2 p-1.5 bg-black/50 rounded-2xl border border-white/5">
-                              <button
-                                onMouseEnter={() => playSFX('hover')}
-                                onClick={() => handleModeChange('free')}
-                                className={`flex-1 py-4 rounded-xl text-lg font-bold transition-all cursor-pointer ${isRegularMode(entryMode) ? 'bg-pink-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
-                              >
-                                정규 대전
-                              </button>
-                              <button
-                                onMouseEnter={() => playSFX('hover')}
-                                onClick={() => handleModeChange('season')}
-                                className={`flex-1 py-4 rounded-xl text-lg font-bold transition-all cursor-pointer ${!isRegularMode(entryMode) ? 'bg-cyan-600 text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}
-                              >
-                                시즌 대전
-                              </button>
+                              <button onMouseEnter={() => playSFX('hover')} onClick={() => handleModeChange('free')} className={`flex-1 py-4 rounded-xl text-lg font-bold transition-all cursor-pointer ${entryMode === 'free' ? 'bg-pink-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>자유대전 (정규)</button>
+                              <button onMouseEnter={() => playSFX('hover')} onClick={() => handleModeChange('random')} className={`flex-1 py-4 rounded-xl text-lg font-bold transition-all cursor-pointer ${entryMode === 'random' ? 'bg-cyan-600 text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}>랜덤대전 (시즌)</button>
                            </div>
-                           {!isRegularMode(entryMode) && (
-                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2 bg-black/45 rounded-2xl border border-cyan-400/20">
-                               {SEASON_MODE_MENU.map((opt) => {
-                                 const active = normalizeChallengeMode(entryMode) === opt.mode;
-                                 return (
-                                   <button
-                                     key={opt.mode}
-                                     onMouseEnter={() => playSFX('hover')}
-                                     onClick={() => handleSeasonSubModeChange(opt.mode)}
-                                     className={`text-left px-3 py-2.5 rounded-xl border transition-all cursor-pointer ${active ? 'bg-cyan-500/20 border-cyan-400/60 text-cyan-200 shadow-[0_0_14px_rgba(34,211,238,0.26)]' : 'bg-black/40 border-white/10 text-slate-300 hover:border-cyan-400/40 hover:text-cyan-200'}`}
-                                   >
-                                     <p className="font-black text-sm sm:text-base leading-tight">{opt.label}</p>
-                                     <p className="text-[11px] sm:text-xs text-slate-400 mt-1 leading-tight">{opt.description}</p>
-                                   </button>
-                                 );
-                               })}
-                             </div>
-                           )}
                            
                            <div className="bg-black/60 p-5 rounded-2xl border border-white/5 mt-2 flex flex-col gap-4">
                               <div className="flex justify-between items-center">
-                                 <p className="text-base text-pink-400 font-bold">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">{isRegularMode(entryMode) ? `최소 ${REGULAR_TICKET_COST}` : '0 가능'}</span></p>
+                                 <p className="text-base text-pink-400 font-bold">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">{entryMode === 'free' ? `최소 ${REGULAR_TICKET_COST}` : '0 가능'}</span></p>
                                  <input 
                                    type="number" 
-                                   min={isRegularMode(entryMode) ? REGULAR_TICKET_COST : 0} 
+                                   min={entryMode === 'free' ? 100 : 0} 
                                    value={betAmount} 
                                   onChange={(e) => setBetAmount(Number(e.target.value) || 0)} 
                                   onBlur={() => {
-                                    if (isRegularMode(entryMode) && betAmount < REGULAR_TICKET_COST) setBetAmount(REGULAR_TICKET_COST);
-                                    if (!isRegularMode(entryMode) && betAmount < 0) setBetAmount(0);
+                                    if (entryMode === 'free' && betAmount < REGULAR_TICKET_COST) setBetAmount(REGULAR_TICKET_COST);
+                                    if (entryMode === 'random' && betAmount < 0) setBetAmount(0);
                                   }}
                                    className="w-28 bg-white/5 border border-white/10 p-2.5 rounded-xl outline-none text-white font-bold text-right text-lg select-text cursor-pointer" 
                                  />
                               </div>
                               <div className="grid grid-cols-2 gap-2">
                                  <div className="grid grid-cols-3 gap-1 min-w-0">
-                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(isRegularMode(entryMode) ? REGULAR_TICKET_COST : 0, p - 50)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-50</button>
-                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(isRegularMode(entryMode) ? REGULAR_TICKET_COST : 0, p - 100)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-100</button>
-                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(isRegularMode(entryMode) ? REGULAR_TICKET_COST : 0, p - 500)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-500</button>
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(entryMode === 'free' ? REGULAR_TICKET_COST : 0, p - 50)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-50</button>
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(entryMode === 'free' ? REGULAR_TICKET_COST : 0, p - 100)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-100</button>
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(entryMode === 'free' ? REGULAR_TICKET_COST : 0, p - 500)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-500</button>
                                  </div>
                                  <div className="grid grid-cols-3 gap-1 min-w-0">
                                     <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => p + 50); }} className="w-full px-0 py-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 rounded-lg text-sm font-bold hover:bg-cyan-500 hover:text-black transition-colors">+50</button>
@@ -3574,14 +3384,14 @@ function App() {
 
                        {matchPhase === 'scoring' && activeMatch && (
                         <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-4 mt-2">
-                           <div onMouseEnter={() => playSFX('hover')} className={`p-5 rounded-[2.5rem] border-2 shadow-2xl flex flex-col gap-4 ${getModeAccent(activeMatch.mode).panel}`}>
+                           <div onMouseEnter={() => playSFX('hover')} className={`p-5 rounded-[2.5rem] border-2 shadow-2xl flex flex-col gap-4 ${activeMatch.mode.includes('random') ? 'border-cyan-400/50 bg-cyan-400/5' : 'border-pink-400/50 bg-pink-400/5'}`}>
                              <div className="flex items-center justify-center mb-1">
-                               <span className={`px-3 py-1 rounded-lg text-[11px] font-black tracking-widest ${getModeAccent(activeMatch.mode).badge}`}>
-                                 {getModeDisplayName(activeMatch.mode)}
+                               <span className={`px-3 py-1 rounded-lg text-[11px] font-black tracking-widest ${activeMatch.mode.includes('random') ? 'bg-cyan-600 text-black' : 'bg-pink-600 text-white'}`}>
+                                 {activeMatch.mode.includes('random') ? '랜덤 대전' : '자유 대전'}
                                </span>
                              </div>
 
-                             {isFreePickMode(activeMatch.mode) ? (
+                             {activeMatch.mode.includes('free') ? (
                                <div className="space-y-3">
                                  <p className="text-center text-sm font-bold text-cyan-300">내 레전드/무기 설정</p>
                                  <select
@@ -3638,7 +3448,7 @@ function App() {
                                    </select>
                                  </div>
                                </div>
-                             ) : isRandomSeasonMode(activeMatch.mode) ? (
+                             ) : (
                                <div className="flex flex-col gap-3">
                                  <p className="text-center text-sm font-bold text-cyan-300">랜덤 리롤</p>
                                  <button
@@ -3657,21 +3467,6 @@ function App() {
                                    </div>
                                    <div className="bg-black/60 p-3 rounded-2xl text-center text-sm font-bold text-pink-400 border border-white/10 shadow-inner whitespace-normal break-words">
                                      {entryWeapons[1] || '랜덤 무기 2'}
-                                   </div>
-                                 </div>
-                               </div>
-                             ) : (
-                               <div className="flex flex-col gap-3">
-                                 <p className="text-center text-sm font-bold text-cyan-300">{getModeDisplayName(activeMatch.mode)} 고정 규칙</p>
-                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                   <div className="bg-black/60 p-3 rounded-2xl text-center text-sm font-bold text-cyan-300 border border-cyan-400/35 shadow-inner whitespace-normal break-words">
-                                     {entryLegend || getFixedSeasonLoadout(activeMatch.mode)?.legend || '-'}
-                                   </div>
-                                   <div className="bg-black/60 p-3 rounded-2xl text-center text-sm font-bold text-pink-300 border border-pink-400/35 shadow-inner whitespace-normal break-words">
-                                     {entryWeapons[0] || getFixedSeasonLoadout(activeMatch.mode)?.weapons?.[0] || '-'}
-                                   </div>
-                                   <div className="bg-black/60 p-3 rounded-2xl text-center text-sm font-bold text-pink-300 border border-pink-400/35 shadow-inner whitespace-normal break-words">
-                                     {entryWeapons[1] || getFixedSeasonLoadout(activeMatch.mode)?.weapons?.[1] || '-'}
                                    </div>
                                  </div>
                                </div>
@@ -4038,26 +3833,27 @@ function App() {
                    {(() => {
                      const regularFiltered = rankers.length > 0 ? rankers.filter((r) => matchesSearch(r.display_name, mainSearchQuery)) : [];
                       const renderRegularCard = (r: any, tone: 'hero' | 'mid' | 'small' = 'small') => {
-	                        const regularIdx = typeof r.regular_display_index === 'number' ? r.regular_display_index : null;
+                        const regularIdx = typeof r.regular_display_index === 'number' ? r.regular_display_index : null;
+                        const isRookieTier = regularIdx === null;
                         const grandRank = getGrandRankInfo(regularIdx, (r as any).regular_tier_level);
                         if (!grandRank) return null;
-	                        const move = getRankMoveValue(r.display_name, 'regular');
-	                        const isTopRegular = regularIdx === 0;
-	                        const throneDefenseStack = r.regular_defense_stack || 0;
-	                        const throneBounty = getDefenseBonusGC(throneDefenseStack);
+                        const move = getRankMoveValue(r.display_name, 'regular');
+                        const isTopRegular = regularIdx === 0;
+                        const throneDefenseStack = r.regular_defense_stack || 0;
+                        const throneBounty = getDefenseBonusGC(throneDefenseStack);
+                        const challengeUi = getRegularChallengeUiState(r.display_name);
 
-	                        const cardClass =
-	                          tone === 'hero'
-	                            ? 'p-12 pt-16 pb-12 rounded-[3.2rem]'
+                        const cardClass =
+                          tone === 'hero'
+                            ? 'p-12 pt-16 pb-12 rounded-[3.2rem]'
                             : tone === 'mid'
                               ? 'p-7 pt-11 pb-7 rounded-[2rem]'
                               : 'p-5 pt-9 pb-5 rounded-[1.35rem]';
-	                        const avatarClass = tone === 'hero' ? 'w-28 h-28' : tone === 'mid' ? 'w-20 h-20' : 'w-14 h-14';
-	                        const nameClass = tone === 'hero' ? 'text-5xl' : tone === 'mid' ? 'text-2xl' : 'text-lg';
-	                        const badgeClass = tone === 'hero' ? 'px-14 py-5 text-[34px] -top-12' : tone === 'mid' ? 'px-12 py-4 text-[24px] -top-9' : 'px-8 py-2.5 text-[19px] -top-6';
-                          const rankTextClass = tone === 'hero' ? 'text-[3.1rem] sm:text-[4rem]' : tone === 'mid' ? 'text-[2.4rem] sm:text-[3rem]' : 'text-[2rem] sm:text-[2.6rem]';
+                        const avatarClass = tone === 'hero' ? 'w-28 h-28' : tone === 'mid' ? 'w-20 h-20' : 'w-14 h-14';
+                        const nameClass = tone === 'hero' ? 'text-5xl' : tone === 'mid' ? 'text-2xl' : 'text-lg';
+                        const badgeClass = tone === 'hero' ? 'px-14 py-5 text-[34px] -top-12' : tone === 'mid' ? 'px-12 py-4 text-[24px] -top-9' : 'px-8 py-2.5 text-[19px] -top-6';
 
-	                       return (
+                       return (
                          <div
                            ref={setRankCardRef('main', 'free', r.display_name)}
                            key={r.id}
@@ -4065,16 +3861,23 @@ function App() {
                            onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }}
                            className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${rankCardFxByTier((r as any).regular_tier_level || 0)} hover:brightness-110 mt-10`}
                          >
-	                            <div className="absolute w-full flex justify-center z-20 pointer-events-none" style={{ top: 0 }}>
-	                              <div className={`${badgeClass} absolute flex items-center justify-center`}>
-	                                <span className="inline-flex scale-[1.45] sm:scale-[1.65]">{grandRank.icon}</span>
-	                              </div>
-	                            </div>
-	                            <div className="absolute left-3 sm:left-4 top-2 sm:top-2.5 flex items-center gap-2 z-20">
-	                              <span className={`${rankTextClass} leading-[0.9] font-black text-cyan-200 drop-shadow-[0_0_14px_rgba(34,211,238,0.5)]`}>
-	                                {regularIdx === null ? '-' : `${regularIdx + 1}위`}
-	                              </span>
-	                             {move > 0 && (
+                            <div className="absolute w-full flex justify-center z-20 pointer-events-none" style={{ top: 0 }}>
+                              <div className={`${badgeClass} absolute flex items-center justify-center`}>
+                                <span className="inline-flex scale-[1.45] sm:scale-[1.65]">{grandRank.icon}</span>
+                              </div>
+                            </div>
+                            {isRookieTier && (
+                              <div className="absolute inset-x-0 top-12 sm:top-14 lg:top-16 flex justify-center pointer-events-none z-20">
+                                <span className="px-3.5 py-1 rounded-full text-xs sm:text-sm font-black text-slate-200 bg-slate-500/24 border border-slate-300/35">
+                                  루키
+                                </span>
+                              </div>
+                            )}
+                            <div className="absolute left-3 sm:left-4 top-3 flex items-center gap-2 z-20">
+                              <span className="text-[2.2rem] sm:text-[2.8rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_14px_rgba(34,211,238,0.5)]">
+                                {regularIdx === null ? '-' : `${regularIdx + 1}위`}
+                              </span>
+                             {move > 0 && (
                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm sm:text-base font-black text-emerald-200 bg-emerald-500/18 border border-emerald-400/45 shadow-[0_0_10px_rgba(16,185,129,0.35)]">
                                  ▲ {move}
                                </span>
@@ -4097,19 +3900,30 @@ function App() {
                               </div>
                             )}
 
-	                           <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
-	                             <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
-	                               <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${getCardAvatarBorderFxForUser(r.display_name)} shrink-0`} alt="p"/>
-	                               <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameClass}`}>{r.display_name}</span>
-	                             </div>
-                               <div className="flex flex-col items-end shrink-0 ml-2">
-                                 <span className={`font-black text-yellow-300 tracking-tight ${tone === 'hero' ? 'text-6xl' : tone === 'mid' ? 'text-4xl' : 'text-2xl'}`}>{Math.max(0, Number(r.regular_rp ?? 0))}</span>
-                                 <span className="text-[10px] font-black text-slate-400 tracking-wider">RP (정규)</span>
-                               </div>
-	                            </div>
-	                          </div>
-	                        );
-	                      };
+                           <div className="flex items-center justify-between w-full mt-8 px-2 relative z-10 gap-4">
+                             <div className="flex items-center gap-5 flex-1 min-w-0 pr-2">
+                               <img src={r.avatar_url} className={`${avatarClass} rounded-full border-4 ${getCardAvatarBorderFxForUser(r.display_name)} shrink-0`} alt="p"/>
+                               <span className={`group-hover:text-cyan-400 font-bold text-white whitespace-normal break-all leading-tight ${nameClass}`}>{r.display_name}</span>
+                             </div>
+                             <button
+                               onMouseEnter={() => playSFX('hover')}
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (!challengeUi.clickable) return;
+                                 playSFX('click');
+                                 setActiveMenu('home');
+                                 handleTargetLock(r.display_name);
+                               }}
+                               title={challengeUi.hint ? `남은 시간: ${challengeUi.hint}` : undefined}
+                               disabled={!challengeUi.clickable}
+                               className={`shrink-0 px-4 py-2 rounded-xl text-sm sm:text-base font-black transition-all cursor-pointer ${challengeUi.className}`}
+                             >
+                               {challengeUi.label}
+                             </button>
+                            </div>
+                          </div>
+                        );
+                      };
 
                      if (regularFiltered.length === 0) {
                        return <div className="col-span-12 flex items-center justify-center h-[300px] opacity-50 text-2xl font-bold text-cyan-400 tracking-widest">해당하는 랭커가 없습니다.</div>;
@@ -4162,6 +3976,7 @@ function App() {
                    <div className="grid grid-cols-12 gap-10 pb-20 justify-center px-4 grid-glow-fix">
                       {rpRankers.length > 0 ? rpRankers.filter(r => matchesSearch(r.display_name, mainSearchQuery)).map((r, i) => {
                            const seasonIdx = typeof (r as any).season_display_index === 'number' ? (r as any).season_display_index : null;
+                           const isDustTier = seasonIdx === null;
                            const tier = getRPTierInfo(seasonIdx, (r as any).season_tier_level);
                            const move = getRankMoveValue(r.display_name, 'season');
                            const isTopSeason = seasonIdx === 0;
@@ -4182,14 +3997,13 @@ function App() {
                            else if (isRank2_3) { spanClass = "col-span-6"; }
                            else if (isRank4_6) { spanClass = "col-span-4"; cardClass = "p-6 pt-10 pb-6 rounded-[1.5rem]"; badgeClass = "px-10 py-3 text-[20px] -top-7"; avatarClass = "w-16 h-16"; statSize = "text-2xl"; nameSize = 'text-xl'; }
                            else { spanClass = "col-span-3"; cardClass = "p-5 pt-8 pb-5 rounded-xl"; badgeClass = "px-8 py-2.5 text-[18px] -top-6"; avatarClass = "w-14 h-14"; statSize = "text-xl"; nameSize = 'text-lg'; }
-                           const rankTextClass = isRank1 ? 'text-[3.1rem] sm:text-[4rem]' : isRank2_3 ? 'text-[2.5rem] sm:text-[3rem]' : 'text-[2rem] sm:text-[2.6rem]';
 
                            return (
                              <div key={r.id} className={spanClass}>
                                 <div ref={setRankCardRef('main', 'random', r.display_name)} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${seasonCardFxByTier((r as any).season_tier_level || 0)} hover:brightness-110 mt-10`}>
                                    {seasonIdx === 0 && <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-[3rem] pointer-events-none"></div>}
                                    
-                                    <span className={`absolute left-3 sm:left-4 top-2 sm:top-2.5 ${rankTextClass} leading-[0.9] font-black text-cyan-200 drop-shadow-[0_0_14px_rgba(34,211,238,0.5)] z-20`}>
+                                    <span className="absolute left-3 sm:left-4 top-3 text-[2.2rem] sm:text-[2.8rem] leading-none font-black text-cyan-200 drop-shadow-[0_0_14px_rgba(34,211,238,0.5)] z-20">
                                       {seasonIdx === null ? '-' : `${seasonIdx + 1}위`}
                                     </span>
                                     {move > 0 && (
@@ -4207,6 +4021,14 @@ function App() {
                                          <span className="inline-flex scale-[1.45] sm:scale-[1.65]">{tier.icon}</span>
                                        </div>
                                     </div>
+                                    {isDustTier && (
+                                      <div className="absolute inset-x-0 top-12 sm:top-14 lg:top-16 flex justify-center pointer-events-none z-20">
+                                        <span className="px-3.5 py-1 rounded-full text-xs sm:text-sm font-black text-orange-200 bg-orange-500/20 border border-orange-300/35">
+                                          보이드
+                                        </span>
+                                      </div>
+                                    )}
+
                                     {isTopSeason && (throneDefenseStack > 0 || throneBounty > 0) && (
                                       <div className="absolute right-3 sm:right-4 top-1 sm:top-2 flex flex-col items-end gap-2 z-20">
                                         <span className="font-black text-base sm:text-lg px-4 py-2 rounded-full bg-red-500/20 text-red-100 border border-red-400/55 shadow-[0_0_14px_rgba(248,113,113,0.38)]">
@@ -4622,32 +4444,32 @@ function App() {
             style={{ animation: 'popup-in 260ms ease-out' }}
           >
             <h4 className="text-2xl font-black mb-3 text-cyan-300">대전 신청 도착</h4>
-	            <div className="space-y-2 text-slate-200 text-base sm:text-lg leading-relaxed">
-	              <p>
-	                <span className="font-black text-pink-300">{incomingChallenge.challengerName}</span> 님이
-	                <span className="font-black text-cyan-300"> {getModeDisplayName(incomingChallenge.mode)}</span>을 신청했습니다.
-	              </p>
-	              <p className="text-sm text-slate-400">배팅 금액: <span className="font-black text-emerald-300">{incomingChallenge.betGc} GC</span></p>
-	            </div>
-	            <div className="mt-6 grid grid-cols-2 gap-3">
-	              <button
-	                onMouseEnter={() => playSFX('hover')}
-	                onClick={handleDeclineIncomingChallenge}
-	                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-rose-400/50 text-rose-300 font-bold bg-black/50 hover:bg-rose-500/20 cursor-pointer"
-	              >
-	                거절
-	              </button>
-	              <button
-	                onMouseEnter={() => playSFX('hover')}
-	                onClick={handleAcceptIncomingChallenge}
-	                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-cyan-400/50 text-cyan-300 font-bold bg-black/50 hover:bg-cyan-500/20 cursor-pointer"
-	              >
-	                수락
-	              </button>
-	            </div>
-	          </div>
-	        </div>
-	      )}
+            <div className="space-y-2 text-slate-200 text-base sm:text-lg leading-relaxed">
+              <p>
+                <span className="font-black text-pink-300">{incomingChallenge.challengerName}</span> 님이
+                <span className="font-black text-cyan-300"> {incomingChallenge.mode === 'free' ? '자유대전(정규)' : '랜덤대전(시즌)'}</span>을 신청했습니다.
+              </p>
+              <p className="text-sm text-slate-400">배팅 금액: <span className="font-black text-emerald-300">{incomingChallenge.betGc} GC</span></p>
+            </div>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                onMouseEnter={() => playSFX('hover')}
+                onClick={handleAcceptIncomingChallenge}
+                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-cyan-400/50 text-cyan-300 font-bold bg-black/50 hover:bg-cyan-500/20 cursor-pointer"
+              >
+                수락
+              </button>
+              <button
+                onMouseEnter={() => playSFX('hover')}
+                onClick={handleDeclineIncomingChallenge}
+                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-rose-400/50 text-rose-300 font-bold bg-black/50 hover:bg-rose-500/20 cursor-pointer"
+              >
+                거절
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activeRewardChest && (
         <div className="fixed inset-0 z-[285] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
@@ -4705,24 +4527,22 @@ function App() {
         <div className="fixed inset-0 z-[280] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setStatusPopup(null)}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className={`w-full max-w-lg rounded-[2rem] border p-6 sm:p-7 bg-[#0a0f1d] shadow-2xl ${statusPopup.type === 'success' ? 'border-emerald-400/70' : statusPopup.type === 'error' ? 'border-rose-400/70' : 'border-cyan-400/70'} ${statusPopupFading ? 'animate-[popup-fade_340ms_ease-out_forwards]' : ''}`}
-            style={statusPopupFading ? undefined : { animation: 'popup-in 260ms ease-out' }}
+            className={`w-full max-w-lg rounded-[2rem] border p-6 sm:p-7 bg-[#0a0f1d] shadow-2xl ${statusPopup.type === 'success' ? 'border-emerald-400/70' : statusPopup.type === 'error' ? 'border-rose-400/70' : 'border-cyan-400/70'}`}
+            style={{ animation: 'popup-in 260ms ease-out' }}
           >
             <h4 className={`text-2xl font-black mb-3 ${statusPopup.type === 'success' ? 'text-emerald-300' : statusPopup.type === 'error' ? 'text-rose-300' : 'text-cyan-300'}`}>
               {statusPopup.title}
             </h4>
             <p className="text-slate-200 text-base sm:text-lg leading-relaxed whitespace-pre-line">{statusPopup.message}</p>
-            {!statusPopup.hideConfirm && (
-              <div className="mt-6 flex justify-end">
-                <button
-                  onMouseEnter={() => playSFX('hover')}
-                  onClick={() => { playSFX('click'); setStatusPopup(null); }}
-                  className="hvr-grow hvr-buzz px-5 py-2.5 rounded-xl border border-cyan-400/50 text-cyan-300 font-bold bg-black/50 hover:bg-cyan-500/20 cursor-pointer"
-                >
-                  확인
-                </button>
-              </div>
-            )}
+            <div className="mt-6 flex justify-end">
+              <button
+                onMouseEnter={() => playSFX('hover')}
+                onClick={() => { playSFX('click'); setStatusPopup(null); }}
+                className="hvr-grow hvr-buzz px-5 py-2.5 rounded-xl border border-cyan-400/50 text-cyan-300 font-bold bg-black/50 hover:bg-cyan-500/20 cursor-pointer"
+              >
+                확인
+              </button>
+            </div>
           </div>
         </div>
       )}
