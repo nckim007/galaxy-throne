@@ -579,6 +579,7 @@ function App() {
   const statusPopupTimerRef = useRef<number | null>(null);
   const statusPopupFadeTimerRef = useRef<number | null>(null);
   const ingameCopyTimerRef = useRef<number | null>(null);
+  const autoScoreSubmitKeyRef = useRef('');
   const rankCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const activeScrollTargetRef = useRef<HTMLElement | null>(null);
@@ -1225,7 +1226,7 @@ function App() {
                             if (wasSenderWaiting) {
                               showStatusPopup('error', '대전 거절', '상대방이 잔뜩 쫄았습니다 ㅋ');
                             } else {
-	                            showStatusPopup('success', '업데이트 완료', '전투 결과가 성공적으로 반영되었습니다.');
+	                            showStatusPopup('error', '대전 거절', '상대방이 잔뜩 쫄았습니다 ㅋ');
                             }
 	                        }
 	                       setMatchPhase('idle');
@@ -2237,7 +2238,10 @@ function App() {
     if (!isRegularMode(baseMode)) setSeasonSubMode(baseMode as SeasonChallengeMode);
     setBetAmount(stake);
     if (acceptance.justAccepted) {
-      showStatusPopup('success', '대전 수락', acceptance.stakeMessage || '대전이 성사되었습니다.');
+      showStatusPopup('success', '대전 수락', acceptance.stakeMessage || '대전이 성사되었습니다.', {
+        autoCloseMs: 1000,
+        hideConfirm: true,
+      });
     }
     setMatchPhase('scoring');
   };
@@ -2350,7 +2354,10 @@ function App() {
       }
       setIncomingChallenge(null);
       if (acceptance.justAccepted) {
-        showStatusPopup('success', '대전 수락', acceptance.stakeMessage || '대전이 성사되었습니다.');
+        showStatusPopup('success', '대전 수락', acceptance.stakeMessage || '대전이 성사되었습니다.', {
+          autoCloseMs: 1000,
+          hideConfirm: true,
+        });
       }
       setMatchPhase('scoring');
     } else {
@@ -2482,7 +2489,7 @@ function App() {
           const challengerWon = updatedData.c_win > updatedData.c_lose;
           const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', challengerName).single();
           const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', targetName).single();
-          let currentPointLabel = isRegularMode(baseMode) ? 'RP (정규)' : 'SP (시즌)';
+          let currentPointLabel = isRegularMode(baseMode) ? 'RP (정규포인트)' : 'SP (시즌포인트)';
           let currentPointDelta = 0;
           let currentGcDelta = 0;
 
@@ -2584,12 +2591,17 @@ function App() {
 
           const didWin = winnerName?.trim() === (currentUserName || '').trim();
           triggerResultFx(didWin, didWin ? '전투 승리! 순위가 갱신되었습니다.' : '전투 종료! 결과가 반영되었습니다.');
-          const pointDeltaText = `${currentPointDelta >= 0 ? '+' : ''}${currentPointDelta}`;
-          const gcDeltaText = `${currentGcDelta >= 0 ? '+' : ''}${currentGcDelta}`;
+          const formatDeltaLine = (label: string, delta: number) => {
+            if (delta >= 0) return `${label} +${delta}획득!`;
+            return `${label} ${Math.abs(delta)}차감`;
+          };
+          const pointDeltaLine = formatDeltaLine(currentPointLabel, currentPointDelta);
+          const gcDeltaLine = formatDeltaLine('GC (갤럭시 코인)', currentGcDelta);
           showStatusPopup(
             didWin ? 'success' : 'info',
             didWin ? '전투 승리! 결과 반영 완료' : '전투 종료! 결과 반영 완료',
-            `스코어: ${updatedData.c_win} : ${updatedData.t_win}\n${currentPointLabel} 변화: ${pointDeltaText}\nGC 변화: ${gcDeltaText}`
+            `스코어 ${updatedData.c_win} : ${updatedData.t_win}\n${pointDeltaLine}\n${gcDeltaLine}`,
+            { autoCloseMs: 1000, hideConfirm: true }
           );
           if (currentUserName) clearRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName);
           setRerollCount(0);
@@ -2632,6 +2644,24 @@ function App() {
       setMyLosses(null);
     }
   };
+
+  useEffect(() => {
+    if (matchPhase !== 'scoring' || !activeMatch) {
+      autoScoreSubmitKeyRef.current = '';
+      return;
+    }
+    const legend = String(entryLegend || '').trim();
+    const weapon1 = String(entryWeapons?.[0] || '').trim();
+    const weapon2 = String(entryWeapons?.[1] || '').trim();
+    if (myWins === null || myLosses === null || !legend || !weapon1 || !weapon2 || waitingForScore) {
+      if (myWins === null || myLosses === null) autoScoreSubmitKeyRef.current = '';
+      return;
+    }
+    const submitKey = `${activeMatch.id}|${legend}|${weapon1}|${weapon2}|${myWins}|${myLosses}`;
+    if (autoScoreSubmitKeyRef.current === submitKey) return;
+    autoScoreSubmitKeyRef.current = submitKey;
+    void handleReportScore();
+  }, [matchPhase, activeMatch?.id, entryLegend, entryWeapons, myWins, myLosses, waitingForScore]);
 
   const copyPlayerName = (name: string) => {
     if (!name) return;
@@ -3200,7 +3230,7 @@ function App() {
     const remainMs = getRegularCooldownRemainingMs(targetName);
     if (remainMs > 0) {
       return {
-        label: `쿨타임 ${formatCooldownLabel(remainMs)}`,
+        label: `${formatCooldownLabel(remainMs)}`,
         hint: formatCooldownLabel(remainMs),
         clickable: false,
         className: 'bg-amber-500/18 border border-amber-400/45 text-amber-300',
@@ -3906,9 +3936,11 @@ function App() {
                                   ))}
                                 </div>
                               </div>
-                              <button onMouseEnter={() => playSFX('hover')} onClick={handleReportScore} disabled={myWins === null || myLosses === null || waitingForScore} className={`hvr-grow hvr-glow w-full py-5 mt-2 rounded-[1.5rem] font-bold text-2xl transition-all uppercase ${waitingForScore ? 'text-yellow-400 border-2 border-yellow-400/50 cursor-wait animate-pulse' : (myWins !== null && myLosses !== null) ? 'text-cyan-400 border-2 border-cyan-400/50 shadow-md cursor-pointer hover:bg-cyan-500 hover:text-black' : 'text-slate-500 border-2 border-slate-700 bg-slate-800/50 cursor-not-allowed'}`}>
-                                {waitingForScore ? '상대방의 결과 입력을 대기중입니다...' : '결과 검증 및 제출'}
-                              </button>
+                              <div className="px-3 py-2 rounded-xl border border-white/10 bg-black/30 text-center">
+                                <p className={`font-black text-base sm:text-lg ${waitingForScore ? 'text-yellow-300 animate-pulse' : (myWins !== null && myLosses !== null) ? 'text-emerald-300' : 'text-slate-400'}`}>
+                                  {waitingForScore ? '결과를 업로드하고 있습니다...' : (myWins !== null && myLosses !== null) ? '점수가 자동으로 업로드되고 있습니다...' : '승/패 점수를 모두 선택하면 자동으로 업로드됩니다.'}
+                                </p>
+                              </div>
                            </div>
                         </div>
                       )}
@@ -4864,24 +4896,24 @@ function App() {
 	              </p>
 	              <p className="text-base sm:text-lg text-slate-400">배팅 금액: <span className="font-black text-emerald-300">{incomingChallenge.betGc} GC</span></p>
 	            </div>
-	            <div className="mt-6 grid grid-cols-2 gap-3">
-	              <button
-	                onMouseEnter={() => playSFX('hover')}
-	                onClick={handleDeclineIncomingChallenge}
-	                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-rose-400/50 text-rose-300 text-lg sm:text-xl font-bold bg-black/50 hover:bg-rose-500/20 cursor-pointer"
-	              >
-	                거절
-	              </button>
-	              <button
-	                onMouseEnter={() => playSFX('hover')}
-	                onClick={handleAcceptIncomingChallenge}
-	                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-cyan-400/50 text-cyan-300 text-lg sm:text-xl font-bold bg-black/50 hover:bg-cyan-500/20 cursor-pointer"
-	              >
-	                수락
-	              </button>
-	            </div>
-	          </div>
-	        </div>
+ 	            <div className="mt-6 grid grid-cols-2 gap-3">
+ 	              <button
+ 	                onMouseEnter={() => playSFX('hover')}
+ 	                onClick={handleAcceptIncomingChallenge}
+ 	                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-cyan-400/50 text-cyan-300 text-lg sm:text-xl font-bold bg-black/50 hover:bg-cyan-500/20 cursor-pointer"
+ 	              >
+ 	                수락
+ 	              </button>
+ 	              <button
+ 	                onMouseEnter={() => playSFX('hover')}
+ 	                onClick={handleDeclineIncomingChallenge}
+ 	                className="hvr-grow hvr-glow px-4 py-3 rounded-xl border border-rose-400/50 text-rose-300 text-lg sm:text-xl font-bold bg-black/50 hover:bg-rose-500/20 cursor-pointer"
+ 	              >
+ 	                거절
+ 	              </button>
+ 	            </div>
+ 	          </div>
+ 	        </div>
 	      )}
 
       {activeRewardChest && (
@@ -4999,7 +5031,7 @@ function App() {
             <h4 className={`text-3xl sm:text-4xl font-black mb-3 ${statusPopup.type === 'success' ? 'text-emerald-300' : statusPopup.type === 'error' ? 'text-rose-300' : 'text-cyan-300'}`}>
               {statusPopup.title}
             </h4>
-            <p className="text-slate-200 text-lg sm:text-xl leading-relaxed whitespace-pre-line">{statusPopup.message}</p>
+            <p className="text-slate-200 text-xl sm:text-2xl leading-relaxed whitespace-pre-line font-black">{statusPopup.message}</p>
             {!statusPopup.hideConfirm && (
               <div className="mt-6 flex justify-end">
                 <button
