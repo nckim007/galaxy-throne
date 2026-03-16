@@ -357,6 +357,8 @@ function App() {
     return { nickname: '', platform: 'steam' };
   };
   const getPlatformLabel = (platform?: unknown) => normalizeIngamePlatform(platform) === 'ea' ? 'EA' : 'STEAM CODE';
+  const getIngameIdentityLabel = (platform?: unknown) =>
+    normalizeIngamePlatform(platform) === 'ea' ? 'EA 닉네임' : '스팀 친구코드';
   const getPlayerIngameNickname = (row?: any) => {
     const resolved = resolveIngameProfile(row);
     return resolved.nickname || String(row?.display_name || '').trim();
@@ -1234,7 +1236,7 @@ function App() {
                               String(deletedRow?.challenger_name || '').trim() === String(currentUserName || '').trim();
                             if (wasSenderWaiting) {
                               const targetDisplay = String(deletedRow?.target_name || '').trim() || '상대방';
-                              showStatusPopup('error', '대전 거절', `${targetDisplay}님이 잔뜩 쫄았습니다`);
+                              showStatusPopup('error', '매치 종료', `${targetDisplay}님이 잔뜩 쫄았습니다 ㅋㅋㅋㅋㅋ`);
                             } else {
 	                            showStatusPopup('info', '매치 종료', '대전이 종료되었습니다.');
                             }
@@ -1244,7 +1246,6 @@ function App() {
                        setWaitingForScore(false);
                        setMyWins(null);
                        setMyLosses(null);
-                       setEntryOpponent('');
                        setEntryLegend('');
                        setEntryWeapons(['', '']);
                        setRerollCount(0);
@@ -1873,7 +1874,7 @@ function App() {
     setRerollCount(0);
     if (mode === 'free') {
       if (betAmount < REGULAR_TICKET_COST) setBetAmount(REGULAR_TICKET_COST);
-    } else if (betAmount < SEASON_TICKET_COST) {
+    } else {
       setBetAmount(SEASON_TICKET_COST);
     }
   };
@@ -2163,7 +2164,6 @@ function App() {
         setIncomingChallenge(null);
         setMatchPhase('idle');
         setActiveMatch(null);
-        setEntryOpponent('');
         setEntryLegend('');
         setEntryWeapons(['', '']);
         return;
@@ -2269,7 +2269,7 @@ function App() {
     setIncomingChallenge(null);
     setMatchPhase('idle');
     setActiveMatch(null);
-    setEntryOpponent('');
+    setEntryOpponent(String(pending.challengerName || '').trim());
     setEntryLegend('');
     setEntryWeapons(['', '']);
     setRerollCount(0);
@@ -2621,7 +2621,6 @@ function App() {
           setWaitingForScore(false);
           setMyWins(null);
           setMyLosses(null);
-          setEntryOpponent('');
           setEntryLegend('');
           setEntryWeapons(['', '']);
           fetchData();
@@ -2677,10 +2676,15 @@ function App() {
   const copyPlayerName = (name: string) => {
     if (!name) return;
     const row = rankers.find((r) => r.display_name === name) || selectedPlayer || profile;
-    const ingameNickname = getPlayerIngameNickname(row) || name;
+    const ingameNickname = String(resolveIngameProfile(row).nickname || '').trim();
     playSFX('click');
-    navigator.clipboard.writeText(ingameNickname);
-    setCopyStatus(true);
+    if (ingameNickname) {
+      navigator.clipboard.writeText(ingameNickname);
+      setCopyStatus(true);
+    } else {
+      setCopyStatus(false);
+      showStatusPopup('error', '복사 실패', '인게임 스팀 친구코드/EA 닉네임이 설정되지 않았습니다.');
+    }
     setEntryOpponent(name);
     setActiveMenu('home');
     setMatchPhase('idle');
@@ -3279,6 +3283,30 @@ function App() {
 
   const selectedPlayerRegularInfo = selectedPlayer ? getRegularRankInfoByName(selectedPlayer.display_name) : null;
   const selectedPlayerSeasonInfo = selectedPlayer ? getSeasonRankInfoByName(selectedPlayer.display_name) : null;
+  const selectedPlayerIngameProfile = selectedPlayer ? resolveIngameProfile(selectedPlayer) : { nickname: '', platform: 'steam' as IngamePlatform };
+  const selectedPlayerIngameLabel = getIngameIdentityLabel(selectedPlayerIngameProfile.platform);
+  const selectedPlayerIngameValue = String(selectedPlayerIngameProfile.nickname || '').trim();
+  const recentOpponents = (() => {
+    if (!currentUserName) return [] as string[];
+    const me = normalizeName(currentUserName);
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const m of logs) {
+      const left = String(m?.left_player_name || m?.left_player || '').trim();
+      const right = String(m?.right_player_name || m?.right_player || '').trim();
+      const leftNorm = normalizeName(left);
+      const rightNorm = normalizeName(right);
+      let opponent = '';
+      if (leftNorm === me && right) opponent = right;
+      else if (rightNorm === me && left) opponent = left;
+      const key = normalizeName(opponent);
+      if (!opponent || !key || key === me || seen.has(key)) continue;
+      seen.add(key);
+      list.push(opponent);
+      if (list.length >= 8) break;
+    }
+    return list;
+  })();
   const setRankCardRef = (scope: 'mini' | 'main', mode: 'free' | 'random', name: string) => (el: HTMLDivElement | null) => {
     const key = `${scope}:${mode}:${normalizeName(name)}`;
     rankCardRefs.current[key] = el;
@@ -3701,9 +3729,9 @@ function App() {
                                <h4 className="text-xl sm:text-2xl font-bold text-white tracking-widest">타겟과 모드를 설정하세요</h4>
                               <p className="text-slate-400 text-sm mt-2">닉네임 입력 후 바로 대전 모드/배팅을 설정하고 신청할 수 있습니다.</p>
                            </div>
-                           <div className="bg-black/60 p-4 rounded-2xl border border-white/10 shadow-inner">
-                              <p className="text-xs text-slate-500 font-bold mb-2 pl-2">TARGET NICKNAME</p>
-                               <input
+                            <div className="bg-black/60 p-4 rounded-2xl border border-white/10 shadow-inner">
+                               <p className="text-xs text-slate-500 font-bold mb-2 pl-2">TARGET NICKNAME</p>
+                                <input
                                  value={entryOpponent}
                                  onChange={(e) => setEntryOpponent(e.target.value)}
                                  onKeyDown={(e) => {
@@ -3713,9 +3741,26 @@ function App() {
                                    }
                                  }}
                                  placeholder="상대방 닉네임 직접 입력"
-                                 className="w-full bg-transparent outline-none text-white font-bold text-lg sm:text-xl select-text pl-2"
-                               />
-                           </div>
+                                  className="w-full bg-transparent outline-none text-white font-bold text-lg sm:text-xl select-text pl-2"
+                                />
+                            </div>
+                            {recentOpponents.length > 0 && (
+                              <div className="bg-black/45 p-3 rounded-2xl border border-white/10">
+                                <p className="text-xs text-slate-400 font-black mb-2">최근 대전 상대</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {recentOpponents.map((op) => (
+                                    <button
+                                      key={op}
+                                      onMouseEnter={() => playSFX('hover')}
+                                      onClick={() => { playSFX('click'); setEntryOpponent(op); }}
+                                      className="px-3 py-1.5 rounded-lg border border-cyan-400/45 bg-cyan-500/15 text-cyan-200 text-xs sm:text-sm font-bold hover:bg-cyan-500 hover:text-black transition-all cursor-pointer"
+                                    >
+                                      {op}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                            <div className="flex gap-2 p-1.5 bg-black/50 rounded-2xl border border-white/5">
                               <button
                                 onMouseEnter={() => playSFX('hover')}
@@ -3958,7 +4003,7 @@ function App() {
                               </div>
                               <div className="px-3 py-2 rounded-xl border border-white/10 bg-black/30 text-center">
                                 <p className={`font-black text-base sm:text-lg ${waitingForScore ? 'text-yellow-300 animate-pulse' : (myWins !== null && myLosses !== null) ? 'text-emerald-300' : 'text-slate-400'}`}>
-                                  {waitingForScore ? '결과를 업로드하고 있습니다...' : (myWins !== null && myLosses !== null) ? '점수가 자동으로 업로드되고 있습니다...' : '승/패 점수를 모두 선택하면 자동으로 업로드됩니다.'}
+                                  {waitingForScore ? '결과를 업로드하고 있습니다...' : (myWins !== null && myLosses !== null) ? '점수가 자동으로 업로드되고 있습니다...' : '승/패 점수를 입력해주세요.'}
                                 </p>
                               </div>
                            </div>
@@ -4760,9 +4805,23 @@ function App() {
                     <div className="flex items-center justify-between gap-4 min-w-0">
                       <div className="min-w-0">
                         <h2 className={`italic font-black text-3xl sm:text-4xl lg:text-5xl whitespace-normal break-all leading-tight ${getNameClassForUser(selectedPlayer.display_name)}`}>{selectedPlayer.display_name}</h2>
-                        <p className="mt-1 text-cyan-300 text-sm sm:text-base font-bold whitespace-normal break-all">
-                          인게임 ({getPlatformLabel(selectedPlayer?.ingame_platform)}): {getPlayerIngameNickname(selectedPlayer)}
-                        </p>
+                        <p className="mt-2 text-slate-400 text-[11px] sm:text-xs font-black tracking-wider">{selectedPlayerIngameLabel}</p>
+                        <button
+                          onMouseEnter={() => playSFX('hover')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playSFX('click');
+                            if (!selectedPlayerIngameValue) {
+                              showStatusPopup('error', '복사 실패', '인게임 스팀 친구코드/EA 닉네임이 설정되지 않았습니다.');
+                              return;
+                            }
+                            navigator.clipboard.writeText(selectedPlayerIngameValue);
+                            showStatusPopup('success', '복사 완료', `${selectedPlayerIngameLabel}가 복사되었습니다.`, { autoCloseMs: 1200, hideConfirm: true });
+                          }}
+                          className="mt-1 text-cyan-300 text-sm sm:text-base font-bold whitespace-normal break-all text-left hover:text-cyan-200 transition-colors cursor-pointer"
+                        >
+                          {selectedPlayerIngameValue || '미설정'}
+                        </button>
                       </div>
                       <div className="flex flex-col gap-2 items-end shrink-0">
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
@@ -4859,12 +4918,12 @@ function App() {
              </div>
 
              <button 
-               onMouseEnter={() => playSFX('hover')} 
-               onClick={() => copyPlayerName(selectedPlayer.display_name)} 
-               className="w-full bg-cyan-600/20 hover:bg-cyan-600/40 border-2 border-cyan-400/50 text-cyan-400 py-4 sm:py-6 rounded-[1.4rem] sm:rounded-[2rem] font-bold text-lg sm:text-2xl flex items-center justify-center gap-3 sm:gap-4 active:scale-95 shadow-lg cursor-pointer transition-all mt-4"
-              >
+                onMouseEnter={() => playSFX('hover')} 
+                onClick={() => copyPlayerName(selectedPlayer.display_name)} 
+                className="w-full bg-cyan-600/20 hover:bg-cyan-600/40 border-2 border-cyan-400/50 text-cyan-400 py-4 sm:py-6 rounded-[1.4rem] sm:rounded-[2rem] font-bold text-lg sm:text-2xl flex items-center justify-center gap-3 sm:gap-4 active:scale-95 shadow-lg cursor-pointer transition-all mt-4"
+               >
                {copyStatus ? <Check size={24}/> : <Copy size={24}/>}
-               {copyStatus ? '복사 완료! 대결 준비!' : '대결신청 및 인게임 닉네임 복사'}
+               {copyStatus ? '복사 완료! 대결 준비!' : '대결신청 및 스팀코드orEA닉네임 복사'}
              </button>
              
              {profileTab === 'details' && (
