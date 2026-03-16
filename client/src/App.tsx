@@ -118,7 +118,6 @@ function App() {
   
   const [miniRankMode, setMiniRankMode] = useState<'free' | 'random'>('free');
   const [mainRankTab, setMainRankTab] = useState<'free' | 'random'>('free');
-  const [showMoreRegularRanks, setShowMoreRegularRanks] = useState(false);
   const [regularRankMoves, setRegularRankMoves] = useState<Record<string, number>>({});
   const [seasonRankMoves, setSeasonRankMoves] = useState<Record<string, number>>({});
   const [resultFx, setResultFx] = useState<{ type: 'win' | 'lose'; message: string } | null>(null);
@@ -136,6 +135,7 @@ function App() {
   const [rewardChestRewardGc, setRewardChestRewardGc] = useState<number | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonPos, setScrollTopButtonPos] = useState<{ left: number; top: number } | null>(null);
+  const [cooldownNowMs, setCooldownNowMs] = useState(() => Date.now());
 
   const [bgmEnabled, setBgmEnabled] = useState(localStorage.getItem('bgmEnabled') !== 'false');
   const [sfxEnabled, setSfxEnabled] = useState(localStorage.getItem('sfxEnabled') !== 'false');
@@ -420,6 +420,7 @@ function App() {
   });
   const dailyRewardCheckingRef = useRef(false);
   const dailyRewardSessionCheckedRef = useRef('');
+  const suppressNextDeletePopupChallengeIdRef = useRef<string | null>(null);
   const rankCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const activeScrollTargetRef = useRef<HTMLElement | null>(null);
@@ -449,10 +450,6 @@ function App() {
   useEffect(() => { incomingChallengeRef.current = incomingChallenge; }, [incomingChallenge]);
   useEffect(() => { entryLegendRef.current = entryLegend; }, [entryLegend]);
   useEffect(() => { entryWeaponsRef.current = entryWeapons; }, [entryWeapons]);
-  useEffect(() => {
-    setShowMoreRegularRanks(false);
-  }, [mainRankTab, mainSearchQuery]);
-
   useEffect(() => {
     const onPointerDown = (e: Event) => {
       const target = e.target as HTMLElement | null;
@@ -488,6 +485,11 @@ function App() {
       updateScrollTopForTarget(mainScrollRef.current);
     }
   }, [activeMenu]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCooldownNowMs(Date.now()), 10 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1007,8 +1009,12 @@ function App() {
                 }
                 if (currentMatch && deletedRow.id === currentMatch.id) {
                     if (currentPhase === 'scoring' || isWaiting) {
+                        const suppressPopup = suppressNextDeletePopupChallengeIdRef.current === deletedRow.id;
+                        suppressNextDeletePopupChallengeIdRef.current = null;
                         playSFX('success');
-                        showStatusPopup('success', '업데이트 완료', '전투 결과가 성공적으로 반영되었습니다.');
+                        if (!suppressPopup) {
+                          showStatusPopup('success', '업데이트 완료', '전투 결과가 성공적으로 반영되었습니다.');
+                        }
                        setMatchPhase('idle');
                        setActiveMatch(null);
                        setWaitingForScore(false);
@@ -1056,11 +1062,11 @@ function App() {
     const tierLevelByRank = (rank1: number | null, totalRanked: number) => {
       if (!rank1 || totalRanked <= 0) return 0;
       const top3 = Math.min(3, totalRanked);
-      const top5 = Math.max(top3, Math.ceil(totalRanked * 0.05));
-      const top10 = Math.max(top5, Math.ceil(totalRanked * 0.1));
-      const top20 = Math.max(top10, Math.ceil(totalRanked * 0.2));
-      const top30 = Math.max(top20, Math.ceil(totalRanked * 0.3));
-      const top50 = Math.max(top30, Math.ceil(totalRanked * 0.5));
+      const top5 = Math.min(totalRanked, Math.max(4, Math.ceil(totalRanked * 0.05)));
+      const top10 = Math.min(totalRanked, Math.max(top5, Math.ceil(totalRanked * 0.1)));
+      const top20 = Math.min(totalRanked, Math.max(top10, Math.ceil(totalRanked * 0.2)));
+      const top30 = Math.min(totalRanked, Math.max(top20, Math.ceil(totalRanked * 0.3)));
+      const top50 = Math.min(totalRanked, Math.max(top30, Math.ceil(totalRanked * 0.5)));
       if (rank1 <= top3) return 7;
       if (rank1 <= top5) return 6;
       if (rank1 <= top10) return 5;
@@ -2153,6 +2159,9 @@ function App() {
           const challengerWon = updatedData.c_win > updatedData.c_lose;
           const { data: cProfile } = await supabase.from('profiles').select('*').eq('display_name', challengerName).single();
           const { data: tProfile } = await supabase.from('profiles').select('*').eq('display_name', targetName).single();
+          let currentPointLabel = String(baseMode).includes('free') ? 'RP (자유)' : 'SP (랜덤)';
+          let currentPointDelta = 0;
+          let currentGcDelta = 0;
 
           if (cProfile && tProfile) {
             const cUpdates: any = { wins: cProfile.wins + (challengerWon ? 1 : 0), losses: cProfile.losses + (challengerWon ? 0 : 1) };
@@ -2184,6 +2193,53 @@ function App() {
                 tUpdates.gc = tGc + transferable;
               }
             }
+
+            const currentNameNorm = (currentUserName || '').trim().toLowerCase();
+            const challengerNorm = (challengerName || '').trim().toLowerCase();
+            const isCurrentChallenger = currentNameNorm === challengerNorm;
+            const didCurrentWin = winnerName?.trim() === (currentUserName || '').trim();
+            const myScore = isCurrentChallenger ? Number(updatedData.c_win || 0) : Number(updatedData.t_win || 0);
+            const myRowBefore: any = regularRankMap.get(normalizeName(currentUserName));
+
+            if (String(baseMode).includes('free')) {
+              const myTierBefore = getRegularTierLevelByName(currentUserName);
+              const oppTierBefore = getRegularTierLevelByName(isCurrentChallenger ? targetName : challengerName);
+              if (didCurrentWin) {
+                const myRegularWinsBefore = Number(myRowBefore?.regular_wins || 0);
+                if (myRegularWinsBefore <= 0) {
+                  currentPointDelta = REGULAR_FIRST_WIN_BASE_BY_TIER_LEVEL[oppTierBefore] ?? 25;
+                } else {
+                  const isSweep = myScore === 3;
+                  const isHigherTierWin = oppTierBefore > myTierBefore;
+                  const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
+                  const nextStreak = Number(myRowBefore?.regular_win_streak || 0) + 1;
+                  const streakMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
+                  currentPointDelta = Math.round(baseGain * streakMultiplier);
+                }
+              } else {
+                currentPointDelta = -(15 - (myScore > 0 ? 5 : 0));
+              }
+            } else {
+              if (didCurrentWin) {
+                const myTierBefore = typeof myRowBefore?.season_tier_level === 'number' ? myRowBefore.season_tier_level : 0;
+                const oppTierBefore = typeof regularRankMap.get(normalizeName(isCurrentChallenger ? targetName : challengerName))?.season_tier_level === 'number'
+                  ? regularRankMap.get(normalizeName(isCurrentChallenger ? targetName : challengerName))?.season_tier_level
+                  : 0;
+                const isSweep = myScore === 3;
+                const isHigherTierWin = Number(oppTierBefore || 0) > Number(myTierBefore || 0);
+                const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
+                const nextStreak = Number(myRowBefore?.season_win_streak || 0) + 1;
+                const seasonMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
+                currentPointDelta = Math.round(baseGain * seasonMultiplier);
+              } else {
+                currentPointDelta = myScore > 0 ? 15 : 10;
+              }
+            }
+
+            currentGcDelta = isCurrentChallenger
+              ? (Number(cUpdates.gc ?? cGc) - cGc)
+              : (Number(tUpdates.gc ?? tGc) - tGc);
+
             const { error: cErr } = await supabase.from('profiles').update(cUpdates).eq('id', cProfile.id);
             const { error: tErr } = await supabase.from('profiles').update(tUpdates).eq('id', tProfile.id);
             if (cErr || tErr) {
@@ -2194,6 +2250,7 @@ function App() {
             }
           }
 
+          suppressNextDeletePopupChallengeIdRef.current = activeMatch.id;
           const { error: deleteErr } = await supabase.from('challenges').delete().eq('id', activeMatch.id);
           if (deleteErr) {
             await supabase.from('challenges').update({ mode: acceptedMode }).eq('id', activeMatch.id).eq('mode', settlingMode);
@@ -2204,7 +2261,13 @@ function App() {
 
           const didWin = winnerName?.trim() === (currentUserName || '').trim();
           triggerResultFx(didWin, didWin ? '전투 승리! 순위가 갱신되었습니다.' : '전투 종료! 결과가 반영되었습니다.');
-          showStatusPopup(didWin ? 'success' : 'info', didWin ? '승리' : '결과 반영', didWin ? '축하합니다. 승리 기록과 순위 변동이 적용되었습니다.' : '전투 결과와 랭킹 정보가 업데이트되었습니다.');
+          const pointDeltaText = `${currentPointDelta >= 0 ? '+' : ''}${currentPointDelta}`;
+          const gcDeltaText = `${currentGcDelta >= 0 ? '+' : ''}${currentGcDelta}`;
+          showStatusPopup(
+            didWin ? 'success' : 'info',
+            didWin ? '전투 승리! 결과 반영 완료' : '전투 종료! 결과 반영 완료',
+            `스코어: ${updatedData.c_win} : ${updatedData.t_win}\n${currentPointLabel} 변화: ${pointDeltaText}\nGC 변화: ${gcDeltaText}`
+          );
           if (currentUserName) clearRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName);
           setRerollCount(0);
           setMatchPhase('idle');
@@ -2363,16 +2426,21 @@ function App() {
   const rankAssetVersion = '20260315';
   const getRankAssetPath = (name: string, ext: 'png' | 'webp' = 'png') =>
     `${import.meta.env.BASE_URL}ranks/${name}.${ext}?v=${rankAssetVersion}`;
+  const BADGE_FALLBACK_DATA_URI =
+    'data:image/svg+xml;utf8,' +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><defs><radialGradient id="g" cx="50%" cy="35%" r="70%"><stop offset="0%" stop-color="#a5f3fc"/><stop offset="60%" stop-color="#6366f1"/><stop offset="100%" stop-color="#0f172a"/></radialGradient></defs><circle cx="48" cy="48" r="44" fill="url(#g)" stroke="#22d3ee" stroke-width="4"/><path d="M48 24l8 16 18 2-13 12 4 18-17-9-17 9 4-18-13-12 18-2z" fill="#e2e8f0"/></svg>`
+    );
 
   const displayTierLevel = (idx: number | null | undefined, totalRanked: number) => {
     if (typeof idx !== 'number' || idx < 0 || totalRanked <= 0) return 0;
     const rank = idx + 1;
     const top3 = Math.min(3, totalRanked);
-    const top5 = Math.max(top3, Math.ceil(totalRanked * 0.05));
-    const top10 = Math.max(top5, Math.ceil(totalRanked * 0.1));
-    const top20 = Math.max(top10, Math.ceil(totalRanked * 0.2));
-    const top30 = Math.max(top20, Math.ceil(totalRanked * 0.3));
-    const top50 = Math.max(top30, Math.ceil(totalRanked * 0.5));
+    const top5 = Math.min(totalRanked, Math.max(4, Math.ceil(totalRanked * 0.05)));
+    const top10 = Math.min(totalRanked, Math.max(top5, Math.ceil(totalRanked * 0.1)));
+    const top20 = Math.min(totalRanked, Math.max(top10, Math.ceil(totalRanked * 0.2)));
+    const top30 = Math.min(totalRanked, Math.max(top20, Math.ceil(totalRanked * 0.3)));
+    const top50 = Math.min(totalRanked, Math.max(top30, Math.ceil(totalRanked * 0.5)));
     if (rank <= top3) return 7;
     if (rank <= top5) return 6;
     if (rank <= top10) return 5;
@@ -2388,8 +2456,11 @@ function App() {
       <img
         src={getRankAssetPath(name, 'png')}
         alt={alt}
+        data-fallback-step="png"
         className="relative w-11 h-11 object-contain shrink-0"
-        loading="lazy"
+        loading="eager"
+        decoding="async"
+        draggable={false}
         onError={(e) => {
           const target = e.currentTarget as HTMLImageElement;
           const current = target.getAttribute('data-fallback-step') || 'png';
@@ -2403,7 +2474,8 @@ function App() {
             target.setAttribute('data-fallback-step', 'fallback');
             return;
           }
-          target.style.display = 'none';
+          target.src = BADGE_FALLBACK_DATA_URI;
+          target.setAttribute('data-fallback-step', 'svg');
         }}
       />
     </span>
@@ -2415,8 +2487,11 @@ function App() {
       <img
         src={getRankAssetPath(fileName, 'png')}
         alt={alt}
+        data-fallback-step="png"
         className="relative w-11 h-11 object-contain"
-        loading="lazy"
+        loading="eager"
+        decoding="async"
+        draggable={false}
         onError={(e) => {
           const target = e.currentTarget as HTMLImageElement;
           const step = target.getAttribute('data-fallback-step') || 'png';
@@ -2430,7 +2505,8 @@ function App() {
             target.setAttribute('data-fallback-step', 'void');
             return;
           }
-          target.style.display = 'none';
+          target.src = BADGE_FALLBACK_DATA_URI;
+          target.setAttribute('data-fallback-step', 'svg');
         }}
       />
     </span>
@@ -2631,7 +2707,8 @@ function App() {
   const currentUserRegularInfo = getRegularRankInfoByName(currentUserName);
   const currentUserRegularIndex = getRegularRankIndexByName(currentUserName);
   const currentUserSeasonInfo = getSeasonRankInfoByName(currentUserName);
-  const currentUserSeasonPoints = (regularRankMap.get(normalizeName(currentUserName)) as any)?.season_sp ?? 0;
+  const currentUserRegularDefenseStack = (regularRankMap.get(normalizeName(currentUserName)) as any)?.regular_defense_stack ?? 0;
+  const currentUserSeasonDefenseStack = (regularRankMap.get(normalizeName(currentUserName)) as any)?.season_defense_stack ?? 0;
   const getStreakBountyGC = (streak?: number) => {
     const safe = streak || 0;
     if (safe < 3) return 0;
@@ -2762,14 +2839,14 @@ function App() {
       if (Number.isFinite(ts) && ts > latestMatchTs) latestMatchTs = ts;
     }
     if (!latestMatchTs) return 0;
-    const remain = latestMatchTs + REGULAR_REMATCH_COOLDOWN_MS - Date.now();
+    const remain = latestMatchTs + REGULAR_REMATCH_COOLDOWN_MS - cooldownNowMs;
     return remain > 0 ? remain : 0;
   };
   const formatCooldownLabel = (ms: number) => {
-    const totalMinutes = Math.ceil(ms / 60000);
+    const totalMinutes = Math.max(0, Math.ceil(ms / 60000));
     const hh = Math.floor(totalMinutes / 60);
     const mm = totalMinutes % 60;
-    return `${hh}시간 ${mm}분`;
+    return `${hh}시간 ${String(mm).padStart(2, '0')}분`;
   };
   const canChallengeTargetByRegularRule = (targetName?: string | null) => {
     if (!targetName || !currentUserName) return false;
@@ -2789,7 +2866,7 @@ function App() {
     const remainMs = getRegularCooldownRemainingMs(targetName);
     if (remainMs > 0) {
       return {
-        label: '쿨타임',
+        label: `쿨타임 ${formatCooldownLabel(remainMs)}`,
         hint: formatCooldownLabel(remainMs),
         clickable: false,
         className: 'bg-amber-500/18 border border-amber-400/45 text-amber-300',
@@ -2826,7 +2903,6 @@ function App() {
     : '현재 접속 중인 클랜원이 없습니다.';
 
   const selectedPlayerRegularInfo = selectedPlayer ? getRegularRankInfoByName(selectedPlayer.display_name) : null;
-  const selectedPlayerRegularLabel = selectedPlayer ? getRegularRankLabelByName(selectedPlayer.display_name) : '루키 -위';
   const selectedPlayerSeasonInfo = selectedPlayer ? getSeasonRankInfoByName(selectedPlayer.display_name) : null;
   const setRankCardRef = (scope: 'mini' | 'main', mode: 'free' | 'random', name: string) => (el: HTMLDivElement | null) => {
     const key = `${scope}:${mode}:${normalizeName(name)}`;
@@ -3756,12 +3832,6 @@ function App() {
 
                    {(() => {
                      const regularFiltered = rankers.length > 0 ? rankers.filter((r) => matchesSearch(r.display_name, mainSearchQuery)) : [];
-                     const featured = regularFiltered.slice(0, 9);
-                     const row1 = featured.slice(0, 1);
-                     const row2 = featured.slice(1, 4);
-                     const row3 = featured.slice(4, 9);
-                     const rest = regularFiltered.slice(9);
-
                       const renderRegularCard = (r: any, tone: 'hero' | 'mid' | 'small' = 'small') => {
                         const regularIdx = typeof r.regular_display_index === 'number' ? r.regular_display_index : null;
                         const isRookieTier = regularIdx === null;
@@ -3860,45 +3930,36 @@ function App() {
                      }
 
                      return (
-                       <div className="pb-20 px-4 space-y-6">
-                         <div className="grid grid-cols-1 gap-6">
-                           {row1.map((r) => renderRegularCard(r, 'hero'))}
-                         </div>
-                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                           {row2.map((r) => renderRegularCard(r, 'mid'))}
-                         </div>
-                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
-                           {row3.map((r) => renderRegularCard(r, 'small'))}
-                         </div>
+                       <div className="grid grid-cols-12 gap-10 pb-20 justify-center px-4 grid-glow-fix">
+                         {regularFiltered.map((r: any) => {
+                           const regularIdx = typeof r.regular_display_index === 'number' ? r.regular_display_index : null;
+                           const isRank1 = regularIdx === 0;
+                           const isRank2_3 = regularIdx === 1 || regularIdx === 2;
+                           const isRank4_6 = regularIdx !== null && regularIdx >= 3 && regularIdx <= 5;
 
-                         {rest.length > 0 && !showMoreRegularRanks && (
-                           <div className="flex justify-center">
-                             <button
-                               onMouseEnter={() => playSFX('hover')}
-                               onClick={() => { playSFX('click'); setShowMoreRegularRanks(true); }}
-                               className="px-8 py-3 rounded-full bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 font-bold hover:bg-cyan-500 hover:text-black transition-all cursor-pointer"
-                             >
-                               더보기 ({rest.length})
-                             </button>
-                           </div>
-                         )}
+                           let spanClass = 'col-span-6';
+                           let tone: 'hero' | 'mid' | 'small' = 'mid';
 
-                         {showMoreRegularRanks && rest.length > 0 && (
-                           <div className="space-y-4">
-                             <div className="flex justify-center">
-                               <button
-                                 onMouseEnter={() => playSFX('hover')}
-                                 onClick={() => { playSFX('click'); setShowMoreRegularRanks(false); }}
-                                 className="px-8 py-3 rounded-full bg-pink-500/15 border border-pink-400/40 text-pink-300 font-bold hover:bg-pink-500 hover:text-white transition-all cursor-pointer"
-                               >
-                                 접기
-                               </button>
+                           if (isRank1) {
+                             spanClass = 'col-span-12 flex justify-center';
+                             tone = 'hero';
+                           } else if (isRank2_3) {
+                             spanClass = 'col-span-6';
+                             tone = 'mid';
+                           } else if (isRank4_6) {
+                             spanClass = 'col-span-4';
+                             tone = 'small';
+                           } else {
+                             spanClass = 'col-span-3';
+                             tone = 'small';
+                           }
+
+                           return (
+                             <div key={r.id} className={spanClass}>
+                               {renderRegularCard(r, tone)}
                              </div>
-                             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                               {rest.map((r) => renderRegularCard(r, 'small'))}
-                             </div>
-                           </div>
-                         )}
+                           );
+                         })}
                        </div>
                      );
                    })()}
@@ -4077,8 +4138,8 @@ function App() {
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">최고 연승</p><p className="text-2xl font-black text-amber-300">{myStats.longestStreak}</p></div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">정규 경기</p><p className="text-2xl font-black text-cyan-300">{myStats.freeMatches}</p></div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">시즌 경기</p><p className="text-2xl font-black text-violet-300">{myStats.randomMatches}</p></div>
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">SP (시즌)</p><p className="text-2xl font-black text-fuchsia-400">{currentUserSeasonPoints}</p></div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">GC (상점)</p><p className="text-2xl font-black text-emerald-400">{profile?.gc ?? 1000}</p></div>
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center shadow-inner"><p className="text-slate-300 text-sm sm:text-base lg:text-[17px] tracking-wide font-black mb-2">방어전 트래커</p><p className="text-xl font-black text-fuchsia-400">정규 {currentUserRegularDefenseStack} / 시즌 {currentUserSeasonDefenseStack}</p></div>
                       </div>
                     </div>
                   </div>
@@ -4241,13 +4302,15 @@ function App() {
                       <div className="flex flex-col gap-2 items-end shrink-0">
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                           {selectedPlayerRegularInfo?.icon}
-                          {selectedPlayerRegularLabel}
+                          {selectedPlayerRegularInfo
+                            ? `${selectedPlayerRegularInfo.title} ${selectedPlayerRegularInfo.num ? `${selectedPlayerRegularInfo.num}위` : '-위'} · ${selectedPlayer?.regular_rp ?? 0} RP (자유)`
+                            : `루키 -위 · ${selectedPlayer?.regular_rp ?? 0} RP (자유)`}
                         </span>
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerSeasonInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                            <span>{selectedPlayerSeasonInfo?.icon || '🪐'}</span>
                            {selectedPlayerSeasonInfo
-                             ? `${selectedPlayerSeasonInfo.name} ${typeof selectedPlayerSeasonInfo.index === 'number' ? `${selectedPlayerSeasonInfo.index + 1}위` : '-위'}`
-                             : '보이드 -위'}
+                             ? `${selectedPlayerSeasonInfo.name} ${typeof selectedPlayerSeasonInfo.index === 'number' ? `${selectedPlayerSeasonInfo.index + 1}위` : '-위'} · ${selectedPlayer?.season_sp ?? 0} SP (랜덤)`
+                             : `보이드 -위 · ${selectedPlayer?.season_sp ?? 0} SP (랜덤)`}
                         </span>
                       </div>
                     </div>
@@ -4275,12 +4338,14 @@ function App() {
                           <p className="text-3xl font-black text-pink-400">{selectedPlayer.win_rate || "0.0%"}</p>
                         </div>
                         <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center">
-                          <p className="text-xs font-bold text-slate-400 mb-2">SP (시즌)</p>
-                          <p className="text-3xl font-black text-fuchsia-400">{selectedPlayer.season_sp ?? 0}</p>
-                        </div>
-                        <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center col-span-1">
                           <p className="text-xs font-bold text-slate-400 mb-2">GC (상점)</p>
                           <p className="text-3xl font-black text-emerald-400">{selectedPlayer.gc ?? 1000}</p>
+                        </div>
+                        <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center col-span-1">
+                          <p className="text-xs font-bold text-slate-400 mb-2">방어전 트래커</p>
+                          <p className="text-xl font-black text-cyan-300">
+                            정규 {selectedPlayer?.regular_defense_stack ?? 0} / 시즌 {selectedPlayer?.season_defense_stack ?? 0}
+                          </p>
                         </div>
                         <div onMouseEnter={() => playSFX('hover')} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] text-center shadow-inner flex flex-col justify-center">
                           <p className="text-xs font-bold text-slate-400 mb-2">FAVORITE LEGEND</p>
