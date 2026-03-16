@@ -3786,13 +3786,6 @@ function App() {
                                       {grandRank.icon}
                                     </div>
                                   </div>
-                                  {regularIdx === null && (
-                                    <div className="absolute inset-x-0 top-[3.05rem] flex justify-center pointer-events-none">
-                                      <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black text-slate-200 bg-slate-500/22 border border-slate-300/30">
-                                        루키
-                                      </span>
-                                    </div>
-                                  )}
                                   {((r.regular_defense_stack || 0) > 0 || (r.regular_win_streak || 0) >= 3) && (
                                     <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex flex-col items-end gap-1.5 z-20">
                                       {(r.regular_defense_stack || 0) > 0 && (
@@ -3846,13 +3839,6 @@ function App() {
                                       {tier.icon}
                                     </div>
                                   </div>
-                                  {seasonIdx === null && (
-                                    <div className="absolute inset-x-0 top-[3.05rem] flex justify-center pointer-events-none">
-                                      <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black text-orange-200 bg-orange-500/18 border border-orange-300/35">
-                                        보이드
-                                      </span>
-                                    </div>
-                                  )}
                                   {((r.season_defense_stack || 0) > 0 || (r.season_win_streak || 0) >= 3) && (
                                     <div className="absolute right-2 sm:right-3 top-2 sm:top-3 flex flex-col items-end gap-1.5 z-20">
                                       {(r.season_defense_stack || 0) > 0 && (
@@ -4055,7 +4041,7 @@ function App() {
 	                        const avatarClass = tone === 'hero' ? 'w-28 h-28' : tone === 'mid' ? 'w-20 h-20' : 'w-14 h-14';
 	                        const nameClass = tone === 'hero' ? 'text-5xl' : tone === 'mid' ? 'text-2xl' : 'text-lg';
 	                        const badgeClass = tone === 'hero' ? 'px-14 py-5 text-[34px] -top-12' : tone === 'mid' ? 'px-12 py-4 text-[24px] -top-9' : 'px-8 py-2.5 text-[19px] -top-6';
-                          const rankTextClass = tone === 'hero' ? 'text-[3.1rem] sm:text-[4rem]' : tone === 'mid' ? 'text-[2.4rem] sm:text-[3rem]' : 'text-[2rem] sm:text-[2.6rem]';
+	                        const rankTextClass = tone === 'hero' ? 'text-[3.9rem] sm:text-[4.8rem]' : tone === 'mid' ? 'text-[2.8rem] sm:text-[3.4rem]' : 'text-[2.25rem] sm:text-[2.9rem]';
 
 	                       return (
                          <div
@@ -4070,8 +4056,8 @@ function App() {
 	                                <span className="inline-flex scale-[1.45] sm:scale-[1.65]">{grandRank.icon}</span>
 	                              </div>
 	                            </div>
-	                            <div className="absolute left-3 sm:left-4 top-2 sm:top-2.5 flex items-center gap-2 z-20">
-	                              <span className={`${rankTextClass} leading-[0.9] font-black text-cyan-200 drop-shadow-[0_0_14px_rgba(34,211,238,0.5)]`}>
+	                            <div className="absolute left-4 sm:left-5 top-3 sm:top-4 flex items-center gap-2 z-20">
+	                              <span className={`${rankTextClass} leading-[0.9] tracking-tight font-black text-cyan-200 drop-shadow-[0_0_14px_rgba(34,211,238,0.5)]`}>
 	                                {regularIdx === null ? '-' : `${regularIdx + 1}위`}
 	                              </span>
 	                             {move > 0 && (
@@ -4182,14 +4168,14 @@ function App() {
                            else if (isRank2_3) { spanClass = "col-span-6"; }
                            else if (isRank4_6) { spanClass = "col-span-4"; cardClass = "p-6 pt-10 pb-6 rounded-[1.5rem]"; badgeClass = "px-10 py-3 text-[20px] -top-7"; avatarClass = "w-16 h-16"; statSize = "text-2xl"; nameSize = 'text-xl'; }
                            else { spanClass = "col-span-3"; cardClass = "p-5 pt-8 pb-5 rounded-xl"; badgeClass = "px-8 py-2.5 text-[18px] -top-6"; avatarClass = "w-14 h-14"; statSize = "text-xl"; nameSize = 'text-lg'; }
-                           const rankTextClass = isRank1 ? 'text-[3.1rem] sm:text-[4rem]' : isRank2_3 ? 'text-[2.5rem] sm:text-[3rem]' : 'text-[2rem] sm:text-[2.6rem]';
+                           const rankTextClass = isRank1 ? 'text-[3.9rem] sm:text-[4.8rem]' : isRank2_3 ? 'text-[2.8rem] sm:text-[3.4rem]' : 'text-[2.25rem] sm:text-[2.9rem]';
 
                            return (
                              <div key={r.id} className={spanClass}>
                                 <div ref={setRankCardRef('main', 'random', r.display_name)} onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setSelectedPlayer(r); setProfileTab('overview'); }} className={`${cardClass} transition-all cursor-pointer group relative flex flex-col justify-center items-center ${seasonCardFxByTier((r as any).season_tier_level || 0)} hover:brightness-110 mt-10`}>
                                    {seasonIdx === 0 && <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-[3rem] pointer-events-none"></div>}
                                    
-                                    <span className={`absolute left-3 sm:left-4 top-2 sm:top-2.5 ${rankTextClass} leading-[0.9] font-black text-cyan-200 drop-shadow-[0_0_14px_rgba(34,211,238,0.5)] z-20`}>
+                                    <span className={`absolute left-4 sm:left-5 top-3 sm:top-4 ${rankTextClass} leading-[0.9] tracking-tight font-black text-cyan-200 drop-shadow-[0_0_14px_rgba(34,211,238,0.5)] z-20`}>
                                       {seasonIdx === null ? '-' : `${seasonIdx + 1}위`}
                                     </span>
                                     {move > 0 && (
