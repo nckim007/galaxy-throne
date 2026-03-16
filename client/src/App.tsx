@@ -90,7 +90,7 @@ function App() {
   const [betAmount, setBetAmount] = useState<number>(200); 
   const [rerollCount, setRerollCount] = useState<number>(0); 
 
-  const [matchPhase, setMatchPhase] = useState<'idle' | 'setup_mode' | 'waiting_sync' | 'picking' | 'waiting_ready' | 'scoring'>('idle');
+  const [matchPhase, setMatchPhase] = useState<'idle' | 'waiting_sync' | 'scoring'>('idle');
   const [activeMatch, setActiveMatch] = useState<{ id: string, mode: string, opponent: string, legend: string, weapons: string[], oppLegend?: string, oppWeapons?: string[], isChallenger: boolean } | null>(null);
   
   const [myWins, setMyWins] = useState<number | null>(null);
@@ -588,7 +588,7 @@ function App() {
           writeRandomDraftState(data.id, isC, username, { rerollCount: savedRandomDraft?.rerollCount || 0, legend: localLegend, weapons: localWeapons });
       } else {
           // 픽 단계에서 아직 Ready를 누르지 않았다면, 상대 업데이트로 내 로컬 선택값이 지워지지 않게 보존합니다.
-          if (matchPhaseRef.current === 'picking' && !amIReady) {
+          if (matchPhaseRef.current === 'scoring' && !amIReady) {
             const draftLegend = entryLegendRef.current || '';
             const draftWeapons = entryWeaponsRef.current || ['', ''];
             const dbLegendEmpty = !localLegend || localLegend === '';
@@ -608,7 +608,7 @@ function App() {
         setMatchPhase('scoring');
       } else if (modeRaw.includes('_accepted') || modeRaw.includes('_accepting') || modeRaw.includes('_settling')) {
         setIncomingChallenge(null);
-        setMatchPhase(amIReady ? 'waiting_ready' : 'picking');
+        setMatchPhase('scoring');
       } else if (isC) {
         setIncomingChallenge(null);
         setMatchPhase('waiting_sync');
@@ -980,10 +980,10 @@ function App() {
                if (currentMatch && updated.id === currentMatch.id) {
                     if (currentPhase === 'waiting_sync' && updated.mode.includes('_accepted')) {
                         playSFX('matchStart');
-                        setMatchPhase('picking');
+                        setMatchPhase('scoring');
                     }
-                   if ((currentPhase === 'picking' || currentPhase === 'waiting_ready') && updated.c_ready && updated.t_ready) {
-                       playSFX('success'); setActiveMatch(prev => prev ? { ...prev, oppLegend: prev.isChallenger ? updated.t_legend : updated.legend, oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons } : prev); setMatchPhase('scoring');
+                   if (currentPhase === 'scoring') {
+                       setActiveMatch(prev => prev ? { ...prev, oppLegend: prev.isChallenger ? updated.t_legend : updated.legend, oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons } : prev);
                    }
                    if (updated.c_win === null && updated.t_win === null && isWaiting) {
                        playSFX('error');
@@ -1563,7 +1563,7 @@ function App() {
       if (!user) return alert("로그인이 필요합니다!");
       if (!name.trim()) return alert("상대방 닉네임을 입력하세요!");
       if (name.trim() === currentUserName?.trim()) return alert("자기 자신에게는 도전할 수 없습니다!");
-      playSFX('click'); setEntryOpponent(name); setMatchPhase('setup_mode');
+      playSFX('click'); setEntryOpponent(name); setMatchPhase('idle');
   };
 
   const handleModeChange = (mode: 'free' | 'random') => {
@@ -1924,7 +1924,7 @@ function App() {
     if (acceptance.justAccepted) {
       showStatusPopup('success', '대전 수락', acceptance.stakeMessage || '대전이 성사되었습니다.');
     }
-    setMatchPhase('picking');
+    setMatchPhase('scoring');
   };
 
   const handleDeclineIncomingChallenge = async () => {
@@ -2029,7 +2029,7 @@ function App() {
       if (acceptance.justAccepted) {
         showStatusPopup('success', '대전 수락', acceptance.stakeMessage || '대전이 성사되었습니다.');
       }
-      setMatchPhase('picking');
+      setMatchPhase('scoring');
     } else {
       if (entryMode === 'free') {
         const remainMs = getRegularCooldownRemainingMs(entryOpponent.trim());
@@ -2047,21 +2047,6 @@ function App() {
         showStatusPopup('info', '대전 신청 완료', `${entryOpponent.trim()}님에게 대전 신청을 보냈습니다. 수락/거절 응답을 기다려주세요.`);
       }
     }
-  };
-
-  const handlePickReady = async () => {
-    if (!entryLegend || !entryWeapons[0] || !entryWeapons[1]) { playSFX('error'); return alert("레전드와 무기를 모두 선택해주세요!"); }
-    playSFX('click'); if (!activeMatch) return;
-    const updatePayload = activeMatch.isChallenger ? { legend: entryLegend, weapons: entryWeapons, c_ready: true } : { t_legend: entryLegend, t_weapons: entryWeapons, t_ready: true };
-    setActiveMatch({ ...activeMatch, legend: entryLegend, weapons: entryWeapons });
-    if (currentUserName && activeMatch.mode.includes('random')) {
-      writeRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName, {
-        rerollCount,
-        legend: entryLegend,
-        weapons: entryWeapons,
-      });
-    }
-    await supabase.from('challenges').update(updatePayload).eq('id', activeMatch.id); setMatchPhase('waiting_ready');
   };
 
   const handleCancelMatch = async () => {
@@ -2086,9 +2071,33 @@ function App() {
       showStatusPopup('error', '입력 필요', '승리 및 패배 횟수를 모두 선택하세요.');
       return;
     }
+    const nextLegend = String(entryLegend || '').trim();
+    const nextWeapons = [String(entryWeapons[0] || '').trim(), String(entryWeapons[1] || '').trim()];
+    if (!nextLegend || !nextWeapons[0] || !nextWeapons[1]) {
+      playSFX('error');
+      showStatusPopup('error', '입력 필요', '레전드와 무기를 모두 설정하세요.');
+      return;
+    }
     playSFX('click'); setWaitingForScore(true);
     
     const isC = activeMatch.isChallenger;
+    const pickPayload = isC ? { legend: nextLegend, weapons: nextWeapons } : { t_legend: nextLegend, t_weapons: nextWeapons };
+    const { error: pickErr } = await supabase.from('challenges').update(pickPayload).eq('id', activeMatch.id);
+    if (pickErr) {
+      setWaitingForScore(false);
+      playSFX('error');
+      showStatusPopup('error', '픽 저장 실패', `레전드/무기 저장 중 오류가 발생했습니다: ${pickErr.message}`);
+      return;
+    }
+    setActiveMatch((prev) => (prev ? { ...prev, legend: nextLegend, weapons: nextWeapons } : prev));
+    if (currentUserName && activeMatch.mode.includes('random')) {
+      writeRandomDraftState(activeMatch.id, activeMatch.isChallenger, currentUserName, {
+        rerollCount,
+        legend: nextLegend,
+        weapons: nextWeapons,
+      });
+    }
+
     const updatePayload = isC ? { c_win: myWins, c_lose: myLosses } : { t_win: myWins, t_lose: myLosses };
     
     const { data: updatedData, error } = await supabase.from('challenges').update(updatePayload).eq('id', activeMatch.id).select().maybeSingle();
@@ -2240,7 +2249,7 @@ function App() {
 
   const copyPlayerName = (name: string) => {
     if (!name) return; playSFX('click'); navigator.clipboard.writeText(name); setCopyStatus(true); 
-    setEntryOpponent(name); setActiveMenu('home'); setMatchPhase('setup_mode'); setTimeout(() => { setCopyStatus(false); setSelectedPlayer(null); }, 500);
+    setEntryOpponent(name); setActiveMenu('home'); setMatchPhase('idle'); setTimeout(() => { setCopyStatus(false); setSelectedPlayer(null); }, 500);
   };
 
   const handleProfileClick = (name: string) => {
@@ -3219,19 +3228,19 @@ function App() {
                <section className="board-soft-glow bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[2rem] lg:rounded-[3rem] p-4 sm:p-5 flex flex-col h-auto shrink-0 relative z-10 overflow-visible">
                   <div className="flex flex-col relative z-10">
                       <h3 onMouseEnter={() => playSFX('hover')} className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3">
-                         {(matchPhase === 'idle' || matchPhase === 'setup_mode') && '대전 신청 (Match Entry)'}
-                         {(matchPhase === 'waiting_sync' || matchPhase === 'picking' || matchPhase === 'waiting_ready') && '대전 준비 (Match Prep)'}
+                         {matchPhase === 'idle' && '대전 신청 (Match Entry)'}
+                         {matchPhase === 'waiting_sync' && '대전 준비 (Match Prep)'}
                          {matchPhase === 'scoring' && '결과 제출 (Submit Score)'}
                       </h3>
                       
                       {matchPhase === 'idle' && (
-                        <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-4">
+                        <div className="flex flex-col pt-1 pb-1 animate-in fade-in gap-5">
                            <div className="flex flex-col items-center text-center mb-1">
                                <Target size={46} className="text-cyan-400 drop-shadow-[0_0_15px_cyan] mb-3" />
-                               <h4 className="text-xl sm:text-2xl font-bold text-white tracking-widest">타겟을 설정하세요</h4>
-                              <p className="text-slate-400 text-sm mt-2">좌측 접속 현황에서 선택하거나 직접 입력하세요.</p>
+                               <h4 className="text-xl sm:text-2xl font-bold text-white tracking-widest">타겟과 모드를 설정하세요</h4>
+                              <p className="text-slate-400 text-sm mt-2">닉네임 입력 후 바로 대전 모드/배팅을 설정하고 신청할 수 있습니다.</p>
                            </div>
-                           <div className="bg-black/60 p-4 rounded-2xl border border-white/10 shadow-inner mt-1">
+                           <div className="bg-black/60 p-4 rounded-2xl border border-white/10 shadow-inner">
                               <p className="text-xs text-slate-500 font-bold mb-2 pl-2">TARGET NICKNAME</p>
                                <input
                                  value={entryOpponent}
@@ -3239,27 +3248,13 @@ function App() {
                                  onKeyDown={(e) => {
                                    if (e.key === 'Enter' && !(e.nativeEvent as any).isComposing) {
                                      e.preventDefault();
-                                     handleTargetLock();
+                                     handleStartMatch();
                                    }
                                  }}
                                  placeholder="상대방 닉네임 직접 입력"
                                  className="w-full bg-transparent outline-none text-white font-bold text-lg sm:text-xl select-text pl-2"
                                />
                            </div>
-                           <button onMouseEnter={() => playSFX('hover')} onClick={() => handleTargetLock()} className="hvr-grow hvr-glow w-full py-4 rounded-[1.5rem] font-bold text-xl text-white bg-cyan-600 shadow-[0_0_20px_rgba(34,211,238,0.5)] hover:bg-cyan-500 transition-all border border-cyan-400 cursor-pointer mt-2">다음 단계 (Next)</button>
-                        </div>
-                      )}
-
-                      {matchPhase === 'setup_mode' && (
-                        <div className="flex flex-col pt-2 pb-2 animate-in fade-in gap-5">
-                           <div className="flex items-center justify-between bg-black/40 p-5 rounded-[2rem] border border-white/10 shadow-inner mb-2">
-                              <div className="flex flex-col cursor-pointer group/target flex-1 min-w-0 pr-4" onClick={() => handleProfileClick(entryOpponent)}>
-                                 <p className="text-xs text-slate-500 font-bold mb-1">SELECTED TARGET</p>
-                                 <h4 className={`text-pink-400 italic group-hover/target:text-cyan-400 text-2xl whitespace-normal break-all leading-tight font-bold`}>{entryOpponent}</h4>
-                              </div>
-                              <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setMatchPhase('idle'); }} className="px-6 py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 text-base font-bold border border-white/10 transition-colors cursor-pointer shrink-0">변경</button>
-                           </div>
-                           
                            <div className="flex gap-2 p-1.5 bg-black/50 rounded-2xl border border-white/5">
                               <button onMouseEnter={() => playSFX('hover')} onClick={() => handleModeChange('free')} className={`flex-1 py-4 rounded-xl text-lg font-bold transition-all cursor-pointer ${entryMode === 'free' ? 'bg-pink-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>자유대전 (정규)</button>
                               <button onMouseEnter={() => playSFX('hover')} onClick={() => handleModeChange('random')} className={`flex-1 py-4 rounded-xl text-lg font-bold transition-all cursor-pointer ${entryMode === 'random' ? 'bg-cyan-600 text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}>랜덤대전 (시즌)</button>
@@ -3305,67 +3300,9 @@ function App() {
                            <div className="w-24 h-24 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-10 shadow-lg"></div>
                            <h4 className="text-3xl font-bold text-cyan-400 tracking-widest">타겟 접속 대기중</h4>
                            <p className="text-base text-slate-300 mt-5 text-center leading-relaxed">
-                             상대방(<span className="text-pink-400 cursor-pointer hover:text-cyan-400 transition-colors" onClick={() => handleProfileClick(entryOpponent)}>{entryOpponent}</span>)이 당신을 지목하여<br/>수락하면 픽창으로 이동합니다.
-                           </p>
+                             상대방(<span className="text-pink-400 cursor-pointer hover:text-cyan-400 transition-colors" onClick={() => handleProfileClick(entryOpponent)}>{entryOpponent}</span>)이 신청을 수락하면<br/>바로 결과 입력 화면으로 이동합니다.
+                            </p>
                            <button onMouseEnter={() => playSFX('hover')} onClick={handleCancelMatch} className="mt-12 px-10 py-4 rounded-full border-2 border-pink-500/50 text-pink-400 font-bold text-lg hover:bg-pink-500 hover:text-white transition-all shadow-md cursor-pointer">매칭 취소 (Cancel)</button>
-                        </div>
-                      )}
-
-                      {matchPhase === 'picking' && (
-                        <div className="flex flex-col pt-2 pb-2 animate-in fade-in gap-5">
-                           <h4 className="text-center text-xl font-bold text-pink-400 mb-2 mt-2">매치 성사! 무기를 선택하세요</h4>
-                           {entryMode === 'free' ? (
-                              <div className="space-y-4 flex flex-col">
-                                 <select onMouseEnter={() => playSFX('hover')} value={entryLegend} onChange={(e) => { setEntryLegend(e.target.value); playSFX('click'); }} className="w-full min-w-0 bg-black/60 border border-white/10 py-5 pl-4 pr-8 rounded-2xl text-base font-bold outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
-                                    <option value="" disabled hidden>👉 레전드 선택</option>
-                                    {Object.entries(LEGEND_CATEGORIES).map(([cat, list]) => (
-                                      <optgroup key={cat} label={`■ ${cat}`} style={{color: getLegendCategoryColorHex(cat), backgroundColor: '#000'}}>
-                                        {list.map(l => <option key={l} value={l} style={{color: '#fff'}}>{l}</option>)}
-                                      </optgroup>
-                                    ))}
-                                 </select>
-                                 <div className="flex gap-3 w-full">
-                                   <select onMouseEnter={() => playSFX('hover')} value={entryWeapons[0]} onChange={(e) => {const w = [...entryWeapons]; w[0] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="flex-1 min-w-0 bg-black/60 border border-white/10 py-5 pl-4 pr-8 rounded-2xl text-base font-bold outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
-                                      <option value="" disabled hidden>👉 무기 선택</option>
-                                      {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (
-                                        <optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>
-                                          {list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}
-                                        </optgroup>
-                                      ))}
-                                   </select>
-                                   <select onMouseEnter={() => playSFX('hover')} value={entryWeapons[1]} onChange={(e) => {const w = [...entryWeapons]; w[1] = e.target.value; setEntryWeapons(w); playSFX('click');}} className="flex-1 min-w-0 bg-black/60 border border-white/10 py-5 pl-4 pr-8 rounded-2xl text-base font-bold outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate">
-                                      <option value="" disabled hidden>👉 무기 선택</option>
-                                      {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (
-                                        <optgroup key={cat} label={`■ ${cat}`} style={{color: getWeaponCategoryColorHex(cat), backgroundColor: '#000'}}>
-                                          {list.map(w => <option key={w} value={w} style={{color: '#fff'}}>{w}</option>)}
-                                        </optgroup>
-                                      ))}
-                                   </select>
-                                 </div>
-                              </div>
-                           ) : (
-                              <div className="flex flex-col gap-4 mt-2">
-                                 <button onMouseEnter={() => playSFX('hover')} onClick={handleReroll} className={`py-5 rounded-2xl font-bold text-lg transition-all border cursor-pointer ${rerollCount === 0 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 hover:bg-emerald-500 hover:text-black shadow-[0_0_15px_emerald]' : 'bg-amber-500/20 text-amber-400 border-amber-500/50 hover:bg-amber-500 hover:text-black shadow-[0_0_15px_amber]'}`}>
-                                    {rerollCount === 0 ? '🎁 1회 무료 리롤 돌리기' : '🔄 50 GC 소모하여 리롤'}
-                                 </button>
-                                 <div className="flex flex-col gap-3 mt-3">
-                                    <div className="bg-black/60 p-5 rounded-2xl text-center text-xl font-bold text-cyan-400 border border-white/10 shadow-inner">{entryLegend || '랜덤 레전드 대기중...'}</div>
-                                    <div className="flex gap-3">
-                                       <span className="flex-1 bg-black/60 p-5 rounded-2xl text-center text-base font-bold text-pink-400 border border-white/10 whitespace-normal break-words leading-snug shadow-inner">{entryWeapons[0] || '랜덤 무기 대기중...'}</span>
-                                       <span className="flex-1 bg-black/60 p-5 rounded-2xl text-center text-base font-bold text-pink-400 border border-white/10 whitespace-normal break-words leading-snug shadow-inner">{entryWeapons[1] || '랜덤 무기 대기중...'}</span>
-                                    </div>
-                                 </div>
-                              </div>
-                           )}
-                           <button onMouseEnter={() => playSFX('hover')} onClick={handlePickReady} className="hvr-grow hvr-glow w-full py-5 mt-6 rounded-[2rem] font-bold text-2xl text-black bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)] hover:bg-yellow-300 transition-all cursor-pointer">준비 완료 (Ready)</button>
-                        </div>
-                      )}
-
-                      {matchPhase === 'waiting_ready' && (
-                        <div className="flex flex-col items-center justify-center py-20 animate-in fade-in">
-                           <div className="w-24 h-24 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mb-10 shadow-lg"></div>
-                           <h4 className="text-3xl font-bold text-yellow-400 tracking-widest">상대방 픽 대기중</h4>
-                           <p className="text-base text-slate-300 mt-5 text-center leading-relaxed">상대방이 무기를 고르고 준비 완료를 누르면<br/>전투 결과 창으로 이동합니다.</p>
                         </div>
                       )}
 
@@ -3377,6 +3314,87 @@ function App() {
                                  {activeMatch.mode.includes('random') ? '랜덤 대전' : '자유 대전'}
                                </span>
                              </div>
+
+                             {activeMatch.mode.includes('free') ? (
+                               <div className="space-y-3">
+                                 <p className="text-center text-sm font-bold text-cyan-300">내 레전드/무기 설정</p>
+                                 <select
+                                   onMouseEnter={() => playSFX('hover')}
+                                   value={entryLegend}
+                                   onChange={(e) => { setEntryLegend(e.target.value); playSFX('click'); }}
+                                   className="w-full min-w-0 bg-black/60 border border-white/10 py-4 pl-4 pr-8 rounded-2xl text-base font-bold outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate"
+                                 >
+                                   <option value="" disabled hidden>👉 레전드 선택</option>
+                                   {Object.entries(LEGEND_CATEGORIES).map(([cat, list]) => (
+                                     <optgroup key={cat} label={`■ ${cat}`} style={{ color: getLegendCategoryColorHex(cat), backgroundColor: '#000' }}>
+                                       {list.map((l) => (
+                                         <option key={l} value={l} style={{ color: '#fff' }}>
+                                           {l}
+                                         </option>
+                                       ))}
+                                     </optgroup>
+                                   ))}
+                                 </select>
+                                 <div className="flex gap-3 w-full">
+                                   <select
+                                     onMouseEnter={() => playSFX('hover')}
+                                     value={entryWeapons[0]}
+                                     onChange={(e) => { const w = [...entryWeapons]; w[0] = e.target.value; setEntryWeapons(w); playSFX('click'); }}
+                                     className="flex-1 min-w-0 bg-black/60 border border-white/10 py-4 pl-4 pr-8 rounded-2xl text-base font-bold outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate"
+                                   >
+                                     <option value="" disabled hidden>👉 무기 1 선택</option>
+                                     {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (
+                                       <optgroup key={cat} label={`■ ${cat}`} style={{ color: getWeaponCategoryColorHex(cat), backgroundColor: '#000' }}>
+                                         {list.map((w) => (
+                                           <option key={w} value={w} style={{ color: '#fff' }}>
+                                             {w}
+                                           </option>
+                                         ))}
+                                       </optgroup>
+                                     ))}
+                                   </select>
+                                   <select
+                                     onMouseEnter={() => playSFX('hover')}
+                                     value={entryWeapons[1]}
+                                     onChange={(e) => { const w = [...entryWeapons]; w[1] = e.target.value; setEntryWeapons(w); playSFX('click'); }}
+                                     className="flex-1 min-w-0 bg-black/60 border border-white/10 py-4 pl-4 pr-8 rounded-2xl text-base font-bold outline-none text-white cursor-pointer hover:border-cyan-400 transition-colors truncate"
+                                   >
+                                     <option value="" disabled hidden>👉 무기 2 선택</option>
+                                     {Object.entries(WEAPON_CATEGORIES).map(([cat, list]) => (
+                                       <optgroup key={cat} label={`■ ${cat}`} style={{ color: getWeaponCategoryColorHex(cat), backgroundColor: '#000' }}>
+                                         {list.map((w) => (
+                                           <option key={w} value={w} style={{ color: '#fff' }}>
+                                             {w}
+                                           </option>
+                                         ))}
+                                       </optgroup>
+                                     ))}
+                                   </select>
+                                 </div>
+                               </div>
+                             ) : (
+                               <div className="flex flex-col gap-3">
+                                 <p className="text-center text-sm font-bold text-cyan-300">랜덤 리롤</p>
+                                 <button
+                                   onMouseEnter={() => playSFX('hover')}
+                                   onClick={handleReroll}
+                                   className={`py-4 rounded-2xl font-bold text-base transition-all border cursor-pointer ${rerollCount === 0 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 hover:bg-emerald-500 hover:text-black shadow-[0_0_15px_emerald]' : 'bg-amber-500/20 text-amber-400 border-amber-500/50 hover:bg-amber-500 hover:text-black shadow-[0_0_15px_amber]'}`}
+                                 >
+                                   {rerollCount === 0 ? '🎁 1회 무료 리롤' : '🔄 50 GC 리롤'}
+                                 </button>
+                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                   <div className="bg-black/60 p-3 rounded-2xl text-center text-sm font-bold text-cyan-400 border border-white/10 shadow-inner whitespace-normal break-words">
+                                     {entryLegend || '랜덤 레전드'}
+                                   </div>
+                                   <div className="bg-black/60 p-3 rounded-2xl text-center text-sm font-bold text-pink-400 border border-white/10 shadow-inner whitespace-normal break-words">
+                                     {entryWeapons[0] || '랜덤 무기 1'}
+                                   </div>
+                                   <div className="bg-black/60 p-3 rounded-2xl text-center text-sm font-bold text-pink-400 border border-white/10 shadow-inner whitespace-normal break-words">
+                                     {entryWeapons[1] || '랜덤 무기 2'}
+                                   </div>
+                                 </div>
+                               </div>
+                             )}
 
                              <div className="flex items-center justify-center gap-2 whitespace-nowrap px-1">
                                  <span className="text-3xl font-black text-yellow-400">{myWins ?? '-'}</span>
@@ -3391,9 +3409,9 @@ function App() {
                                    <p className={`${getResponsiveNameClass(currentUserName || 'GUEST', 'medium')} leading-none`}>{currentUserName || 'GUEST'}</p>
                                  </div>
                                  <div className="space-y-1">
-                                   <p className="text-sm font-bold text-pink-400 leading-snug whitespace-normal break-words">{activeMatch.legend || '?'}</p>
-                                   <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">{activeMatch.weapons[0] || '?'}</p>
-                                   <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">{activeMatch.weapons[1] || '?'}</p>
+                                   <p className="text-sm font-bold text-pink-400 leading-snug whitespace-normal break-words">{entryLegend || '?'}</p>
+                                   <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">{entryWeapons[0] || '?'}</p>
+                                   <p className="text-sm font-bold text-cyan-300 leading-snug whitespace-normal break-words">{entryWeapons[1] || '?'}</p>
                                  </div>
                                </div>
 
