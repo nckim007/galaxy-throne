@@ -162,7 +162,7 @@ function App() {
   const [rewardChestClaiming, setRewardChestClaiming] = useState(false);
   const [rewardChestRewardGc, setRewardChestRewardGc] = useState<number | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [scrollTopButtonPos, setScrollTopButtonPos] = useState<{ left: number; top: number } | null>(null);
+  const [scrollTopButtonPos, setScrollTopButtonPos] = useState<{ left: number; top: number; transform: string } | null>(null);
   const [cooldownNowMs, setCooldownNowMs] = useState(() => Date.now());
 
   const [bgmEnabled, setBgmEnabled] = useState(localStorage.getItem('bgmEnabled') !== 'false');
@@ -596,10 +596,19 @@ function App() {
       setScrollTopButtonPos(null);
       return;
     }
-    const rect = target.getBoundingClientRect();
+    const isGlobalScroll = Boolean(mainScrollRef.current && target === mainScrollRef.current);
+    if (isGlobalScroll) {
+      setScrollTopButtonPos({
+        left: window.innerWidth - 16,
+        top: window.innerHeight - 12,
+        transform: 'translate(-100%, -100%)',
+      });
+      return;
+    }
     setScrollTopButtonPos({
-      left: rect.left + rect.width / 2,
-      top: rect.bottom - 10,
+      left: window.innerWidth / 2,
+      top: window.innerHeight - 12,
+      transform: 'translate(-50%, -100%)',
     });
   };
 
@@ -1224,9 +1233,10 @@ function App() {
                               currentPhase === 'waiting_sync' &&
                               String(deletedRow?.challenger_name || '').trim() === String(currentUserName || '').trim();
                             if (wasSenderWaiting) {
-                              showStatusPopup('error', '대전 거절', '상대방이 잔뜩 쫄았습니다 ㅋ');
+                              const targetDisplay = String(deletedRow?.target_name || '').trim() || '상대방';
+                              showStatusPopup('error', '대전 거절', `${targetDisplay}님이 잔뜩 쫄았습니다`);
                             } else {
-	                            showStatusPopup('error', '대전 거절', '상대방이 잔뜩 쫄았습니다 ㅋ');
+	                            showStatusPopup('info', '매치 종료', '대전이 종료되었습니다.');
                             }
 	                        }
 	                       setMatchPhase('idle');
@@ -2263,7 +2273,8 @@ function App() {
     setEntryLegend('');
     setEntryWeapons(['', '']);
     setRerollCount(0);
-    showStatusPopup('info', '대전 거절', '당신은 잔뜩 쫄았습니까? ㅎ', { autoCloseMs: 3000, hideConfirm: true });
+    const challengerDisplay = String(pending.challengerName || '').trim() || '상대방';
+    showStatusPopup('info', '대전 거절', `${challengerDisplay}님에게 잔뜩 쫄았쥬~ㅋㅋㅋㅋ`, { autoCloseMs: 3000, hideConfirm: true });
   };
 
   const handleStartMatch = async () => {
@@ -3586,11 +3597,16 @@ function App() {
                       </span>
                     </div>
                 </div>
-                <div onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); toggleProfileView(); }} className="flex items-center gap-3 sm:gap-4 bg-black/60 p-2.5 sm:p-3.5 rounded-full border border-white/10 pr-4 sm:pr-5 border-l-cyan-500 border-l-4 cursor-pointer hover:border-l-pink-500 transition-all w-full sm:w-auto justify-center sm:justify-start">
-                  <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest"} className={`w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full border-2 ${equippedBorderFxClass}`} alt="profile"/>
-                  <div className="flex flex-col min-w-0">
-                    <span className={`text-[1.2rem] sm:text-[1.45rem] lg:text-[1.9rem] leading-tight font-black ${equippedNameClass}`}>{currentUserName || "GUEST"}</span>
-                    <span className="text-[10px] sm:text-xs font-bold text-cyan-400 uppercase tracking-wider">Profile</span>
+                <div className="flex flex-col items-center sm:items-start gap-2 w-full sm:w-auto">
+                  <div onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); toggleProfileView(); }} className="flex items-center gap-3 sm:gap-4 bg-black/60 p-2.5 sm:p-3.5 rounded-full border border-white/10 pr-4 sm:pr-5 border-l-cyan-500 border-l-4 cursor-pointer hover:border-l-pink-500 transition-all w-full sm:w-auto justify-center sm:justify-start">
+                    <img src={currentUserAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest"} className={`w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full border-2 ${equippedBorderFxClass}`} alt="profile"/>
+                    <div className="flex flex-col min-w-0">
+                      <span className={`text-[1.2rem] sm:text-[1.45rem] lg:text-[1.9rem] leading-tight font-black ${equippedNameClass}`}>{currentUserName || "GUEST"}</span>
+                      <span className="text-[10px] sm:text-xs font-bold text-cyan-400 uppercase tracking-wider">Profile</span>
+                    </div>
+                  </div>
+                  <div className="px-3 py-1.5 rounded-xl border border-emerald-400/40 bg-black/55 text-emerald-300 text-sm sm:text-base font-black w-full sm:w-auto text-center">
+                    GC 코인 {Number(profile?.gc ?? 1000).toLocaleString()}
                   </div>
                 </div>
                 <button
@@ -3735,10 +3751,14 @@ function App() {
                              </div>
                            )}
                            
-                           <div className="bg-black/60 p-5 rounded-2xl border border-white/5 mt-2 flex flex-col gap-4">
-                              <div className="flex justify-between items-center">
-                                 <p className="text-base text-pink-400 font-bold">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">{isRegularMode(entryMode) ? `최소 ${REGULAR_TICKET_COST}` : '0 가능'}</span></p>
-                                 <input 
+                            <div className="bg-black/60 p-5 rounded-2xl border border-white/5 mt-2 flex flex-col gap-4">
+                               <div className="flex items-center justify-between text-sm sm:text-base font-black">
+                                 <span className="text-slate-300">보유 중 GC 코인</span>
+                                 <span className="text-emerald-300">{Number(profile?.gc ?? 1000).toLocaleString()} GC</span>
+                               </div>
+                               <div className="flex justify-between items-center">
+                                  <p className="text-base text-pink-400 font-bold">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">{isRegularMode(entryMode) ? `최소 ${REGULAR_TICKET_COST}` : '0 가능'}</span></p>
+                                  <input 
                                    type="number" 
                                    min={isRegularMode(entryMode) ? REGULAR_TICKET_COST : 0} 
                                    value={betAmount} 
@@ -5056,7 +5076,7 @@ function App() {
             target?.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           className="fixed z-[240] hvr-grow hvr-glow px-4 py-3 rounded-full border border-cyan-400/60 bg-black/65 text-cyan-300 font-black shadow-[0_0_16px_rgba(34,211,238,0.35)] cursor-pointer"
-          style={scrollTopButtonPos ? { left: `${scrollTopButtonPos.left}px`, top: `${scrollTopButtonPos.top}px`, transform: 'translate(-50%, -100%)' } : undefined}
+          style={scrollTopButtonPos ? { left: `${scrollTopButtonPos.left}px`, top: `${scrollTopButtonPos.top}px`, transform: scrollTopButtonPos.transform } : undefined}
         >
           맨 위로
         </button>
