@@ -166,7 +166,6 @@ function App() {
   const [rewardChestRewardGc, setRewardChestRewardGc] = useState<number | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonPos, setScrollTopButtonPos] = useState<{ left: number; top: number; transform: string } | null>(null);
-  const [cooldownNowMs, setCooldownNowMs] = useState(() => Date.now());
   const [starRainActive, setStarRainActive] = useState(false);
   const [starRainParticles, setStarRainParticles] = useState<
     { id: number; left: number; delay: number; duration: number; size: number; drift: number; kind: 'star' | 'meteor' }[]
@@ -185,16 +184,6 @@ function App() {
   const SEASON_TICKET_COST = 0;
   const REGULAR_INACTIVE_GRACE_DAYS = 3;
   const REGULAR_INACTIVE_DECAY_PER_DAY = 100;
-  const REGULAR_FIRST_WIN_BASE_BY_TIER_LEVEL: Record<number, number> = {
-    0: 25, // rookie/void
-    1: 25, // bronze
-    2: 40, // silver
-    3: 55, // gold
-    4: 70, // platinum
-    5: 100, // diamond
-    6: 200, // master
-    7: 300, // predator
-  };
   const calcSeasonStreakMultiplier = (nextStreak: number) => {
     if (nextStreak < 4) return 1;
     return Math.pow(1.2, nextStreak - 3);
@@ -221,6 +210,17 @@ function App() {
       sp: 10 + (safeLoserScore > 0 ? safeLoserScore * 5 : 0),
       gc: 20 + (safeLoserScore > 0 ? safeLoserScore * 10 : 0),
     };
+  };
+  const calcRegularWinGain = (opts: { winnerScore: number; isHigherTierWin: boolean }) => {
+    const winnerScore = Math.max(0, Math.floor(Number(opts.winnerScore || 0)));
+    const extraWins = Math.max(0, winnerScore - 3);
+    return 30 + extraWins * 10 + (opts.isHigherTierWin ? winnerScore * 15 : 0);
+  };
+  const calcRegularLoseDelta = (opts: { loserScore: number; winnerScore: number }) => {
+    const loserScore = Math.max(0, Math.floor(Number(opts.loserScore || 0)));
+    const winnerScore = Math.max(0, Math.floor(Number(opts.winnerScore || 0)));
+    const basePenalty = 20 + Math.max(0, winnerScore - 3) * 5 - loserScore * 5;
+    return -Math.max(0, basePenalty);
   };
   const cosmeticsStorageKey = user?.id ? `gt_cosmetics_v1_${user.id}` : null;
   const defaultOwnedIds = ['name_default', 'style_default', 'border_default'];
@@ -764,18 +764,12 @@ function App() {
       setScrollTopButtonPos(null);
       return;
     }
-    const isGlobalScroll = Boolean(mainScrollRef.current && target === mainScrollRef.current);
-    if (isGlobalScroll) {
-      setScrollTopButtonPos({
-        left: window.innerWidth - 16,
-        top: window.innerHeight - 12,
-        transform: 'translate(-100%, -100%)',
-      });
-      return;
-    }
+    const rect = target.getBoundingClientRect();
+    const left = Math.min(window.innerWidth - 18, Math.max(18, rect.left + rect.width / 2));
+    const top = Math.min(window.innerHeight - 12, Math.max(88, rect.bottom - 10));
     setScrollTopButtonPos({
-      left: window.innerWidth / 2,
-      top: window.innerHeight - 12,
+      left,
+      top,
       transform: 'translate(-50%, -100%)',
     });
   };
@@ -860,11 +854,6 @@ function App() {
       updateScrollTopForTarget(mainScrollRef.current);
     }
   }, [activeMenu]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setCooldownNowMs(Date.now()), 10 * 1000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -1792,9 +1781,6 @@ function App() {
         const winnerTierBefore = getRegularTierLevelBefore(winner);
         const loserTierBefore = getRegularTierLevelBefore(loser);
         const isHigherTierWin = loserTierBefore > winnerTierBefore;
-        const isSweep = loserScore === 0;
-        const loserWonAnyRound = loserScore > 0;
-        const wasFirstRegularWin = winnerState.regularWins === 0;
 
         winnerState.regularMatches += 1;
         winnerState.regularWins += 1;
@@ -1803,20 +1789,12 @@ function App() {
         loserState.regularLosses += 1;
         loserState.lastRegularMatchTs = safeTs;
 
-        if (wasFirstRegularWin) {
-          const startRp = REGULAR_FIRST_WIN_BASE_BY_TIER_LEVEL[loserTierBefore] ?? 25;
-          winnerState.regularRp = Math.max(0, winnerState.regularRp + startRp);
-          winnerState.regularWinStreak = 1;
-        } else {
-          const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
-          const nextStreak = winnerState.regularWinStreak + 1;
-          const streakMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
-          winnerState.regularRp = Math.max(0, winnerState.regularRp + Math.round(baseGain * streakMultiplier));
-          winnerState.regularWinStreak = nextStreak;
-        }
+        const winGain = calcRegularWinGain({ winnerScore, isHigherTierWin });
+        winnerState.regularRp = Math.max(0, winnerState.regularRp + winGain);
+        winnerState.regularWinStreak += 1;
 
-        const losePenalty = 15 - (loserWonAnyRound ? 5 : 0);
-        loserState.regularRp = Math.max(0, loserState.regularRp - losePenalty);
+        const loseDelta = calcRegularLoseDelta({ loserScore, winnerScore });
+        loserState.regularRp = Math.max(0, loserState.regularRp + loseDelta);
         loserState.regularWinStreak = 0;
         loserState.regularDefenseStack = 0;
 
@@ -2578,20 +2556,6 @@ function App() {
     const modeRaw = String(existing.mode || '').trim();
     const alreadyAccepted = modeRaw.includes('_accepted');
     const baseMode = normalizeChallengeMode(modeRaw);
-    if (!alreadyAccepted && baseMode === 'free') {
-      const remainMs = getRegularCooldownRemainingMs(existing.challenger_name);
-      if (remainMs > 0) {
-        playSFX('error');
-        showStatusPopup('error', '재도전 쿨타임', `같은 상대와의 정규 랭크전은 12시간 쿨타임이 있습니다.\n남은 시간: ${formatCooldownLabel(remainMs)}`);
-        await supabase.from('challenges').delete().eq('id', existing.id);
-        setIncomingChallenge(null);
-        setMatchPhase('idle');
-        setActiveMatch(null);
-        applyDefaultLoadoutForMode(entryMode);
-        return;
-      }
-    }
-
     const challengerName = existing.challenger_name?.trim();
     const targetName = existing.target_name?.trim();
     if (!challengerName || !targetName || targetName !== currentUserName.trim()) {
@@ -2726,13 +2690,6 @@ function App() {
       .maybeSingle();
     
     if (existing) {
-      if (isRegularMode(entryMode)) {
-        const remainMs = getRegularCooldownRemainingMs(entryOpponent.trim());
-        if (remainMs > 0) {
-          playSFX('error');
-          return alert(`같은 상대와의 정규 랭크전은 12시간 쿨타임이 있습니다. (남은 시간: ${formatCooldownLabel(remainMs)})`);
-        }
-      }
       playSFX('click');
       const modeRaw = String(existing.mode || '').trim();
       const alreadyAccepted = modeRaw.includes('_accepted');
@@ -2797,13 +2754,6 @@ function App() {
       setWinTarget(inferWinTargetFromScores(acceptedRow?.c_win, acceptedRow?.c_lose, acceptedRow?.t_win, acceptedRow?.t_lose));
       setMatchPhase('scoring');
     } else {
-      if (isRegularMode(entryMode)) {
-        const remainMs = getRegularCooldownRemainingMs(entryOpponent.trim());
-        if (remainMs > 0) {
-          playSFX('error');
-          return alert(`같은 상대와의 정규 랭크전은 12시간 쿨타임이 있습니다. (남은 시간: ${formatCooldownLabel(remainMs)})`);
-        }
-      }
       playSFX('click');
       const modeToInsert = normalizeChallengeMode(entryMode);
       const { data: newChall } = await supabase.from('challenges').insert([{ challenger_name: currentUserName.trim(), target_name: entryOpponent.trim(), mode: modeToInsert, bet_gc: betAmount }]).select().single();
@@ -3006,59 +2956,30 @@ function App() {
           const isCurrentChallenger = currentNameNorm === challengerNorm;
           const didCurrentWin = winnerName?.trim() === (currentUserName || '').trim();
           const myScore = isCurrentChallenger ? challengerScore : targetScore;
-          const myRowBefore: any = regularRankMap.get(normalizeName(currentUserName));
           let challengerPointDelta = 0;
           let targetPointDelta = 0;
 
           if (isRegularMode(baseMode)) {
             const challengerTierBefore = getRegularTierLevelByName(challengerName);
             const targetTierBefore = getRegularTierLevelByName(targetName);
-            const challengerWinsBefore = Number(challengerRowBefore?.regular_wins || 0);
-            const targetWinsBefore = Number(targetRowBefore?.regular_wins || 0);
-            const challengerStreakBefore = Number(challengerRowBefore?.regular_win_streak || 0);
-            const targetStreakBefore = Number(targetRowBefore?.regular_win_streak || 0);
             if (challengerWon) {
-              if (challengerWinsBefore <= 0) {
-                challengerPointDelta = REGULAR_FIRST_WIN_BASE_BY_TIER_LEVEL[targetTierBefore] ?? 25;
-              } else {
-                const isSweep = targetScore === 0;
-                const isHigherTierWin = targetTierBefore > challengerTierBefore;
-                const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
-                const nextStreak = challengerStreakBefore + 1;
-                const streakMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
-                challengerPointDelta = Math.round(baseGain * streakMultiplier);
-              }
-              targetPointDelta = -(15 - (targetScore > 0 ? 5 : 0));
+              const isHigherTierWin = targetTierBefore > challengerTierBefore;
+              challengerPointDelta = calcRegularWinGain({ winnerScore: challengerScore, isHigherTierWin });
+              targetPointDelta = calcRegularLoseDelta({ loserScore: targetScore, winnerScore: challengerScore });
             } else {
-              if (targetWinsBefore <= 0) {
-                targetPointDelta = REGULAR_FIRST_WIN_BASE_BY_TIER_LEVEL[challengerTierBefore] ?? 25;
-              } else {
-                const isSweep = challengerScore === 0;
-                const isHigherTierWin = challengerTierBefore > targetTierBefore;
-                const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
-                const nextStreak = targetStreakBefore + 1;
-                const streakMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
-                targetPointDelta = Math.round(baseGain * streakMultiplier);
-              }
-              challengerPointDelta = -(15 - (challengerScore > 0 ? 5 : 0));
+              const isHigherTierWin = challengerTierBefore > targetTierBefore;
+              targetPointDelta = calcRegularWinGain({ winnerScore: targetScore, isHigherTierWin });
+              challengerPointDelta = calcRegularLoseDelta({ loserScore: challengerScore, winnerScore: targetScore });
             }
 
             const myTierBefore = getRegularTierLevelByName(currentUserName);
             const oppTierBefore = getRegularTierLevelByName(isCurrentChallenger ? targetName : challengerName);
             if (didCurrentWin) {
-              const myRegularWinsBefore = Number(myRowBefore?.regular_wins || 0);
-              if (myRegularWinsBefore <= 0) {
-                currentPointDelta = REGULAR_FIRST_WIN_BASE_BY_TIER_LEVEL[oppTierBefore] ?? 25;
-              } else {
-                const isSweep = loserScore === 0;
-                const isHigherTierWin = oppTierBefore > myTierBefore;
-                const baseGain = 25 + (isSweep ? 5 : 0) + (isHigherTierWin ? 10 : 0);
-                const nextStreak = Number(myRowBefore?.regular_win_streak || 0) + 1;
-                const streakMultiplier = nextStreak >= 3 ? Math.pow(1.2, nextStreak - 2) : 1;
-                currentPointDelta = Math.round(baseGain * streakMultiplier);
-              }
+              const isHigherTierWin = oppTierBefore > myTierBefore;
+              currentPointDelta = calcRegularWinGain({ winnerScore: myScore, isHigherTierWin });
             } else {
-              currentPointDelta = -(15 - (myScore > 0 ? 5 : 0));
+              const oppScore = isCurrentChallenger ? targetScore : challengerScore;
+              currentPointDelta = calcRegularLoseDelta({ loserScore: myScore, winnerScore: oppScore });
             }
           } else {
             if (challengerWon) {
@@ -3703,7 +3624,6 @@ function App() {
     if (!key) return 0;
     return (mode === 'regular' ? regularRankMoves[key] : seasonRankMoves[key]) || 0;
   };
-  const REGULAR_REMATCH_COOLDOWN_MS = 12 * 60 * 60 * 1000;
   const getRegularTierLevelByName = (name?: string | null) => {
     const found: any = regularRankMap.get(normalizeName(name));
     if (!found) return 0;
@@ -3728,32 +3648,6 @@ function App() {
     if (targetTierLevel > challengerTierLevel + 1) return false;
     return true;
   };
-  const getRegularCooldownRemainingMs = (targetName?: string | null) => {
-    if (!currentUserName || !targetName) return 0;
-    const me = normalizeName(currentUserName);
-    const target = normalizeName(targetName);
-    if (!me || !target || me === target) return 0;
-	    let latestMatchTs = 0;
-	    for (const m of logs) {
-	      const type = normalizeChallengeMode(String(m?.match_type || '').toLowerCase());
-	      if (!isRegularMode(type)) continue;
-	      const left = normalizeName((m?.left_player_name || m?.left_player || '') as string);
-	      const right = normalizeName((m?.right_player_name || m?.right_player || '') as string);
-      const isPair = (left === me && right === target) || (left === target && right === me);
-      if (!isPair) continue;
-      const ts = new Date(m?.created_at || 0).getTime();
-      if (Number.isFinite(ts) && ts > latestMatchTs) latestMatchTs = ts;
-    }
-    if (!latestMatchTs) return 0;
-    const remain = latestMatchTs + REGULAR_REMATCH_COOLDOWN_MS - cooldownNowMs;
-    return remain > 0 ? remain : 0;
-  };
-  const formatCooldownLabel = (ms: number) => {
-    const totalMinutes = Math.max(0, Math.ceil(ms / 60000));
-    const hh = Math.floor(totalMinutes / 60);
-    const mm = totalMinutes % 60;
-    return `${hh}시간 ${String(mm).padStart(2, '0')}분`;
-  };
   const canChallengeTargetByRegularRule = (targetName?: string | null) => {
     if (!targetName || !currentUserName) return false;
     return canRegularChallengeByTierRule(currentUserName, targetName);
@@ -3768,15 +3662,6 @@ function App() {
     }
     if (targetName.trim() === currentUserName.trim()) {
       return { label: '나', hint: '', clickable: false, className: 'bg-blue-600/20 border border-blue-500/50 text-blue-400' };
-    }
-    const remainMs = getRegularCooldownRemainingMs(targetName);
-    if (remainMs > 0) {
-      return {
-        label: `${formatCooldownLabel(remainMs)}`,
-        hint: formatCooldownLabel(remainMs),
-        clickable: false,
-        className: 'bg-amber-500/18 border border-amber-400/45 text-amber-300',
-      };
     }
     if (matchPhase !== 'idle') {
       return { label: '도전불가', hint: '', clickable: false, className: 'bg-slate-800/50 border border-slate-700 text-slate-500' };
@@ -4225,10 +4110,10 @@ function App() {
         {activeMenu === 'home' && (
           <main className="flex-1 p-3 sm:p-4 lg:p-10 grid grid-cols-12 gap-4 lg:gap-8 items-start xl:items-stretch pb-20 animate-in fade-in duration-500 h-full">
             <div className="col-span-12 xl:col-span-8 flex flex-col gap-4 lg:gap-8 h-auto xl:h-full relative order-1 xl:order-1">
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-8 items-start">
+              <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:gap-8 items-start">
                 <div className="flex flex-col h-auto relative">
                <section className="board-soft-glow bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2rem] lg:rounded-[2.5rem] p-4 sm:p-5 lg:p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
-                  <h3 onMouseEnter={() => playSFX('hover')} className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 lg:mb-6 border-b border-white/5 pb-3 lg:pb-4">
+                  <h3 onMouseEnter={() => playSFX('hover')} className="text-base sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 lg:mb-6 border-b border-white/5 pb-3 lg:pb-4 leading-tight">
                     접속 현황 (Online Board)
                   </h3>
 
@@ -4286,7 +4171,7 @@ function App() {
                 <div className="flex flex-col h-auto relative">
                <section className="board-soft-glow bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[2rem] lg:rounded-[3rem] p-4 sm:p-5 flex flex-col h-auto shrink-0 relative z-10 overflow-visible">
                   <div className="flex flex-col relative z-10">
-                      <h3 onMouseEnter={() => playSFX('hover')} className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3">
+                      <h3 onMouseEnter={() => playSFX('hover')} className="text-base sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3 leading-tight">
                          {matchPhase === 'idle' && '대전 신청 (Match Entry)'}
                          {matchPhase === 'waiting_sync' && '대전 준비 (Match Prep)'}
                          {matchPhase === 'scoring' && '결과 제출 (Submit Score)'}
@@ -5698,7 +5583,7 @@ function App() {
       )}
 
       {statusPopup && (
-        <div className="fixed inset-0 z-[280] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setStatusPopup(null)}>
+        <div className="fixed inset-0 z-[360] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setStatusPopup(null)}>
           <div
             onClick={(e) => e.stopPropagation()}
             className={`w-full max-w-lg rounded-[2rem] border p-6 sm:p-7 bg-[#0a0f1d] shadow-2xl ${statusPopup.type === 'success' ? 'border-emerald-400/70' : statusPopup.type === 'error' ? 'border-rose-400/70' : 'border-cyan-400/70'} ${statusPopupFading ? 'animate-[popup-fade_340ms_ease-out_forwards]' : ''}`}
