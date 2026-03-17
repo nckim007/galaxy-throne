@@ -363,10 +363,11 @@ function App() {
     return Number(row.c_win) === Number(row.t_lose) && Number(row.c_lose) === Number(row.t_win);
   };
   const getSingleLineProfileNameStyle = (fontSize: number): React.CSSProperties => ({
-    fontSize: `${Math.max(14, Math.min(92, Math.round(fontSize)))}px`,
+    fontSize: `${Math.max(8, Math.min(92, Math.round(fontSize)))}px`,
     lineHeight: 1.05,
     whiteSpace: 'nowrap',
-    maxWidth: '100%',
+    width: 'max-content',
+    maxWidth: 'none',
   });
   const getDiscordCopyCandidate = (row: any) => {
     const candidates = [
@@ -938,20 +939,30 @@ function App() {
       }
       const vw = window.innerWidth || 1280;
       const maxPx = vw < 480 ? 46 : vw < 640 ? 56 : vw < 1024 ? 66 : 74;
-      const minPx = vw < 480 ? 10 : 12;
+      const minPx = vw < 480 ? 8 : 10;
       text.style.fontSize = `${maxPx}px`;
       const available = Math.max(0, wrap.clientWidth - 6);
-      const full = Math.ceil(text.scrollWidth || 0);
-      if (!available || !full) {
+      if (!available) {
         setSelectedProfileNameFontSize(maxPx);
         return;
       }
-      const scaled = full > available ? Math.floor(maxPx * (available / full)) : maxPx;
-      const next = Math.max(minPx, Math.min(maxPx, scaled));
+      let next = maxPx;
+      let guard = 0;
+      while (next > minPx && text.scrollWidth > available + 1 && guard < 200) {
+        next -= 1;
+        guard += 1;
+        text.style.fontSize = `${next}px`;
+      }
       setSelectedProfileNameFontSize(next);
     };
 
     const raf = window.requestAnimationFrame(fitName);
+    const timerA = window.setTimeout(fitName, 80);
+    const timerB = window.setTimeout(fitName, 220);
+    const fontsReady = (document as any)?.fonts?.ready;
+    if (fontsReady && typeof fontsReady.then === 'function') {
+      fontsReady.then(() => fitName()).catch(() => {});
+    }
     let ro: ResizeObserver | null = null;
     if (typeof ResizeObserver !== 'undefined') {
       ro = new ResizeObserver(() => fitName());
@@ -960,6 +971,8 @@ function App() {
     window.addEventListener('resize', fitName);
     return () => {
       window.cancelAnimationFrame(raf);
+      window.clearTimeout(timerA);
+      window.clearTimeout(timerB);
       if (ro) ro.disconnect();
       window.removeEventListener('resize', fitName);
     };
@@ -1541,6 +1554,16 @@ function App() {
           didWin ? '전투 승리! 결과 반영 완료' : '전투 종료! 결과 반영 완료',
           `스코어 ${myScore} : ${oppScore}\n${formatDeltaLine(pointLabel, pointDelta)}\n${formatDeltaLine('GC (갤럭시 코인)', gcDelta)}`
         );
+        const active = activeMatchRef.current;
+        if (active && String(payload?.matchId || '') === String(active.id)) {
+          setMatchPhase('idle');
+          setActiveMatch(null);
+          setWaitingForScore(false);
+          setMyWins(null);
+          setMyLosses(null);
+          setRerollCount(0);
+          applyDefaultLoadoutForMode(active.mode);
+        }
       })
       .subscribe();
     resultPopupChannelRef.current = resultPopupChannel;
@@ -1631,35 +1654,9 @@ function App() {
                          setWinTarget((prev) => (prev === inferredTarget ? prev : inferredTarget));
                        }
                    }
-                   const prevRow: any = payload.old || {};
-                   const hadAnyScoreBefore =
-                     prevRow.c_win !== null ||
-                     prevRow.c_lose !== null ||
-                     prevRow.t_win !== null ||
-                     prevRow.t_lose !== null;
-                   const hadBothScoresBefore =
-                     isSubmittedScorePair(prevRow.c_win, prevRow.c_lose) &&
-                     isSubmittedScorePair(prevRow.t_win, prevRow.t_lose);
-                   const nowAllScoresNull =
-                     updated.c_win === null &&
-                     updated.c_lose === null &&
-                     updated.t_win === null &&
-                     updated.t_lose === null;
-                   if (nowAllScoresNull && hadAnyScoreBefore && hadBothScoresBefore && isWaiting) {
-                       playSFX('error');
-                       showStatusPopup(
-                         'error',
-                         '스코어 불일치',
-                         '상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다. 다시 합의 후 정확히 입력해주세요.'
-                       );
-                       autoScoreSubmitKeyRef.current = '';
-                       setWaitingForScore(false);
-                       setMyWins(null);
-                       setMyLosses(null);
-                   }
-               }
-               checkActiveChallenge(currentUserName);
-           }
+                }
+                checkActiveChallenge(currentUserName);
+            }
            if (payload.eventType === 'DELETE') {
 	                const deletedRow = payload.old;
                   const deletedWasSettledResult = isSettledChallengeRow(deletedRow);
@@ -2949,6 +2946,11 @@ function App() {
             } else {
               showStatusPopup('info', '결과 반영 대기', settlement.message || '결과가 이미 처리되었습니다.');
             }
+            if (currentUserName) {
+              window.setTimeout(() => {
+                void checkActiveChallenge(currentUserName);
+              }, 900);
+            }
             return;
           }
 
@@ -3162,19 +3164,9 @@ function App() {
           showStatusPopup(
             'error',
             '스코어 불일치',
-            `도전자(${updatedData.c_win}승 ${updatedData.c_lose}패) / 타겟(${updatedData.t_win}승 ${updatedData.t_lose}패) 입력값이 달라 초기화됩니다.`
+            `도전자(${updatedData.c_win}승 ${updatedData.c_lose}패) / 타겟(${updatedData.t_win}승 ${updatedData.t_lose}패) 입력값이 달라 결과를 반영하지 못했습니다.\n양쪽이 점수를 다시 맞춘 뒤 재입력해주세요.`
           );
-          autoScoreSubmitKeyRef.current = '';
           setWaitingForScore(false);
-          setMyWins(null);
-          setMyLosses(null);
-          const { error: resetErr } = await supabase
-            .from('challenges')
-            .update({ c_win: null, c_lose: null, t_win: null, t_lose: null })
-            .eq('id', activeMatch.id);
-          if (resetErr) {
-            showStatusPopup('error', '초기화 실패', `스코어 초기화 중 오류가 발생했습니다: ${resetErr.message}`);
-          }
         }
       }
     } else {
@@ -5401,7 +5393,7 @@ function App() {
              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-8 lg:gap-10 mb-5 sm:mb-8 mt-2">
                 <img src={selectedPlayer.avatar_url} className={`w-24 h-24 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-[2rem] sm:rounded-[2.5rem] lg:rounded-[3rem] border-4 ${getCardAvatarBorderFxForUser(selectedPlayer.display_name)} shrink-0`} alt="p" />
                  <div className="flex-1 min-w-0 flex flex-col justify-center w-full">
-                    <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] gap-3 sm:gap-4 min-w-0 w-full items-start">
+                    <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] gap-3 sm:gap-4 min-w-0 w-full items-start">
                       <div className="min-w-0 overflow-hidden" ref={selectedProfileNameWrapRef}>
                         <h2
                           ref={selectedProfileNameTextRef}
@@ -5440,7 +5432,7 @@ function App() {
                           {selectedPlayerIngameValue || '미설정'}
                         </button>
                       </div>
-                      <div className="flex flex-col gap-2 items-start sm:items-end shrink-0 w-full sm:w-[340px]">
+                      <div className="flex flex-col gap-2 items-start md:items-end shrink-0 w-full md:w-[340px]">
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit whitespace-nowrap`}>
                           {selectedPlayerRegularInfo?.icon}
                           {selectedPlayerRegularInfo
