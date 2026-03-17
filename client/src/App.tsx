@@ -1603,20 +1603,18 @@ function App() {
 	                        const suppressPopup = suppressNextDeletePopupChallengeIdRef.current === deletedRow.id;
 	                        suppressNextDeletePopupChallengeIdRef.current = null;
 	                        playSFX('success');
-	                       if (!suppressPopup && !deletedWasSettledResult) {
-                           const wasSenderWaiting =
-                              Boolean(currentMatch?.isChallenger) ||
-                              normalizeName(deletedRow?.challenger_name) === normalizeName(currentUserName);
+ 	                       if (!suppressPopup && !deletedWasSettledResult) {
+                            const wasSenderWaiting =
+                               Boolean(currentMatch?.isChallenger) ||
+                               normalizeName(deletedRow?.challenger_name) === normalizeName(currentUserName);
                             if (wasSenderWaiting) {
                               const targetDisplay =
                                 String(currentMatch?.opponent || '').trim() ||
                                 String(deletedRow?.target_name || '').trim() ||
                                 '상대방';
                               showStatusPopup('error', '매치 종료', `(${targetDisplay}님이 잔뜩 쫄아서 거절했습니다 ㅋㅋㅋㅋㅋ)`);
-                            } else {
-	                            showStatusPopup('info', '매치 종료', '대전이 종료되었습니다.');
                             }
-	                        }
+ 	                        }
 	                       setMatchPhase('idle');
 	                       setActiveMatch(null);
                        setWaitingForScore(false);
@@ -1630,7 +1628,7 @@ function App() {
                        if(user) fetchProfile(user.id);
                    } else if (currentPhase !== 'idle') {
                        playSFX('click');
-                        if (!deletedWasSettledResult) {
+                         if (!deletedWasSettledResult) {
                           const wasSenderWaiting =
                             Boolean(currentMatch?.isChallenger) ||
                             normalizeName(deletedRow?.challenger_name) === normalizeName(currentUserName);
@@ -1640,8 +1638,6 @@ function App() {
                               String(deletedRow?.target_name || '').trim() ||
                               '상대방';
                             showStatusPopup('error', '매치 종료', `(${targetDisplay}님이 잔뜩 쫄아서 거절했습니다 ㅋㅋㅋㅋㅋ)`);
-                          } else {
-                            showStatusPopup('info', '매치 종료', '매치가 취소되었거나 정상적으로 종료되었습니다.');
                           }
                         }
                        setRerollCount(0);
@@ -2048,6 +2044,16 @@ function App() {
         lastError = error;
       }
 
+      if (!syncedToDb && lastError) {
+        console.warn('[ingame-profile-sync] DB 컬럼 동기화 실패:', lastError.message);
+        showStatusPopup(
+          'error',
+          '저장 실패',
+          '인게임 닉네임 정보를 서버에 저장하지 못했습니다.\n잠시 후 다시 시도해주세요.'
+        );
+        return false;
+      }
+
       setProfile((prev: any) => (prev ? { ...prev, ingame_nickname: nickname, ingame_platform: platform } : prev));
       setRankers((prev) =>
         prev.map((r) =>
@@ -2060,9 +2066,6 @@ function App() {
       fetchRankers();
       if (user?.id) fetchProfile(user.id);
 
-      if (!syncedToDb && lastError) {
-        console.warn('[ingame-profile-sync] DB 컬럼 동기화 실패. local fallback 사용:', lastError.message);
-      }
       showStatusPopup('success', '저장 완료', '인게임 닉네임 정보가 저장되었습니다.', {
         autoCloseMs: 2200,
         hideConfirm: true,
@@ -2076,12 +2079,7 @@ function App() {
     if (!user?.id || !profile) return;
     const todayKst = getKstDateKey();
     const checkKey = `${user.id}:${todayKst}`;
-    const localDailyKey = `gt_daily_reward_kst_${user.id}`;
     if (dailyRewardSessionCheckedRef.current === checkKey) return;
-    if (localStorage.getItem(localDailyKey) === todayKst) {
-      dailyRewardSessionCheckedRef.current = checkKey;
-      return;
-    }
     if (dailyRewardCheckingRef.current) return;
     dailyRewardCheckingRef.current = true;
     try {
@@ -2095,7 +2093,17 @@ function App() {
         return;
       }
 
-      const currentGc = typeof profile.gc === 'number' ? profile.gc : 1000;
+      const { data: freshProfileRow } = await supabase
+        .from('profiles')
+        .select('gc')
+        .eq('id', user.id)
+        .single();
+      const currentGc =
+        typeof freshProfileRow?.gc === 'number'
+          ? freshProfileRow.gc
+          : typeof profile.gc === 'number'
+            ? profile.gc
+            : 1000;
       const nextGc = currentGc + 100;
       const { error: gcErr } = await supabase.from('profiles').update({ gc: nextGc }).eq('id', user.id);
       if (gcErr) {
@@ -2107,9 +2115,18 @@ function App() {
       const { error: metaErr } = await supabase.auth.updateUser({ data: nextMetadata });
       if (metaErr) {
         console.warn('[daily-reward] metadata update failed:', metaErr.message);
-      } else {
-        setUser((prev: any) => (prev ? { ...prev, user_metadata: nextMetadata } : prev));
+        const { error: revertErr } = await supabase.from('profiles').update({ gc: currentGc }).eq('id', user.id);
+        if (revertErr) {
+          console.warn('[daily-reward] gc revert failed:', revertErr.message);
+        }
+        showStatusPopup(
+          'error',
+          '출석 보상 처리 실패',
+          '계정 동기화 중 오류가 발생해 보상을 지급하지 않았습니다.\n잠시 후 다시 시도해주세요.'
+        );
+        return;
       }
+      setUser((prev: any) => (prev ? { ...prev, user_metadata: nextMetadata } : prev));
 
       setProfile((prev: any) => (prev ? { ...prev, gc: nextGc } : prev));
       setRankers((prev) => prev.map((r) => (r.id === user.id ? { ...r, gc: nextGc } : r)));
@@ -2119,7 +2136,6 @@ function App() {
         '출석 보상 획득!',
         '매일 첫 접속 보상 +100 GC가 지급되었습니다.\n다음 초기화: 매일 00:00 (KST)'
       );
-      localStorage.setItem(localDailyKey, todayKst);
       dailyRewardSessionCheckedRef.current = checkKey;
     } finally {
       dailyRewardCheckingRef.current = false;
@@ -3150,7 +3166,7 @@ function App() {
     try {
       const { data: fresh } = await supabase.from('profiles').select('*').eq('id', found.id).maybeSingle();
       if (!fresh) return;
-      const merged = { ...fresh, ...found };
+      const merged = { ...found, ...fresh };
       const resolved = resolveIngameProfile({ ...found, ...fresh });
       const hydrated = { ...merged, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform };
       setSelectedPlayer((prev) => (prev && prev.id === found.id ? hydrated : prev));
@@ -4064,7 +4080,7 @@ function App() {
           </div>
           {user ? (
             <div className="flex items-center gap-3 sm:gap-4 w-full xl:w-auto justify-between xl:justify-end flex-wrap">
-                <div className="flex flex-col items-start min-w-0 w-full sm:w-auto sm:min-w-[220px] lg:min-w-[300px] xl:min-w-[350px] max-w-full pr-0 sm:pr-1">
+                <div className="hidden md:flex flex-col items-start min-w-0 w-full sm:w-auto sm:min-w-[220px] lg:min-w-[300px] xl:min-w-[350px] max-w-full pr-0 sm:pr-1">
                     <div className="flex items-center gap-3 w-full">
                       <span className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 flex items-center justify-center shrink-0">{currentUserRegularInfo?.icon || <Shield size={34} className="text-slate-300" />}</span>
                       <span className={`text-sm sm:text-[1.1rem] lg:text-[1.65rem] font-black leading-tight whitespace-nowrap truncate max-w-[190px] sm:max-w-[260px] lg:max-w-[340px] drop-shadow-[0_0_10px_rgba(250,204,21,0.4)] ${currentUserRegularInfo?.color || 'text-yellow-300'}`}>
@@ -4110,7 +4126,7 @@ function App() {
         {activeMenu === 'home' && (
           <main className="flex-1 p-3 sm:p-4 lg:p-10 grid grid-cols-12 gap-4 lg:gap-8 items-start xl:items-stretch pb-20 animate-in fade-in duration-500 h-full">
             <div className="col-span-12 xl:col-span-8 flex flex-col gap-4 lg:gap-8 h-auto xl:h-full relative order-1 xl:order-1">
-              <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:gap-8 items-start">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4 lg:gap-8 items-start">
                 <div className="flex flex-col h-auto relative">
                <section className="board-soft-glow bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2rem] lg:rounded-[2.5rem] p-4 sm:p-5 lg:p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-base sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 lg:mb-6 border-b border-white/5 pb-3 lg:pb-4 leading-tight">
@@ -4766,26 +4782,26 @@ function App() {
           <main className="flex-1 p-3 sm:p-4 lg:p-10 h-full overflow-y-auto custom-scrollbar pb-20 animate-in fade-in duration-500">
             <div className="max-w-7xl mx-auto flex flex-col h-full relative">
                
-               <div className="flex flex-col items-center justify-center gap-4 mb-12">
-                  <Trophy className="text-yellow-400 drop-shadow-[0_0_30px_gold]" size={80}/>
-                  <h2 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500 uppercase tracking-widest drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]">
+               <div className="flex flex-col items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-12">
+                  <Trophy className="text-yellow-400 drop-shadow-[0_0_30px_gold]" size={52}/>
+                  <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500 uppercase tracking-tight sm:tracking-widest drop-shadow-[0_0_15px_rgba(250,204,21,0.5)] text-center">
                     은하단 랭킹
                   </h2>
                </div>
 
-               <div className="flex justify-center gap-6 mb-12">
-                  <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setMainRankTab('free'); }} className={`px-16 py-5 rounded-full font-black text-2xl transition-all border-4 cursor-pointer ${mainRankTab === 'free' ? 'bg-pink-600/20 text-pink-400 border-pink-500 shadow-[0_0_30px_pink] scale-105' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-pink-500/50'}`}>⚔️ 정규 랭킹</button>
-                  <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setMainRankTab('random'); }} className={`px-16 py-5 rounded-full font-black text-2xl transition-all border-4 cursor-pointer ${mainRankTab === 'random' ? 'bg-cyan-600/20 text-cyan-400 border-cyan-400 shadow-[0_0_30px_cyan] scale-105' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>🎲 시즌 랭킹</button>
+               <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-6 mb-8 sm:mb-12 w-full max-w-3xl mx-auto">
+                  <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setMainRankTab('free'); }} className={`w-full sm:w-auto px-6 sm:px-12 lg:px-16 py-3.5 sm:py-4.5 lg:py-5 rounded-2xl sm:rounded-full font-black text-lg sm:text-xl lg:text-2xl transition-all border-2 sm:border-4 cursor-pointer ${mainRankTab === 'free' ? 'bg-pink-600/20 text-pink-400 border-pink-500 shadow-[0_0_30px_pink] scale-[1.01] sm:scale-105' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-pink-500/50'}`}>⚔️ 정규 랭킹</button>
+                  <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setMainRankTab('random'); }} className={`w-full sm:w-auto px-6 sm:px-12 lg:px-16 py-3.5 sm:py-4.5 lg:py-5 rounded-2xl sm:rounded-full font-black text-lg sm:text-xl lg:text-2xl transition-all border-2 sm:border-4 cursor-pointer ${mainRankTab === 'random' ? 'bg-cyan-600/20 text-cyan-400 border-cyan-400 shadow-[0_0_30px_cyan] scale-[1.01] sm:scale-105' : 'bg-black/40 border-white/10 text-slate-500 hover:text-white hover:border-cyan-400/50'}`}>🎲 시즌 랭킹</button>
                </div>
 
                {mainRankTab === 'free' ? (
                  <>
-                   <div className="flex justify-end mb-8 max-w-7xl mx-auto w-full px-4">
-                     <div className="relative w-96">
-                       <Search className="absolute left-6 top-4.5 text-slate-500" size={24}/>
-                       <input value={mainSearchQuery} onChange={(e) => setMainSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRankSearchEnter('main'); } }} placeholder="랭커 검색..." className="w-full bg-black/40 border border-white/10 pl-16 pr-8 py-5 rounded-full text-lg font-bold outline-none focus:border-cyan-400 text-white select-text shadow-inner"/>
-                     </div>
-                   </div>
+                    <div className="flex justify-end mb-6 sm:mb-8 max-w-7xl mx-auto w-full px-0 sm:px-4">
+                      <div className="relative w-full sm:w-96">
+                        <Search className="absolute left-4 sm:left-6 top-3.5 sm:top-4.5 text-slate-500" size={20}/>
+                        <input value={mainSearchQuery} onChange={(e) => setMainSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRankSearchEnter('main'); } }} placeholder="랭커 검색..." className="w-full bg-black/40 border border-white/10 pl-12 sm:pl-16 pr-5 sm:pr-8 py-3.5 sm:py-5 rounded-2xl sm:rounded-full text-base sm:text-lg font-bold outline-none focus:border-cyan-400 text-white select-text shadow-inner"/>
+                      </div>
+                    </div>
 
                    {(() => {
                      const regularFiltered = rankers.length > 0 ? rankers.filter((r) => matchesSearch(r.display_name, mainSearchQuery)) : [];
@@ -4802,16 +4818,16 @@ function App() {
 		                        const throneBounty = getDefenseBonusGC(throneDefenseStack);
 
                             const cardClass = isRank1
-                              ? 'w-full max-w-5xl p-12 pt-16 pb-12 rounded-[3.5rem] shadow-[0_0_30px_rgba(239,68,68,0.5)] hover:shadow-[0_0_50px_rgba(239,68,68,0.7)] hover:scale-[1.03]'
+                              ? 'w-full max-w-5xl p-5 sm:p-12 pt-10 sm:pt-16 pb-6 sm:pb-12 rounded-[1.6rem] sm:rounded-[3.5rem] shadow-[0_0_30px_rgba(239,68,68,0.5)] hover:shadow-[0_0_50px_rgba(239,68,68,0.7)] hover:scale-[1.01] sm:hover:scale-[1.03]'
                               : isRank4_6
-                                ? 'p-6 pt-10 pb-6 rounded-[1.5rem]'
+                                ? 'p-4 sm:p-6 pt-7 sm:pt-10 pb-4 sm:pb-6 rounded-[1.2rem] sm:rounded-[1.5rem]'
                                 : isRank2_3
-                                  ? 'p-8 pt-12 pb-8 rounded-[2rem]'
-                                  : 'p-5 pt-8 pb-5 rounded-xl';
-                            const avatarClass = isRank1 ? 'w-32 h-32' : isRank4_6 ? 'w-16 h-16' : isRank2_3 ? 'w-20 h-20' : 'w-14 h-14';
-                            const nameClass = isRank1 ? 'text-5xl' : isRank4_6 ? 'text-xl' : isRank2_3 ? 'text-2xl' : 'text-lg';
-                            const badgeClass = isRank1 ? 'px-14 py-5 text-[34px] -top-12' : isRank4_6 ? 'px-10 py-3 text-[20px] -top-7' : isRank2_3 ? 'px-12 py-4 text-[24px] -top-9' : 'px-8 py-2.5 text-[18px] -top-6';
-		                        const rankTextClass = isRank1 ? 'text-[3.9rem] sm:text-[4.8rem]' : isRank2_3 ? 'text-[2.8rem] sm:text-[3.4rem]' : 'text-[2.25rem] sm:text-[2.9rem]';
+                                  ? 'p-5 sm:p-8 pt-8 sm:pt-12 pb-5 sm:pb-8 rounded-[1.4rem] sm:rounded-[2rem]'
+                                  : 'p-4 sm:p-5 pt-6 sm:pt-8 pb-4 sm:pb-5 rounded-xl';
+                            const avatarClass = isRank1 ? 'w-20 h-20 sm:w-32 sm:h-32' : isRank4_6 ? 'w-14 h-14 sm:w-16 sm:h-16' : isRank2_3 ? 'w-16 h-16 sm:w-20 sm:h-20' : 'w-12 h-12 sm:w-14 sm:h-14';
+                            const nameClass = isRank1 ? 'text-3xl sm:text-5xl' : isRank4_6 ? 'text-lg sm:text-xl' : isRank2_3 ? 'text-xl sm:text-2xl' : 'text-base sm:text-lg';
+                            const badgeClass = isRank1 ? 'px-8 sm:px-14 py-2.5 sm:py-5 text-[20px] sm:text-[34px] -top-6 sm:-top-12' : isRank4_6 ? 'px-6 sm:px-10 py-2 sm:py-3 text-[14px] sm:text-[20px] -top-5 sm:-top-7' : isRank2_3 ? 'px-7 sm:px-12 py-2.5 sm:py-4 text-[16px] sm:text-[24px] -top-6 sm:-top-9' : 'px-5 sm:px-8 py-1.5 sm:py-2.5 text-[13px] sm:text-[18px] -top-4 sm:-top-6';
+ 		                        const rankTextClass = isRank1 ? 'text-[2.4rem] sm:text-[4.8rem]' : isRank2_3 ? 'text-[2.1rem] sm:text-[3.4rem]' : 'text-[1.8rem] sm:text-[2.9rem]';
 
 	                       return (
                          <div
@@ -4859,7 +4875,7 @@ function App() {
                         <span className={`group-hover:text-cyan-400 font-bold text-white truncate leading-tight ${nameClass}`}>{r.display_name}</span>
 	                             </div>
                                <div className="flex flex-col items-end shrink-0 ml-2">
-                                 <span className={`font-black text-yellow-300 tracking-tight ${isRank1 ? 'text-6xl' : isRank2_3 ? 'text-4xl' : isRank4_6 ? 'text-2xl' : 'text-xl'}`}>{Math.max(0, Number(r.regular_rp ?? 0))}</span>
+                                 <span className={`font-black text-yellow-300 tracking-tight ${isRank1 ? 'text-4xl sm:text-6xl' : isRank2_3 ? 'text-3xl sm:text-4xl' : isRank4_6 ? 'text-xl sm:text-2xl' : 'text-lg sm:text-xl'}`}>{Math.max(0, Number(r.regular_rp ?? 0))}</span>
                                  <span className="text-[10px] font-black text-slate-400 tracking-wider">RP (정규)</span>
                                </div>
 	                            </div>
@@ -4872,23 +4888,23 @@ function App() {
                      }
 
                      return (
-                       <div className="grid grid-cols-12 gap-10 pb-20 justify-center px-4 grid-glow-fix">
+                        <div className="grid grid-cols-12 gap-4 sm:gap-10 pb-20 justify-center px-0 sm:px-4 grid-glow-fix">
                          {regularFiltered.map((r: any) => {
                            const regularIdx = typeof r.regular_display_index === 'number' ? r.regular_display_index : null;
                            const isRank1 = regularIdx === 0;
                            const isRank2_3 = regularIdx === 1 || regularIdx === 2;
                            const isRank4_6 = regularIdx !== null && regularIdx >= 3 && regularIdx <= 5;
 
-                           let spanClass = 'col-span-6';
+                            let spanClass = 'col-span-12 sm:col-span-6';
 
                            if (isRank1) {
                              spanClass = 'col-span-12 flex justify-center';
                            } else if (isRank2_3) {
-                             spanClass = 'col-span-6';
+                              spanClass = 'col-span-12 sm:col-span-6';
                            } else if (isRank4_6) {
-                             spanClass = 'col-span-4';
+                              spanClass = 'col-span-12 sm:col-span-6 lg:col-span-4';
                            } else {
-                             spanClass = 'col-span-3';
+                              spanClass = 'col-span-12 sm:col-span-6 xl:col-span-3';
                            }
 
                            return (
@@ -4903,14 +4919,14 @@ function App() {
                  </>
                ) : (
                  <>
-                   <div className="flex justify-end mb-8 max-w-7xl mx-auto w-full px-4 mt-8">
-                     <div className="relative w-96">
-                       <Search className="absolute left-6 top-4.5 text-slate-500" size={24}/>
-                       <input value={mainSearchQuery} onChange={(e) => setMainSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRankSearchEnter('main'); } }} placeholder="랭커 검색..." className="w-full bg-black/40 border border-white/10 pl-16 pr-8 py-5 rounded-full text-lg font-bold outline-none focus:border-cyan-400 text-white select-text shadow-inner"/>
-                     </div>
-                   </div>
-                   
-                   <div className="grid grid-cols-12 gap-10 pb-20 justify-center px-4 grid-glow-fix">
+                    <div className="flex justify-end mb-6 sm:mb-8 max-w-7xl mx-auto w-full px-0 sm:px-4 mt-6 sm:mt-8">
+                      <div className="relative w-full sm:w-96">
+                        <Search className="absolute left-4 sm:left-6 top-3.5 sm:top-4.5 text-slate-500" size={20}/>
+                        <input value={mainSearchQuery} onChange={(e) => setMainSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRankSearchEnter('main'); } }} placeholder="랭커 검색..." className="w-full bg-black/40 border border-white/10 pl-12 sm:pl-16 pr-5 sm:pr-8 py-3.5 sm:py-5 rounded-2xl sm:rounded-full text-base sm:text-lg font-bold outline-none focus:border-cyan-400 text-white select-text shadow-inner"/>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-12 gap-4 sm:gap-10 pb-20 justify-center px-0 sm:px-4 grid-glow-fix">
                       {rpRankers.length > 0 ? rpRankers.filter(r => matchesSearch(r.display_name, mainSearchQuery)).map((r, i) => {
                            const seasonIdx = typeof (r as any).season_display_index === 'number' ? (r as any).season_display_index : null;
                            const tier = getRPTierInfo(seasonIdx, (r as any).season_tier_level);
@@ -4922,18 +4938,18 @@ function App() {
                            const isRank2_3 = seasonIdx === 1 || seasonIdx === 2;
                            const isRank4_6 = seasonIdx !== null && seasonIdx >= 3 && seasonIdx <= 5;
                            
-                           let spanClass = "col-span-6";
-                           let cardClass = "p-8 pt-12 pb-8 rounded-[2rem]";
-                           let badgeClass = "px-12 py-4 text-[24px] -top-9";
-                           let avatarClass = "w-20 h-20";
-                           let nameSize = i === 0 ? 'text-4xl' : 'text-2xl';
-                           let statSize = "text-3xl";
+                            let spanClass = "col-span-12 sm:col-span-6";
+                            let cardClass = "p-5 sm:p-8 pt-8 sm:pt-12 pb-5 sm:pb-8 rounded-[1.4rem] sm:rounded-[2rem]";
+                            let badgeClass = "px-7 sm:px-12 py-2.5 sm:py-4 text-[16px] sm:text-[24px] -top-6 sm:-top-9";
+                            let avatarClass = "w-16 h-16 sm:w-20 sm:h-20";
+                            let nameSize = i === 0 ? 'text-3xl sm:text-4xl' : 'text-xl sm:text-2xl';
+                            let statSize = "text-2xl sm:text-3xl";
 
-                           if (isRank1) { spanClass = "col-span-12 flex justify-center"; cardClass = "w-full max-w-5xl p-12 pt-16 pb-12 rounded-[3.5rem] shadow-[0_0_30px_rgba(239,68,68,0.5)] hover:shadow-[0_0_50px_rgba(239,68,68,0.7)] hover:scale-[1.03]"; badgeClass = "px-14 py-5 text-[34px] -top-12"; avatarClass = "w-32 h-32"; statSize = "text-5xl"; nameSize = 'text-5xl'; }
-                           else if (isRank2_3) { spanClass = "col-span-6"; }
-                           else if (isRank4_6) { spanClass = "col-span-4"; cardClass = "p-6 pt-10 pb-6 rounded-[1.5rem]"; badgeClass = "px-10 py-3 text-[20px] -top-7"; avatarClass = "w-16 h-16"; statSize = "text-2xl"; nameSize = 'text-xl'; }
-                           else { spanClass = "col-span-3"; cardClass = "p-5 pt-8 pb-5 rounded-xl"; badgeClass = "px-8 py-2.5 text-[18px] -top-6"; avatarClass = "w-14 h-14"; statSize = "text-xl"; nameSize = 'text-lg'; }
-                           const rankTextClass = isRank1 ? 'text-[3.9rem] sm:text-[4.8rem]' : isRank2_3 ? 'text-[2.8rem] sm:text-[3.4rem]' : 'text-[2.25rem] sm:text-[2.9rem]';
+                            if (isRank1) { spanClass = "col-span-12 flex justify-center"; cardClass = "w-full max-w-5xl p-5 sm:p-12 pt-10 sm:pt-16 pb-6 sm:pb-12 rounded-[1.6rem] sm:rounded-[3.5rem] shadow-[0_0_30px_rgba(239,68,68,0.5)] hover:shadow-[0_0_50px_rgba(239,68,68,0.7)] hover:scale-[1.01] sm:hover:scale-[1.03]"; badgeClass = "px-8 sm:px-14 py-2.5 sm:py-5 text-[20px] sm:text-[34px] -top-6 sm:-top-12"; avatarClass = "w-20 h-20 sm:w-32 sm:h-32"; statSize = "text-4xl sm:text-5xl"; nameSize = 'text-3xl sm:text-5xl'; }
+                            else if (isRank2_3) { spanClass = "col-span-12 sm:col-span-6"; }
+                            else if (isRank4_6) { spanClass = "col-span-12 sm:col-span-6 lg:col-span-4"; cardClass = "p-4 sm:p-6 pt-7 sm:pt-10 pb-4 sm:pb-6 rounded-[1.2rem] sm:rounded-[1.5rem]"; badgeClass = "px-6 sm:px-10 py-2 sm:py-3 text-[14px] sm:text-[20px] -top-5 sm:-top-7"; avatarClass = "w-14 h-14 sm:w-16 sm:h-16"; statSize = "text-xl sm:text-2xl"; nameSize = 'text-lg sm:text-xl'; }
+                            else { spanClass = "col-span-12 sm:col-span-6 xl:col-span-3"; cardClass = "p-4 sm:p-5 pt-6 sm:pt-8 pb-4 sm:pb-5 rounded-xl"; badgeClass = "px-5 sm:px-8 py-1.5 sm:py-2.5 text-[13px] sm:text-[18px] -top-4 sm:-top-6"; avatarClass = "w-12 h-12 sm:w-14 sm:h-14"; statSize = "text-lg sm:text-xl"; nameSize = 'text-base sm:text-lg'; }
+                            const rankTextClass = isRank1 ? 'text-[2.4rem] sm:text-[4.8rem]' : isRank2_3 ? 'text-[2.1rem] sm:text-[3.4rem]' : 'text-[1.8rem] sm:text-[2.9rem]';
 
                            return (
                              <div key={r.id} className={spanClass}>
