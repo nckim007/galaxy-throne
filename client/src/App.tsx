@@ -291,9 +291,7 @@ function App() {
     setEntryWeapons(saved ? [...saved.weapons] : ['', '']);
   };
   const inferWinTargetFromScores = (...scoreValues: Array<number | null | undefined>): WinTarget => {
-    const numeric = scoreValues
-      .map((value) => (typeof value === 'number' && Number.isFinite(value) ? value : Number(value)))
-      .filter((value) => Number.isFinite(value) && value >= 0);
+    const numeric = scoreValues.filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0);
     const maxScore = numeric.length > 0 ? Math.max(...numeric) : 0;
     if (maxScore >= 21) return 21;
     if (maxScore >= 11) return 11;
@@ -1560,8 +1558,13 @@ function App() {
                     }
                    if (currentPhase === 'scoring') {
                        setActiveMatch(prev => prev ? { ...prev, oppLegend: prev.isChallenger ? updated.t_legend : updated.legend, oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons } : prev);
-                       const inferredTarget = inferWinTargetFromScores(updated.c_win, updated.c_lose, updated.t_win, updated.t_lose);
-                       setWinTarget((prev) => (prev === inferredTarget ? prev : inferredTarget));
+                       const hasSubmittedScore =
+                         isSubmittedScorePair(updated.c_win, updated.c_lose) ||
+                         isSubmittedScorePair(updated.t_win, updated.t_lose);
+                       if (hasSubmittedScore) {
+                         const inferredTarget = inferWinTargetFromScores(updated.c_win, updated.c_lose, updated.t_win, updated.t_lose);
+                         setWinTarget((prev) => (prev === inferredTarget ? prev : inferredTarget));
+                       }
                    }
                    const prevRow: any = payload.old || {};
                    const hadAnyScoreBefore =
@@ -2858,10 +2861,12 @@ function App() {
     }
 
     if (updatedData) {
-      const resolvedTarget = inferWinTargetFromScores(updatedData.c_win, updatedData.c_lose, updatedData.t_win, updatedData.t_lose);
-      setWinTarget((prev) => (prev === resolvedTarget ? prev : resolvedTarget));
       const hasC = isSubmittedScorePair(updatedData.c_win, updatedData.c_lose);
       const hasT = isSubmittedScorePair(updatedData.t_win, updatedData.t_lose);
+      if (hasC || hasT) {
+        const resolvedTarget = inferWinTargetFromScores(updatedData.c_win, updatedData.c_lose, updatedData.t_win, updatedData.t_lose);
+        setWinTarget((prev) => (prev === resolvedTarget ? prev : resolvedTarget));
+      }
       if (hasC && hasT) {
         if (updatedData.c_win === updatedData.t_lose && updatedData.c_lose === updatedData.t_win) {
           const challengeMode = String(updatedData.mode || '').trim();
@@ -3166,7 +3171,7 @@ function App() {
     try {
       const { data: fresh } = await supabase.from('profiles').select('*').eq('id', found.id).maybeSingle();
       if (!fresh) return;
-      const merged = { ...found, ...fresh };
+      const merged = { ...fresh, ...found };
       const resolved = resolveIngameProfile({ ...found, ...fresh });
       const hydrated = { ...merged, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform };
       setSelectedPlayer((prev) => (prev && prev.id === found.id ? hydrated : prev));
@@ -3714,6 +3719,15 @@ function App() {
   const selectedPlayerIngameProfile = selectedPlayer ? resolveIngameProfile(selectedPlayer) : { nickname: '', platform: 'steam' as IngamePlatform };
   const selectedPlayerIngameLabel = getIngameIdentityLabel(selectedPlayerIngameProfile.platform);
   const selectedPlayerIngameValue = String(selectedPlayerIngameProfile.nickname || '').trim();
+  const selectedRankRow = selectedPlayer ? regularRankMap.get(normalizeName(selectedPlayer.display_name)) : null;
+  const selectedRegularRp = Math.max(
+    0,
+    Number((selectedRankRow as any)?.regular_rp ?? (selectedPlayer as any)?.regular_rp ?? 0) || 0
+  );
+  const selectedSeasonSp = Math.max(
+    0,
+    Number((selectedRankRow as any)?.season_sp ?? (selectedPlayer as any)?.season_sp ?? 0) || 0
+  );
   const recentOpponents = (() => {
     if (!currentUserName) return [] as string[];
     const me = normalizeName(currentUserName);
@@ -5291,19 +5305,19 @@ function App() {
       </div>
 
       {selectedPlayer && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[300] flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-300 cursor-pointer" onClick={() => { setSelectedPlayer(null); playSFX('click'); }}>
-          <div className="bg-[#0A0C14] border-2 border-cyan-400 w-full max-w-3xl rounded-[2rem] sm:rounded-[3rem] lg:rounded-[4rem] p-4 sm:p-8 lg:p-12 shadow-2xl relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[300] flex items-start sm:items-center justify-center p-3 sm:p-6 animate-in fade-in duration-300 overflow-y-auto cursor-pointer" onClick={() => { setSelectedPlayer(null); playSFX('click'); }}>
+          <div className="bg-[#0A0C14] border-2 border-cyan-400 w-full max-w-3xl rounded-[2rem] sm:rounded-[3rem] lg:rounded-[4rem] p-4 sm:p-8 lg:p-12 shadow-2xl relative overflow-y-auto custom-scrollbar max-h-[92vh] sm:max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
              <button onMouseEnter={() => playSFX('hover')} onClick={() => { setSelectedPlayer(null); playSFX('click'); }} className="absolute top-4 sm:top-8 lg:top-10 right-4 sm:right-8 lg:right-10 text-slate-500 hover:text-white cursor-pointer">
                <X size={32}/>
              </button>
               
-             <div className="flex flex-col sm:flex-row items-center sm:items-center gap-5 sm:gap-8 lg:gap-10 mb-6 sm:mb-8 mt-2">
+             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-8 lg:gap-10 mb-5 sm:mb-8 mt-2">
                 <img src={selectedPlayer.avatar_url} className={`w-24 h-24 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-[2rem] sm:rounded-[2.5rem] lg:rounded-[3rem] border-4 ${getCardAvatarBorderFxForUser(selectedPlayer.display_name)} shrink-0`} alt="p" />
                  <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <div className="flex items-center justify-between gap-4 min-w-0">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 min-w-0">
                       <div className="min-w-0">
-                        <h2 className={`italic font-black text-3xl sm:text-4xl lg:text-5xl whitespace-normal break-all leading-tight ${getNameClassForUser(selectedPlayer.display_name)}`}>{selectedPlayer.display_name}</h2>
-                        <p className="mt-2 text-slate-400 text-[11px] sm:text-xs font-black tracking-wider">{selectedPlayerIngameLabel}</p>
+                        <h2 className={`italic font-black text-2xl sm:text-4xl lg:text-5xl whitespace-normal break-all leading-tight ${getNameClassForUser(selectedPlayer.display_name)}`}>{selectedPlayer.display_name}</h2>
+                        <p className="mt-1.5 text-slate-400 text-[11px] sm:text-xs font-black tracking-wider">{selectedPlayerIngameLabel}</p>
                         <button
                           onMouseEnter={() => playSFX('hover')}
                           onClick={(e) => {
@@ -5321,18 +5335,18 @@ function App() {
                           {selectedPlayerIngameValue || '미설정'}
                         </button>
                       </div>
-                      <div className="flex flex-col gap-2 items-end shrink-0">
+                      <div className="flex flex-col gap-2 items-start sm:items-end shrink-0 w-full sm:w-auto">
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                           {selectedPlayerRegularInfo?.icon}
                           {selectedPlayerRegularInfo
-                            ? `${selectedPlayerRegularInfo.title} ${selectedPlayerRegularInfo.num ? `${selectedPlayerRegularInfo.num}위` : '-위'} · ${selectedPlayer?.regular_rp ?? 0} RP (정규)`
-                            : `루키 -위 · ${selectedPlayer?.regular_rp ?? 0} RP (정규)`}
+                            ? `${selectedPlayerRegularInfo.title} ${selectedPlayerRegularInfo.num ? `${selectedPlayerRegularInfo.num}위` : '-위'} · ${selectedRegularRp} RP (정규)`
+                            : `루키 -위 · ${selectedRegularRp} RP (정규)`}
                         </span>
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerSeasonInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                            <span>{selectedPlayerSeasonInfo?.icon || '🪐'}</span>
                            {selectedPlayerSeasonInfo
-                             ? `${selectedPlayerSeasonInfo.name} ${typeof selectedPlayerSeasonInfo.index === 'number' ? `${selectedPlayerSeasonInfo.index + 1}위` : '-위'} · ${selectedPlayer?.season_sp ?? 0} SP (시즌)`
-                             : `보이드 -위 · ${selectedPlayer?.season_sp ?? 0} SP (시즌)`}
+                             ? `${selectedPlayerSeasonInfo.name} ${typeof selectedPlayerSeasonInfo.index === 'number' ? `${selectedPlayerSeasonInfo.index + 1}위` : '-위'} · ${selectedSeasonSp} SP (시즌)`
+                             : `보이드 -위 · ${selectedSeasonSp} SP (시즌)`}
                         </span>
                       </div>
                     </div>
