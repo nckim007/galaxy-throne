@@ -759,6 +759,8 @@ function App() {
   const starRainTimerRef = useRef<number | null>(null);
   const starRainClickCountRef = useRef(0);
   const starRainParticleSeqRef = useRef(0);
+  const titleBlinkTimerRef = useRef<number | null>(null);
+  const originalDocumentTitleRef = useRef('');
   const resultPopupChannelRef = useRef<any>(null);
   const lastResultPopupMatchIdRef = useRef<string>('');
   const ingameProfileBackfillRef = useRef<string>('');
@@ -924,6 +926,65 @@ function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [selectedPlayer, statusPopup]);
+
+  useEffect(() => {
+    if (!currentUserName) return;
+    let polling = false;
+    let mounted = true;
+    const run = async () => {
+      if (!mounted || polling) return;
+      polling = true;
+      try {
+        await checkActiveChallenge(currentUserName);
+      } finally {
+        polling = false;
+      }
+    };
+    void run();
+    const timer = window.setInterval(() => {
+      void run();
+    }, 2500);
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, [currentUserName]);
+
+  useEffect(() => {
+    if (!originalDocumentTitleRef.current) {
+      originalDocumentTitleRef.current = document.title || '쫄?봇';
+    }
+    const stopBlink = () => {
+      if (titleBlinkTimerRef.current) {
+        window.clearInterval(titleBlinkTimerRef.current);
+        titleBlinkTimerRef.current = null;
+      }
+      document.title = originalDocumentTitleRef.current;
+    };
+    const startBlink = () => {
+      if (titleBlinkTimerRef.current) return;
+      let on = false;
+      titleBlinkTimerRef.current = window.setInterval(() => {
+        on = !on;
+        document.title = on ? '🔥 대전 신청 도착!' : originalDocumentTitleRef.current;
+      }, 850);
+    };
+    const syncBlinkState = () => {
+      const shouldBlink = Boolean(incomingChallenge) && (document.hidden || !document.hasFocus());
+      if (shouldBlink) startBlink();
+      else stopBlink();
+    };
+    syncBlinkState();
+    window.addEventListener('focus', syncBlinkState);
+    window.addEventListener('blur', syncBlinkState);
+    document.addEventListener('visibilitychange', syncBlinkState);
+    return () => {
+      window.removeEventListener('focus', syncBlinkState);
+      window.removeEventListener('blur', syncBlinkState);
+      document.removeEventListener('visibilitychange', syncBlinkState);
+      stopBlink();
+    };
+  }, [incomingChallenge]);
 
   useEffect(() => {
     if (!selectedPlayer) {
@@ -1867,9 +1928,6 @@ function App() {
 
         if (topBefore === winner && winner === right) {
           winnerState.regularDefenseStack += 1;
-          winnerState.regularWinStreak = 0;
-        } else {
-          winnerState.regularDefenseStack = 0;
         }
         if (topBefore === loser) {
           loserState.regularDefenseStack = 0;
@@ -1901,9 +1959,6 @@ function App() {
 
         if (topBefore === winner && winner === right) {
           winnerState.seasonDefenseStack += 1;
-          winnerState.seasonWinStreak = 0;
-        } else {
-          winnerState.seasonDefenseStack = 0;
         }
         if (topBefore === loser) {
           loserState.seasonDefenseStack = 0;
@@ -3009,6 +3064,8 @@ function App() {
           const isRegular = isRegularMode(baseMode);
           const challengerRowBefore: any = regularRankMap.get(normalizeName(challengerName));
           const targetRowBefore: any = regularRankMap.get(normalizeName(targetName));
+          const challengerBountyFromOpponent = getModeBountyGCFromRow(targetRowBefore, baseMode);
+          const targetBountyFromOpponent = getModeBountyGCFromRow(challengerRowBefore, baseMode);
           const challengerSeasonTierBefore = typeof challengerRowBefore?.season_tier_level === 'number' ? challengerRowBefore.season_tier_level : 0;
           const targetSeasonTierBefore = typeof targetRowBefore?.season_tier_level === 'number' ? targetRowBefore.season_tier_level : 0;
           const winnerSeasonTierBefore = challengerWon ? challengerSeasonTierBefore : targetSeasonTierBefore;
@@ -3027,21 +3084,21 @@ function App() {
             // 정규전: 티켓(200)은 소멸, 초과 배팅만 승자가 획득
             const transferable = Math.max(0, bet - REGULAR_TICKET_COST) * 2;
             if (challengerWon) {
-              cUpdates.gc = cGc + transferable;
+              cUpdates.gc = cGc + transferable + challengerBountyFromOpponent;
               tUpdates.gc = tGc;
             } else {
               cUpdates.gc = cGc;
-              tUpdates.gc = tGc + transferable;
+              tUpdates.gc = tGc + transferable + targetBountyFromOpponent;
             }
           } else {
             // 시즌전: 점수 보상 + 배팅 전체 팟(양쪽)을 승자가 획득
             const transferable = bet * 2;
             if (challengerWon) {
-              cUpdates.gc = cGc + seasonWinnerReward.gc + transferable;
+              cUpdates.gc = cGc + seasonWinnerReward.gc + transferable + challengerBountyFromOpponent;
               tUpdates.gc = tGc + seasonLoserReward.gc;
             } else {
               cUpdates.gc = cGc + seasonLoserReward.gc;
-              tUpdates.gc = tGc + seasonWinnerReward.gc + transferable;
+              tUpdates.gc = tGc + seasonWinnerReward.gc + transferable + targetBountyFromOpponent;
             }
           }
 
@@ -3629,6 +3686,13 @@ function App() {
     return 100 + (safe - 3) * 50;
   };
   const getDefenseBonusGC = (stack?: number) => (stack || 0) * 200;
+  const getModeBountyGCFromRow = (row: any, mode: ChallengeMode | string) => {
+    const baseMode = normalizeChallengeMode(mode);
+    const isRegular = isRegularMode(baseMode);
+    const streak = Number(isRegular ? row?.regular_win_streak : row?.season_win_streak) || 0;
+    const defense = Number(isRegular ? row?.regular_defense_stack : row?.season_defense_stack) || 0;
+    return getStreakBountyGC(streak) + getDefenseBonusGC(defense);
+  };
   const getRegularInnerGlowStyle = (idx: number): React.CSSProperties => {
     if (idx === 0) {
       return {
@@ -4604,6 +4668,15 @@ function App() {
                                       ? '점수가 자동으로 업로드되고 있습니다...'
                                       : `승리 목표(${winTarget}승)에 맞춰 승/패 점수를 입력해주세요.`}
                                 </p>
+                              </div>
+                              <div className="px-3 pb-1">
+                                <button
+                                  onMouseEnter={() => playSFX('hover')}
+                                  onClick={handleCancelMatch}
+                                  className="w-full py-3 rounded-2xl border border-rose-400/70 bg-rose-500/10 text-rose-300 font-black text-base sm:text-lg hover:bg-rose-500 hover:text-white transition-all cursor-pointer shadow-[0_0_14px_rgba(244,63,94,0.35)]"
+                                >
+                                  경기 취소
+                                </button>
                               </div>
                            </div>
                         </div>
