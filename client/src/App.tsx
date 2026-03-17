@@ -1182,11 +1182,27 @@ function App() {
 
       if (data.c_ready && data.t_ready) {
         setIncomingChallenge(null);
-        setWinTarget(inferWinTargetFromScores(data.c_win, data.c_lose, data.t_win, data.t_lose));
+        const hasSubmittedScore =
+          isSubmittedScorePair(data.c_win, data.c_lose) ||
+          isSubmittedScorePair(data.t_win, data.t_lose);
+        if (hasSubmittedScore) {
+          setWinTarget((prev) => {
+            const inferred = inferWinTargetFromScores(data.c_win, data.c_lose, data.t_win, data.t_lose);
+            return prev === inferred ? prev : inferred;
+          });
+        }
         setMatchPhase('scoring');
       } else if (modeRaw.includes('_accepted') || modeRaw.includes('_accepting') || modeRaw.includes('_settling')) {
         setIncomingChallenge(null);
-        setWinTarget(inferWinTargetFromScores(data.c_win, data.c_lose, data.t_win, data.t_lose));
+        const hasSubmittedScore =
+          isSubmittedScorePair(data.c_win, data.c_lose) ||
+          isSubmittedScorePair(data.t_win, data.t_lose);
+        if (hasSubmittedScore) {
+          setWinTarget((prev) => {
+            const inferred = inferWinTargetFromScores(data.c_win, data.c_lose, data.t_win, data.t_lose);
+            return prev === inferred ? prev : inferred;
+          });
+        }
         setMatchPhase('scoring');
       } else if (isC) {
         setIncomingChallenge(null);
@@ -1672,6 +1688,15 @@ function App() {
     const channel = supabase.channel('unified_challenge_sync_' + currentUserName.replace(/[^a-zA-Z0-9]/g, ''))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'challenges' }, payload => {
            const currentMatch = activeMatchRef.current; const currentPhase = matchPhaseRef.current; const isWaiting = waitingForScoreRef.current;
+           const meNorm = normalizeName(currentUserName);
+           const rowAffectsMe = (row: any) => {
+             if (!row) return false;
+             const challengerNorm = normalizeName(row?.challenger_name);
+             const targetNorm = normalizeName(row?.target_name);
+             const rowId = String(row?.id || '');
+             const activeId = String(currentMatch?.id || '');
+             return challengerNorm === meNorm || targetNorm === meNorm || (!!activeId && rowId === activeId);
+           };
 	           if (payload.eventType === 'INSERT') {
 	              const newChallenge = payload.new;
 	              if (newChallenge.target_name.trim() === currentUserName.trim()) {
@@ -1689,9 +1714,12 @@ function App() {
 	                 setBetAmount(newChallenge.bet_gc || 0);
 	                 setMatchPhase('idle');
 	              }
+               if (rowAffectsMe(newChallenge)) {
+                 checkActiveChallenge(currentUserName);
+               }
 	           }
            if (payload.eventType === 'UPDATE') {
-               const updated = payload.new;
+                const updated = payload.new;
                const pendingIncoming = incomingChallengeRef.current;
                if (
                  pendingIncoming &&
@@ -1700,7 +1728,7 @@ function App() {
                ) {
                  setIncomingChallenge(null);
                }
-               if (currentMatch && updated.id === currentMatch.id) {
+                if (currentMatch && updated.id === currentMatch.id) {
                     if (currentPhase === 'waiting_sync' && updated.mode.includes('_accepted')) {
                         playSFX('matchStart');
                         setMatchPhase('scoring');
@@ -1714,9 +1742,11 @@ function App() {
                          const inferredTarget = inferWinTargetFromScores(updated.c_win, updated.c_lose, updated.t_win, updated.t_lose);
                          setWinTarget((prev) => (prev === inferredTarget ? prev : inferredTarget));
                        }
-                   }
+                    }
                 }
-                checkActiveChallenge(currentUserName);
+                if (rowAffectsMe(updated) || rowAffectsMe(payload.old)) {
+                  checkActiveChallenge(currentUserName);
+                }
             }
            if (payload.eventType === 'DELETE') {
 	                const deletedRow = payload.old;
@@ -1775,9 +1805,12 @@ function App() {
                        setRerollCount(0);
                        clearRandomDraftState(currentMatch.id, currentMatch.isChallenger, currentUserName);
                        setMatchPhase('idle');
-                       setActiveMatch(null);
-                       setWaitingForScore(false);
-                   }
+	                       setActiveMatch(null);
+	                       setWaitingForScore(false);
+	                   }
+                 }
+                if (rowAffectsMe(deletedRow)) {
+                  checkActiveChallenge(currentUserName);
                 }
             }
        }).subscribe();
