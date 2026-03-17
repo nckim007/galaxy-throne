@@ -361,14 +361,15 @@ function App() {
     if (!hasC || !hasT) return false;
     return Number(row.c_win) === Number(row.t_lose) && Number(row.c_lose) === Number(row.t_win);
   };
-  const getSingleLineProfileNameClass = (nameRaw?: string | null) => {
+  const getSingleLineProfileNameStyle = (nameRaw?: string | null): React.CSSProperties => {
     const len = String(nameRaw || '').trim().length;
-    if (len >= 36) return 'text-[1.15rem] sm:text-[1.35rem] lg:text-[1.65rem]';
-    if (len >= 30) return 'text-[1.3rem] sm:text-[1.6rem] lg:text-[1.9rem]';
-    if (len >= 24) return 'text-[1.55rem] sm:text-[1.95rem] lg:text-[2.25rem]';
-    if (len >= 20) return 'text-[1.8rem] sm:text-[2.2rem] lg:text-[2.6rem]';
-    if (len >= 14) return 'text-3xl sm:text-4xl lg:text-[3rem]';
-    return 'text-4xl sm:text-5xl lg:text-[3.7rem]';
+    const desktop = len <= 8 ? 3.05 : Math.max(1.35, 3.05 - (len - 8) * 0.16);
+    const tablet = Math.max(1.25, desktop * 0.9);
+    const mobile = Math.max(1.1, desktop * 0.78);
+    return {
+      fontSize: `clamp(${mobile.toFixed(2)}rem, ${tablet.toFixed(2)}rem + 0.25vw, ${desktop.toFixed(2)}rem)`,
+      lineHeight: 1.05,
+    };
   };
   const getDiscordCopyCandidate = (row: any) => {
     const candidates = [
@@ -3753,7 +3754,7 @@ function App() {
   const selectedPlayerIngameLabel = getIngameIdentityLabel(selectedPlayerIngameProfile.platform);
   const selectedPlayerIngameValue = String(selectedPlayerIngameProfile.nickname || '').trim();
   const selectedPlayerDiscordId = selectedPlayer ? getDiscordCopyCandidate(selectedPlayer) : '';
-  const selectedProfileNameClass = getSingleLineProfileNameClass(selectedPlayer?.display_name);
+  const selectedProfileNameStyle = getSingleLineProfileNameStyle(selectedPlayer?.display_name);
   const selectedRankRow = selectedPlayer ? regularRankMap.get(normalizeName(selectedPlayer.display_name)) : null;
   const selectedRegularRp = Math.max(
     0,
@@ -5359,8 +5360,8 @@ function App() {
               
              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-8 lg:gap-10 mb-5 sm:mb-8 mt-2">
                 <img src={selectedPlayer.avatar_url} className={`w-24 h-24 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-[2rem] sm:rounded-[2.5rem] lg:rounded-[3rem] border-4 ${getCardAvatarBorderFxForUser(selectedPlayer.display_name)} shrink-0`} alt="p" />
-                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 min-w-0">
+                 <div className="flex-1 min-w-0 flex flex-col justify-center w-full">
+                    <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(260px,340px)] gap-3 sm:gap-4 min-w-0 w-full items-start">
                       <div className="min-w-0">
                         <h2
                           onMouseEnter={() => playSFX('hover')}
@@ -5375,7 +5376,8 @@ function App() {
                             showStatusPopup('success', '복사 완료', '복사가 완료되었습니다.', { autoCloseMs: 1000, hideConfirm: true });
                           }}
                           title={selectedPlayerDiscordId ? '클릭해서 디스코드 아이디 복사' : '복사 가능한 아이디 없음'}
-                          className={`italic font-black leading-tight cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap max-w-full ${selectedProfileNameClass} ${getNameClassForUser(selectedPlayer.display_name)}`}
+                          style={selectedProfileNameStyle}
+                          className={`italic font-black cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap max-w-full ${getNameClassForUser(selectedPlayer.display_name)}`}
                         >
                           {selectedPlayer.display_name}
                         </h2>
@@ -5397,7 +5399,7 @@ function App() {
                           {selectedPlayerIngameValue || '미설정'}
                         </button>
                       </div>
-                      <div className="flex flex-col gap-2 items-start sm:items-end shrink-0 w-full sm:w-auto">
+                      <div className="flex flex-col gap-2 items-start sm:items-end shrink-0 w-full sm:w-[320px]">
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
                           {selectedPlayerRegularInfo?.icon}
                           {selectedPlayerRegularInfo
