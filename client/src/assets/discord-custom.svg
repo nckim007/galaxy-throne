@@ -1,0 +1,24 @@
+<svg width="128" height="96" viewBox="0 0 128 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="discordGradStroke" x1="16" y1="12" x2="112" y2="84" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E6EFF"/>
+      <stop offset="0.55" stop-color="#8D63FF"/>
+      <stop offset="1" stop-color="#FF2EBE"/>
+    </linearGradient>
+    <linearGradient id="discordGradFace" x1="44" y1="38" x2="84" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#69D9FF"/>
+      <stop offset="0.5" stop-color="#A88DFF"/>
+      <stop offset="1" stop-color="#FF7FE2"/>
+    </linearGradient>
+  </defs>
+
+  <path
+    d="M34 16C25 20 20 28 18 39C16 52 21 63 30 70L26 80L38 74C46 78 56 80 64 80C72 80 82 78 90 74L102 80L98 70C107 63 112 52 110 39C108 28 103 20 94 16C86 14 76 13 64 13C52 13 42 14 34 16Z"
+    stroke="url(#discordGradStroke)"
+    stroke-width="7"
+    stroke-linejoin="round"
+  />
+
+  <circle cx="52" cy="48" r="8" fill="url(#discordGradFace)"/>
+  <circle cx="76" cy="48" r="8" fill="url(#discordGradFace)"/>
+</svg>

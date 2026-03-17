@@ -3,12 +3,13 @@ import {
   Calendar, Users, Target, Swords, Zap, Crown, Activity, LogIn, LogOut, 
   Search, ChevronDown, ChevronUp, Copy, Check, Shield, RefreshCw, Flame, 
   Lock, Unlock, BarChart3, TrendingUp, X, Trophy, PieChart, Home, User, 
-  Settings, Bell, Star, ShoppingBag, Palette, MessageCircle
+  Settings, Bell, Star, ShoppingBag, Palette
 } from 'lucide-react';
 import { supabase } from './supabase';
 
 // @ts-ignore
 import bgImage from './assets/bg.png'; 
+import discordCustomIcon from './assets/discord-custom.svg';
 import { ALL_LEGENDS, ALL_WEAPONS, LEGEND_CATEGORIES, WEAPON_CATEGORIES, getLegendCategoryColorHex, getWeaponCategoryColorHex } from './config/gameMeta';
 import { getAvatarFallback, getResponsiveNameClass } from './utils/profile';
 import { applyAudioSettings, playSFX, setMatchPhaseAudio } from './lib/audioManager';
@@ -362,8 +363,11 @@ function App() {
   };
   const getSingleLineProfileNameClass = (nameRaw?: string | null) => {
     const len = String(nameRaw || '').trim().length;
-    if (len >= 20) return 'text-2xl sm:text-3xl lg:text-4xl';
-    if (len >= 14) return 'text-3xl sm:text-4xl lg:text-[3.2rem]';
+    if (len >= 36) return 'text-[1.15rem] sm:text-[1.35rem] lg:text-[1.65rem]';
+    if (len >= 30) return 'text-[1.3rem] sm:text-[1.6rem] lg:text-[1.9rem]';
+    if (len >= 24) return 'text-[1.55rem] sm:text-[1.95rem] lg:text-[2.25rem]';
+    if (len >= 20) return 'text-[1.8rem] sm:text-[2.2rem] lg:text-[2.6rem]';
+    if (len >= 14) return 'text-3xl sm:text-4xl lg:text-[3rem]';
     return 'text-4xl sm:text-5xl lg:text-[3.7rem]';
   };
   const getDiscordCopyCandidate = (row: any) => {
@@ -4110,9 +4114,9 @@ function App() {
             title="디스코드 서버 바로가기"
             onMouseEnter={() => playSFX('hover')}
             onClick={() => playSFX('click')}
-            className="cursor-pointer transition-all hover:text-indigo-300 text-indigo-400 drop-shadow-[0_0_8px_rgba(99,102,241,0.45)]"
+            className="cursor-pointer transition-all hover:scale-105"
           >
-            <MessageCircle size={20} />
+            <img src={discordCustomIcon} alt="discord" className="w-6 h-6 sm:w-7 sm:h-7 object-contain drop-shadow-[0_0_8px_rgba(129,140,248,0.55)]" />
           </a>
         </div>
         <div onMouseEnter={() => playSFX('hover')} className="mt-auto mb-4 sm:mb-6 hover:text-pink-500 cursor-pointer transition-colors" onClick={handleLogout}>
@@ -5371,7 +5375,7 @@ function App() {
                             showStatusPopup('success', '복사 완료', '복사가 완료되었습니다.', { autoCloseMs: 1000, hideConfirm: true });
                           }}
                           title={selectedPlayerDiscordId ? '클릭해서 디스코드 아이디 복사' : '복사 가능한 아이디 없음'}
-                          className={`italic font-black leading-tight cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap overflow-hidden text-ellipsis max-w-full ${selectedProfileNameClass} ${getNameClassForUser(selectedPlayer.display_name)}`}
+                          className={`italic font-black leading-tight cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap max-w-full ${selectedProfileNameClass} ${getNameClassForUser(selectedPlayer.display_name)}`}
                         >
                           {selectedPlayer.display_name}
                         </h2>
