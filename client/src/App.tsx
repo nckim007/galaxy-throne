@@ -13,12 +13,15 @@ import discordCustomIcon from './assets/discord-custom.svg';
 import { ALL_LEGENDS, ALL_WEAPONS, LEGEND_CATEGORIES, WEAPON_CATEGORIES, getLegendCategoryColorHex, getWeaponCategoryColorHex } from './config/gameMeta';
 import { getAvatarFallback, getResponsiveNameClass } from './utils/profile';
 import { applyAudioSettings, playSFX, setMatchPhaseAudio } from './lib/audioManager';
-const MENU_ITEMS = [
+const BASE_MENU_ITEMS = [
   { id: 'home', icon: Home, label: '대시보드' },
   { id: 'shop', icon: ShoppingBag, label: '상점' },
   { id: 'ranking', icon: Trophy, label: '명예의 전당' },
   { id: 'settings', icon: Settings, label: '환경 설정' }
 ];
+const MASTER_MENU_ITEM = { id: 'master', icon: Shield, label: '마스터' };
+// fallback only: real authority should be controlled by profiles.is_master
+const MASTER_ACCOUNT_EMAILS = ['hdtop410@naver.com'];
 
 type CosmeticCategory = 'nameColor' | 'nameStyle' | 'borderFx';
 type ShopItem = {
@@ -180,30 +183,29 @@ function App() {
 
   const currentUserName = profile?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name;
   const currentUserAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || profile?.avatar_url || null;
+  const currentUserEmail = String(user?.email || '').trim().toLowerCase();
+  const hasDbMasterGrant = Boolean((profile as any)?.is_master);
+  const isMasterFallback = MASTER_ACCOUNT_EMAILS.includes(currentUserEmail);
+  const isMasterAccount = hasDbMasterGrant || isMasterFallback;
+  const visibleMenuItems = isMasterAccount ? [...BASE_MENU_ITEMS, MASTER_MENU_ITEM] : BASE_MENU_ITEMS;
   const lastOpponentStorageKey = user?.id ? `gt_last_opponent_v1_${user.id}` : null;
   const DISCORD_GUILD_ID = (import.meta.env.VITE_DISCORD_GUILD_ID as string | undefined)?.trim();
   const REGULAR_TICKET_COST = 200;
   const SEASON_TICKET_COST = 0;
   const REGULAR_INACTIVE_GRACE_DAYS = 3;
   const REGULAR_INACTIVE_DECAY_PER_DAY = 100;
-  const calcSeasonStreakMultiplier = (nextStreak: number) => {
-    if (nextStreak < 4) return 1;
-    return Math.pow(1.2, nextStreak - 3);
-  };
   const calcSeasonWinReward = (opts: {
     winnerScore: number;
     isHigherTierWin: boolean;
-    nextStreak: number;
   }) => {
     const winnerScore = Math.max(0, Math.floor(Number(opts.winnerScore || 0)));
     const extraWins = Math.max(0, winnerScore - 3);
     const higherTierBonusWins = opts.isHigherTierWin ? winnerScore : 0;
     const baseSp = 30 + extraWins * 10 + higherTierBonusWins * 15;
     const baseGc = 60 + extraWins * 20 + higherTierBonusWins * 30;
-    const multiplier = calcSeasonStreakMultiplier(opts.nextStreak);
     return {
-      sp: Math.round(baseSp * multiplier),
-      gc: Math.round(baseGc * multiplier),
+      sp: Math.round(baseSp),
+      gc: Math.round(baseGc),
     };
   };
   const calcSeasonLoseReward = (loserScore: number) => {
@@ -879,6 +881,12 @@ function App() {
       updateScrollTopForTarget(mainScrollRef.current);
     }
   }, [activeMenu]);
+
+  useEffect(() => {
+    if (activeMenu === 'master' && !isMasterAccount) {
+      setActiveMenu('home');
+    }
+  }, [activeMenu, isMasterAccount]);
 
   useEffect(() => {
     return () => {
@@ -1980,7 +1988,6 @@ function App() {
         const winnerReward = calcSeasonWinReward({
           winnerScore,
           isHigherTierWin,
-          nextStreak: nextSeasonStreak,
         });
         const loserReward = calcSeasonLoseReward(loserScore);
         winnerState.seasonSp += winnerReward.sp;
@@ -3109,7 +3116,6 @@ function App() {
           const seasonWinnerReward = calcSeasonWinReward({
             winnerScore,
             isHigherTierWin: loserSeasonTierBefore > winnerSeasonTierBefore,
-            nextStreak: winnerSeasonStreakBefore + 1,
           });
           const seasonLoserReward = calcSeasonLoseReward(loserScore);
 
@@ -4222,7 +4228,7 @@ function App() {
           <Star className="text-cyan-400 animate-pulse" size={20}/>
         </div>
         <div className="flex flex-col gap-6 sm:gap-8 lg:gap-10 text-slate-500 w-full items-center">
-          {MENU_ITEMS.map((item) => (
+          {visibleMenuItems.map((item) => (
             <div
               key={item.id}
               title={item.label}
@@ -5441,6 +5447,77 @@ function App() {
                 </section>
               )}
             </div>
+          </main>
+        )}
+
+        {activeMenu === 'master' && isMasterAccount && (
+          <main className="flex-1 p-3 sm:p-4 lg:p-10 h-full overflow-y-auto custom-scrollbar pb-20 animate-in fade-in duration-500">
+            <h2
+              onMouseEnter={() => playSFX('hover')}
+              className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 via-cyan-300 to-violet-400 mb-6 sm:mb-8 tracking-tight drop-shadow-[0_0_12px_rgba(34,211,238,0.45)]"
+            >
+              마스터 콘솔 (Master)
+            </h2>
+            <section className="bg-black/55 border-2 border-cyan-400/70 rounded-[2rem] p-4 sm:p-6 lg:p-8 shadow-[0_0_20px_rgba(34,211,238,0.25)]">
+              <p className="text-cyan-200 font-black text-sm sm:text-base">
+                마스터 계정: <span className="text-white">{currentUserEmail || '-'}</span>
+              </p>
+              <p className="mt-1 text-xs sm:text-sm font-black text-slate-300">
+                권한 소스: <span className={hasDbMasterGrant ? 'text-emerald-300' : 'text-amber-300'}>{hasDbMasterGrant ? 'DB profiles.is_master' : '이메일 fallback'}</span>
+              </p>
+              <p className="mt-2 text-slate-300 font-bold text-xs sm:text-sm">
+                이 메뉴는 마스터 계정에서만 보입니다. 운영 중 즉시 동기화/점검 도구를 사용할 수 있습니다.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mt-5 sm:mt-6">
+                <button
+                  onMouseEnter={() => playSFX('hover')}
+                  onClick={async () => {
+                    playSFX('click');
+                    await fetchData();
+                    await fetchRankers();
+                    if (user?.id) await fetchProfile(user.id);
+                    showStatusPopup('success', '동기화 완료', '데이터를 최신 상태로 강제 동기화했습니다.', { autoCloseMs: 1200, hideConfirm: true });
+                  }}
+                  className="rounded-xl border border-emerald-400/55 bg-emerald-500/15 text-emerald-200 font-black px-4 py-3 hover:bg-emerald-500/25 transition-all cursor-pointer"
+                >
+                  실시간 데이터 강제 동기화
+                </button>
+                <button
+                  onMouseEnter={() => playSFX('hover')}
+                  onClick={() => {
+                    playSFX('click');
+                    if (currentUserName) checkActiveChallenge(currentUserName);
+                    showStatusPopup('info', '점검 완료', '현재 계정 기준 대전 상태를 재점검했습니다.', { autoCloseMs: 1200, hideConfirm: true });
+                  }}
+                  className="rounded-xl border border-cyan-400/55 bg-cyan-500/15 text-cyan-200 font-black px-4 py-3 hover:bg-cyan-500/25 transition-all cursor-pointer"
+                >
+                  현재 대전 상태 재점검
+                </button>
+                <button
+                  onMouseEnter={() => playSFX('hover')}
+                  onClick={() => {
+                    playSFX('click');
+                    if (lastOpponentStorageKey) localStorage.removeItem(lastOpponentStorageKey);
+                    localStorage.removeItem('gt_scroll_target_v2');
+                    setEntryOpponent('');
+                    setMainSearchQuery('');
+                    setMiniSearchQuery('');
+                    showStatusPopup('success', '정리 완료', '마스터 로컬 캐시를 정리했습니다.', { autoCloseMs: 1200, hideConfirm: true });
+                  }}
+                  className="rounded-xl border border-pink-400/55 bg-pink-500/15 text-pink-200 font-black px-4 py-3 hover:bg-pink-500/25 transition-all cursor-pointer"
+                >
+                  로컬 캐시 정리
+                </button>
+              </div>
+              <div className="mt-6 rounded-2xl border border-white/10 bg-black/45 p-4 sm:p-5">
+                <h3 className="text-white font-black text-base sm:text-lg mb-2">마스터 계정 안내</h3>
+                <ul className="text-slate-300 text-sm sm:text-base font-bold leading-7 list-disc pl-5 space-y-1">
+                  <li>이 계정은 마스터 메뉴 접근 권한이 활성화됩니다.</li>
+                  <li>추가 편집 기능(보드 이동/크기/텍스트 변경 등)은 이 메뉴에 확장 가능합니다.</li>
+                  <li>운영 중 이상 징후가 있으면 먼저 동기화 버튼으로 상태를 맞춘 뒤 점검하세요.</li>
+                </ul>
+              </div>
+            </section>
           </main>
         )}
 
