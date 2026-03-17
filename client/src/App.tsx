@@ -159,6 +159,7 @@ function App() {
     { type: 'success' | 'error' | 'info'; title: string; message: string; autoCloseMs?: number; hideConfirm?: boolean } | null
   >(null);
   const [statusPopupFading, setStatusPopupFading] = useState(false);
+  const [selectedProfileNameFontSize, setSelectedProfileNameFontSize] = useState(56);
   const [incomingChallenge, setIncomingChallenge] = useState<IncomingChallengeRequest | null>(null);
   const [rewardChestQueue, setRewardChestQueue] = useState<PendingRewardChest[]>([]);
   const [activeRewardChest, setActiveRewardChest] = useState<PendingRewardChest | null>(null);
@@ -361,16 +362,12 @@ function App() {
     if (!hasC || !hasT) return false;
     return Number(row.c_win) === Number(row.t_lose) && Number(row.c_lose) === Number(row.t_win);
   };
-  const getSingleLineProfileNameStyle = (nameRaw?: string | null): React.CSSProperties => {
-    const len = String(nameRaw || '').trim().length;
-    const desktop = len <= 8 ? 3.05 : Math.max(1.35, 3.05 - (len - 8) * 0.16);
-    const tablet = Math.max(1.25, desktop * 0.9);
-    const mobile = Math.max(1.1, desktop * 0.78);
-    return {
-      fontSize: `clamp(${mobile.toFixed(2)}rem, ${tablet.toFixed(2)}rem + 0.25vw, ${desktop.toFixed(2)}rem)`,
-      lineHeight: 1.05,
-    };
-  };
+  const getSingleLineProfileNameStyle = (fontSize: number): React.CSSProperties => ({
+    fontSize: `${Math.max(14, Math.min(92, Math.round(fontSize)))}px`,
+    lineHeight: 1.05,
+    whiteSpace: 'nowrap',
+    maxWidth: '100%',
+  });
   const getDiscordCopyCandidate = (row: any) => {
     const candidates = [
       row?.discord_username,
@@ -756,6 +753,8 @@ function App() {
   const suppressNextDeletePopupChallengeIdRef = useRef<string | null>(null);
   const statusPopupTimerRef = useRef<number | null>(null);
   const statusPopupFadeTimerRef = useRef<number | null>(null);
+  const selectedProfileNameWrapRef = useRef<HTMLDivElement | null>(null);
+  const selectedProfileNameTextRef = useRef<HTMLHeadingElement | null>(null);
   const starRainTimerRef = useRef<number | null>(null);
   const starRainClickCountRef = useRef(0);
   const starRainParticleSeqRef = useRef(0);
@@ -924,6 +923,47 @@ function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [selectedPlayer, statusPopup]);
+
+  useEffect(() => {
+    if (!selectedPlayer) {
+      setSelectedProfileNameFontSize(56);
+      return;
+    }
+    const fitName = () => {
+      const wrap = selectedProfileNameWrapRef.current;
+      const text = selectedProfileNameTextRef.current;
+      if (!wrap || !text) {
+        setSelectedProfileNameFontSize(56);
+        return;
+      }
+      const vw = window.innerWidth || 1280;
+      const maxPx = vw < 480 ? 46 : vw < 640 ? 56 : vw < 1024 ? 66 : 74;
+      const minPx = vw < 480 ? 10 : 12;
+      text.style.fontSize = `${maxPx}px`;
+      const available = Math.max(0, wrap.clientWidth - 6);
+      const full = Math.ceil(text.scrollWidth || 0);
+      if (!available || !full) {
+        setSelectedProfileNameFontSize(maxPx);
+        return;
+      }
+      const scaled = full > available ? Math.floor(maxPx * (available / full)) : maxPx;
+      const next = Math.max(minPx, Math.min(maxPx, scaled));
+      setSelectedProfileNameFontSize(next);
+    };
+
+    const raf = window.requestAnimationFrame(fitName);
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => fitName());
+      if (selectedProfileNameWrapRef.current) ro.observe(selectedProfileNameWrapRef.current);
+    }
+    window.addEventListener('resize', fitName);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', fitName);
+    };
+  }, [selectedPlayer?.id, selectedPlayer?.display_name, selectedPlayer?.regular_rp, selectedPlayer?.season_sp]);
 
   useEffect(() => {
     localStorage.setItem('bgmEnabled', bgmEnabled.toString());
@@ -3754,7 +3794,7 @@ function App() {
   const selectedPlayerIngameLabel = getIngameIdentityLabel(selectedPlayerIngameProfile.platform);
   const selectedPlayerIngameValue = String(selectedPlayerIngameProfile.nickname || '').trim();
   const selectedPlayerDiscordId = selectedPlayer ? getDiscordCopyCandidate(selectedPlayer) : '';
-  const selectedProfileNameStyle = getSingleLineProfileNameStyle(selectedPlayer?.display_name);
+  const selectedProfileNameStyle = getSingleLineProfileNameStyle(selectedProfileNameFontSize);
   const selectedRankRow = selectedPlayer ? regularRankMap.get(normalizeName(selectedPlayer.display_name)) : null;
   const selectedRegularRp = Math.max(
     0,
@@ -5361,9 +5401,10 @@ function App() {
              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-8 lg:gap-10 mb-5 sm:mb-8 mt-2">
                 <img src={selectedPlayer.avatar_url} className={`w-24 h-24 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-[2rem] sm:rounded-[2.5rem] lg:rounded-[3rem] border-4 ${getCardAvatarBorderFxForUser(selectedPlayer.display_name)} shrink-0`} alt="p" />
                  <div className="flex-1 min-w-0 flex flex-col justify-center w-full">
-                    <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(260px,340px)] gap-3 sm:gap-4 min-w-0 w-full items-start">
-                      <div className="min-w-0">
+                    <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] gap-3 sm:gap-4 min-w-0 w-full items-start">
+                      <div className="min-w-0 overflow-hidden" ref={selectedProfileNameWrapRef}>
                         <h2
+                          ref={selectedProfileNameTextRef}
                           onMouseEnter={() => playSFX('hover')}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -5377,7 +5418,7 @@ function App() {
                           }}
                           title={selectedPlayerDiscordId ? '클릭해서 디스코드 아이디 복사' : '복사 가능한 아이디 없음'}
                           style={selectedProfileNameStyle}
-                          className={`italic font-black cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap max-w-full ${getNameClassForUser(selectedPlayer.display_name)}`}
+                          className={`italic font-black cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap inline-block align-middle ${getNameClassForUser(selectedPlayer.display_name)}`}
                         >
                           {selectedPlayer.display_name}
                         </h2>
@@ -5399,14 +5440,14 @@ function App() {
                           {selectedPlayerIngameValue || '미설정'}
                         </button>
                       </div>
-                      <div className="flex flex-col gap-2 items-start sm:items-end shrink-0 w-full sm:w-[320px]">
-                        <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
+                      <div className="flex flex-col gap-2 items-start sm:items-end shrink-0 w-full sm:w-[340px]">
+                        <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit whitespace-nowrap`}>
                           {selectedPlayerRegularInfo?.icon}
                           {selectedPlayerRegularInfo
                             ? `${selectedPlayerRegularInfo.title} ${selectedPlayerRegularInfo.num ? `${selectedPlayerRegularInfo.num}위` : '-위'} · ${selectedRegularRp} RP (정규)`
                             : `루키 -위 · ${selectedRegularRp} RP (정규)`}
                         </span>
-                        <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerSeasonInfo?.color || 'text-slate-300'} bg-white/10 w-fit`}>
+                        <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerSeasonInfo?.color || 'text-slate-300'} bg-white/10 w-fit whitespace-nowrap`}>
                            <span>{selectedPlayerSeasonInfo?.icon || '🪐'}</span>
                            {selectedPlayerSeasonInfo
                              ? `${selectedPlayerSeasonInfo.name} ${typeof selectedPlayerSeasonInfo.index === 'number' ? `${selectedPlayerSeasonInfo.index + 1}위` : '-위'} · ${selectedSeasonSp} SP (시즌)`
