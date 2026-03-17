@@ -3,7 +3,7 @@ import {
   Calendar, Users, Target, Swords, Zap, Crown, Activity, LogIn, LogOut, 
   Search, ChevronDown, ChevronUp, Copy, Check, Shield, RefreshCw, Flame, 
   Lock, Unlock, BarChart3, TrendingUp, X, Trophy, PieChart, Home, User, 
-  Settings, Bell, Star, ShoppingBag, Palette
+  Settings, Bell, Star, ShoppingBag, Palette, MessageCircle
 } from 'lucide-react';
 import { supabase } from './supabase';
 
@@ -359,6 +359,26 @@ function App() {
     const hasT = isSubmittedScorePair(row.t_win, row.t_lose);
     if (!hasC || !hasT) return false;
     return Number(row.c_win) === Number(row.t_lose) && Number(row.c_lose) === Number(row.t_win);
+  };
+  const getSingleLineProfileNameClass = (nameRaw?: string | null) => {
+    const len = String(nameRaw || '').trim().length;
+    if (len >= 20) return 'text-2xl sm:text-3xl lg:text-4xl';
+    if (len >= 14) return 'text-3xl sm:text-4xl lg:text-[3.2rem]';
+    return 'text-4xl sm:text-5xl lg:text-[3.7rem]';
+  };
+  const getDiscordCopyCandidate = (row: any) => {
+    const candidates = [
+      row?.discord_username,
+      row?.discord_name,
+      row?.discord_display_name,
+      row?.discord_global_name,
+      row?.display_name,
+    ];
+    for (const candidate of candidates) {
+      const normalized = String(candidate || '').trim();
+      if (normalized) return normalized;
+    }
+    return '';
   };
   const getModeAccent = (mode: ChallengeMode | string) => {
     const m = normalizeChallengeMode(mode);
@@ -1587,6 +1607,7 @@ function App() {
                          '스코어 불일치',
                          '상대방과 입력한 스코어가 일치하지 않아 초기화되었습니다. 다시 합의 후 정확히 입력해주세요.'
                        );
+                       autoScoreSubmitKeyRef.current = '';
                        setWaitingForScore(false);
                        setMyWins(null);
                        setMyLosses(null);
@@ -1601,17 +1622,22 @@ function App() {
 	                if (pendingIncoming && deletedRow.id === pendingIncoming.id) {
 	                    setIncomingChallenge(null);
 	                }
-	                if (currentMatch && deletedRow.id === currentMatch.id) {
-	                    if (currentPhase === 'scoring' || isWaiting || currentPhase === 'waiting_sync') {
-	                        const suppressPopup = suppressNextDeletePopupChallengeIdRef.current === deletedRow.id;
-	                        suppressNextDeletePopupChallengeIdRef.current = null;
-	                        playSFX('success');
- 	                       if (!suppressPopup && !deletedWasSettledResult) {
-                            const wasSenderWaiting =
-                               Boolean(currentMatch?.isChallenger) ||
-                               normalizeName(deletedRow?.challenger_name) === normalizeName(currentUserName);
-                            if (wasSenderWaiting) {
-                              const targetDisplay =
+		                if (currentMatch && deletedRow.id === currentMatch.id) {
+		                    if (currentPhase === 'scoring' || isWaiting || currentPhase === 'waiting_sync') {
+		                        const suppressPopup = suppressNextDeletePopupChallengeIdRef.current === deletedRow.id;
+		                        suppressNextDeletePopupChallengeIdRef.current = null;
+		                        playSFX('success');
+                           const shouldShowDeclinePopup =
+                             !suppressPopup &&
+                             !deletedWasSettledResult &&
+                             currentPhase === 'waiting_sync' &&
+                             !isWaiting;
+	 	                       if (shouldShowDeclinePopup) {
+	                            const wasSenderWaiting =
+	                               Boolean(currentMatch?.isChallenger) ||
+	                               normalizeName(deletedRow?.challenger_name) === normalizeName(currentUserName);
+	                            if (wasSenderWaiting) {
+	                              const targetDisplay =
                                 String(currentMatch?.opponent || '').trim() ||
                                 String(deletedRow?.target_name || '').trim() ||
                                 '상대방';
@@ -1627,14 +1653,14 @@ function App() {
                        setRerollCount(0);
                        clearRandomDraftState(currentMatch.id, currentMatch.isChallenger, currentUserName);
                        fetchData();
-                       fetchRankers();
-                       if(user) fetchProfile(user.id);
-                   } else if (currentPhase !== 'idle') {
-                       playSFX('click');
-                         if (!deletedWasSettledResult) {
-                          const wasSenderWaiting =
-                            Boolean(currentMatch?.isChallenger) ||
-                            normalizeName(deletedRow?.challenger_name) === normalizeName(currentUserName);
+		                       fetchRankers();
+		                       if(user) fetchProfile(user.id);
+		                   } else if (currentPhase === 'waiting_sync') {
+		                       playSFX('click');
+	                         if (!deletedWasSettledResult) {
+	                          const wasSenderWaiting =
+	                            Boolean(currentMatch?.isChallenger) ||
+	                            normalizeName(deletedRow?.challenger_name) === normalizeName(currentUserName);
                           if (wasSenderWaiting) {
                             const targetDisplay =
                               String(currentMatch?.opponent || '').trim() ||
@@ -3093,14 +3119,17 @@ function App() {
             '스코어 불일치',
             `도전자(${updatedData.c_win}승 ${updatedData.c_lose}패) / 타겟(${updatedData.t_win}승 ${updatedData.t_lose}패) 입력값이 달라 초기화됩니다.`
           );
+          autoScoreSubmitKeyRef.current = '';
           setWaitingForScore(false);
           setMyWins(null);
           setMyLosses(null);
-          await supabase
+          const { error: resetErr } = await supabase
             .from('challenges')
             .update({ c_win: null, c_lose: null, t_win: null, t_lose: null })
-            .eq('id', activeMatch.id)
-            .eq('mode', String(updatedData.mode || ''));
+            .eq('id', activeMatch.id);
+          if (resetErr) {
+            showStatusPopup('error', '초기화 실패', `스코어 초기화 중 오류가 발생했습니다: ${resetErr.message}`);
+          }
         }
       }
     } else {
@@ -3719,6 +3748,8 @@ function App() {
   const selectedPlayerIngameProfile = selectedPlayer ? resolveIngameProfile(selectedPlayer) : { nickname: '', platform: 'steam' as IngamePlatform };
   const selectedPlayerIngameLabel = getIngameIdentityLabel(selectedPlayerIngameProfile.platform);
   const selectedPlayerIngameValue = String(selectedPlayerIngameProfile.nickname || '').trim();
+  const selectedPlayerDiscordId = selectedPlayer ? getDiscordCopyCandidate(selectedPlayer) : '';
+  const selectedProfileNameClass = getSingleLineProfileNameClass(selectedPlayer?.display_name);
   const selectedRankRow = selectedPlayer ? regularRankMap.get(normalizeName(selectedPlayer.display_name)) : null;
   const selectedRegularRp = Math.max(
     0,
@@ -4072,6 +4103,17 @@ function App() {
               <item.icon size={20}/>
             </div>
           ))}
+          <a
+            href="https://discord.com/channels/146930111478890496/1469829921630064721"
+            target="_blank"
+            rel="noreferrer"
+            title="디스코드 서버 바로가기"
+            onMouseEnter={() => playSFX('hover')}
+            onClick={() => playSFX('click')}
+            className="cursor-pointer transition-all hover:text-indigo-300 text-indigo-400 drop-shadow-[0_0_8px_rgba(99,102,241,0.45)]"
+          >
+            <MessageCircle size={20} />
+          </a>
         </div>
         <div onMouseEnter={() => playSFX('hover')} className="mt-auto mb-4 sm:mb-6 hover:text-pink-500 cursor-pointer transition-colors" onClick={handleLogout}>
           <LogOut size={20}/>
@@ -5316,7 +5358,23 @@ function App() {
                  <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 min-w-0">
                       <div className="min-w-0">
-                        <h2 className={`italic font-black text-2xl sm:text-4xl lg:text-5xl whitespace-normal break-all leading-tight ${getNameClassForUser(selectedPlayer.display_name)}`}>{selectedPlayer.display_name}</h2>
+                        <h2
+                          onMouseEnter={() => playSFX('hover')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playSFX('click');
+                            if (!selectedPlayerDiscordId) {
+                              showStatusPopup('error', '복사 실패', '복사 가능한 디스코드 아이디가 없습니다.');
+                              return;
+                            }
+                            navigator.clipboard.writeText(selectedPlayerDiscordId);
+                            showStatusPopup('success', '복사 완료', '복사가 완료되었습니다.', { autoCloseMs: 1000, hideConfirm: true });
+                          }}
+                          title={selectedPlayerDiscordId ? '클릭해서 디스코드 아이디 복사' : '복사 가능한 아이디 없음'}
+                          className={`italic font-black leading-tight cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap overflow-hidden text-ellipsis max-w-full ${selectedProfileNameClass} ${getNameClassForUser(selectedPlayer.display_name)}`}
+                        >
+                          {selectedPlayer.display_name}
+                        </h2>
                         <p className="mt-1.5 text-slate-400 text-[11px] sm:text-xs font-black tracking-wider">{selectedPlayerIngameLabel}</p>
                         <button
                           onMouseEnter={() => playSFX('hover')}
