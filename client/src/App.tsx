@@ -582,6 +582,16 @@ function App() {
     if (wins === losses) return false;
     return wins === target || losses === target;
   };
+  const parseManualScoreInput = (valueRaw: string, target: WinTarget): number | null => {
+    const value = String(valueRaw ?? '').trim();
+    if (!value) return null;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return null;
+    const integer = Math.floor(parsed);
+    if (integer < 0) return 0;
+    if (integer > target) return target;
+    return integer;
+  };
   const getAdaptiveTierLevelByRank = (rank1Raw: number | null, totalRankedRaw: number) => {
     const totalRanked = Number.isFinite(totalRankedRaw) ? Math.max(0, Math.floor(totalRankedRaw)) : 0;
     if (!rank1Raw || totalRanked <= 0) return 0;
@@ -1446,7 +1456,7 @@ function App() {
         id: Date.now() + 1000 + i,
         left: Math.random() * 100,
         delay: Math.random() * 1.05,
-        duration: 1.9 + Math.random() * 2.3,
+        duration: 8 + Math.random() * 2,
         size: 9 + Math.random() * 17,
         drift: -220 + Math.random() * 440,
         hue: Math.floor(Math.random() * 360),
@@ -1454,8 +1464,8 @@ function App() {
       }));
       setResultVictoryStars(stars);
       setResultLoseTaunts([]);
-      setTimeout(() => setResultBursts([]), 2500);
-      setTimeout(() => setResultVictoryStars([]), 3400);
+      setTimeout(() => setResultBursts([]), 10000);
+      setTimeout(() => setResultVictoryStars([]), 10000);
     } else {
       setResultBursts([]);
       const tauntLabels = ['😝 메롱', '🤪 메롱', '😛 메롱', '😜 메롱'];
@@ -1463,7 +1473,7 @@ function App() {
         id: Date.now() + 2000 + i,
         left: Math.random() * 100,
         delay: Math.random() * 1.2,
-        duration: 1.9 + Math.random() * 2.6,
+        duration: 8 + Math.random() * 2,
         size: 24 + Math.random() * 30,
         drift: -210 + Math.random() * 420,
         rotate: -56 + Math.random() * 112,
@@ -1471,9 +1481,9 @@ function App() {
       }));
       setResultLoseTaunts(taunts);
       setResultVictoryStars([]);
-      setTimeout(() => setResultLoseTaunts([]), 3400);
+      setTimeout(() => setResultLoseTaunts([]), 10000);
     }
-    setTimeout(() => setResultFx(null), 3600);
+    setTimeout(() => setResultFx(null), 10000);
   };
 
   const checkActiveChallenge = async (username: string) => {
@@ -1541,27 +1551,9 @@ function App() {
 
       if (data.c_ready && data.t_ready) {
         setIncomingChallenge(null);
-        const hasSubmittedScore =
-          isSubmittedScorePair(data.c_win, data.c_lose) ||
-          isSubmittedScorePair(data.t_win, data.t_lose);
-        if (hasSubmittedScore) {
-          setWinTarget((prev) => {
-            const inferred = inferWinTargetFromScores(data.c_win, data.c_lose, data.t_win, data.t_lose);
-            return prev === inferred ? prev : inferred;
-          });
-        }
         setMatchPhase('scoring');
       } else if (modeRaw.includes('_accepted') || modeRaw.includes('_accepting') || modeRaw.includes('_settling')) {
         setIncomingChallenge(null);
-        const hasSubmittedScore =
-          isSubmittedScorePair(data.c_win, data.c_lose) ||
-          isSubmittedScorePair(data.t_win, data.t_lose);
-        if (hasSubmittedScore) {
-          setWinTarget((prev) => {
-            const inferred = inferWinTargetFromScores(data.c_win, data.c_lose, data.t_win, data.t_lose);
-            return prev === inferred ? prev : inferred;
-          });
-        }
         setMatchPhase('scoring');
       } else if (isC) {
         setIncomingChallenge(null);
@@ -2282,13 +2274,6 @@ function App() {
                     }
                    if (currentPhase === 'scoring') {
                        setActiveMatch(prev => prev ? { ...prev, oppLegend: prev.isChallenger ? updated.t_legend : updated.legend, oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons } : prev);
-                       const hasSubmittedScore =
-                         isSubmittedScorePair(updated.c_win, updated.c_lose) ||
-                         isSubmittedScorePair(updated.t_win, updated.t_lose);
-                       if (hasSubmittedScore) {
-                         const inferredTarget = inferWinTargetFromScores(updated.c_win, updated.c_lose, updated.t_win, updated.t_lose);
-                         setWinTarget((prev) => (prev === inferredTarget ? prev : inferredTarget));
-                       }
                     }
                 }
                 if (rowAffectsMe(updated) || rowAffectsMe(payload.old)) {
@@ -3693,10 +3678,6 @@ function App() {
     if (updatedData) {
       const hasC = isSubmittedScorePair(updatedData.c_win, updatedData.c_lose);
       const hasT = isSubmittedScorePair(updatedData.t_win, updatedData.t_lose);
-      if (hasC || hasT) {
-        const resolvedTarget = inferWinTargetFromScores(updatedData.c_win, updatedData.c_lose, updatedData.t_win, updatedData.t_lose);
-        setWinTarget((prev) => (prev === resolvedTarget ? prev : resolvedTarget));
-      }
       if (hasC && hasT) {
         if (updatedData.c_win === updatedData.t_lose && updatedData.c_lose === updatedData.t_win) {
           const challengeMode = String(updatedData.mode || '').trim();
@@ -5455,21 +5436,45 @@ function App() {
                                   ))}
                                 </div>
                               </div>
-                              <div className="flex items-center justify-between px-3">
-                                <span className="text-cyan-400 font-bold text-xl tracking-widest">나의 승리</span>
-                                <div className="flex flex-wrap gap-2 justify-end max-w-[360px]">
-                                  {Array.from({ length: winTarget + 1 }, (_, idx) => idx).map(num => (
-                                    <button key={`w${num}`} onMouseEnter={() => playSFX('hover')} onClick={() => { setMyWins(num); playSFX('click'); }} className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl font-bold text-lg sm:text-xl transition-all border-2 cursor-pointer ${myWins === num ? 'bg-cyan-500 border-white text-black shadow-[0_0_16px_cyan]' : 'bg-black/60 border-white/10 text-white hover:border-cyan-400/50'}`}>{num}</button>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-between px-3 mb-3">
-                                <span className="text-pink-400 font-bold text-xl tracking-widest">나의 패배</span>
-                                <div className="flex flex-wrap gap-2 justify-end max-w-[360px]">
-                                  {Array.from({ length: winTarget + 1 }, (_, idx) => idx).map(num => (
-                                    <button key={`l${num}`} onMouseEnter={() => playSFX('hover')} onClick={() => { setMyLosses(num); playSFX('click'); }} className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl font-bold text-lg sm:text-xl transition-all border-2 cursor-pointer ${myLosses === num ? 'bg-pink-500 border-white text-black shadow-[0_0_16px_pink]' : 'bg-black/60 border-white/10 text-white hover:border-pink-400/50'}`}>{num}</button>
-                                  ))}
-                                </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-3 mb-3">
+                                <label className="rounded-2xl border border-cyan-400/35 bg-cyan-500/10 px-4 py-3 flex items-center justify-between gap-3">
+                                  <span className="text-cyan-300 font-black text-lg sm:text-xl tracking-wide">나의 승리</span>
+                                  <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={0}
+                                    max={winTarget}
+                                    value={myWins ?? ''}
+                                    onChange={(e) => {
+                                      setMyWins(parseManualScoreInput(e.target.value, winTarget));
+                                    }}
+                                    onBlur={(e) => {
+                                      setMyWins(parseManualScoreInput(e.target.value, winTarget));
+                                    }}
+                                    onFocus={() => playSFX('hover')}
+                                    placeholder="0"
+                                    className="w-24 sm:w-28 rounded-xl border-2 border-cyan-400/55 bg-black/70 px-3 py-2 text-center text-2xl font-black text-cyan-200 outline-none focus:border-cyan-300"
+                                  />
+                                </label>
+                                <label className="rounded-2xl border border-pink-400/35 bg-pink-500/10 px-4 py-3 flex items-center justify-between gap-3">
+                                  <span className="text-pink-300 font-black text-lg sm:text-xl tracking-wide">나의 패배</span>
+                                  <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={0}
+                                    max={winTarget}
+                                    value={myLosses ?? ''}
+                                    onChange={(e) => {
+                                      setMyLosses(parseManualScoreInput(e.target.value, winTarget));
+                                    }}
+                                    onBlur={(e) => {
+                                      setMyLosses(parseManualScoreInput(e.target.value, winTarget));
+                                    }}
+                                    onFocus={() => playSFX('hover')}
+                                    placeholder="0"
+                                    className="w-24 sm:w-28 rounded-xl border-2 border-pink-400/55 bg-black/70 px-3 py-2 text-center text-2xl font-black text-pink-200 outline-none focus:border-pink-300"
+                                  />
+                                </label>
                               </div>
                               <div className="px-3 py-2 rounded-xl border border-white/10 bg-black/30 text-center">
                                 <p className={`font-black text-base sm:text-lg ${waitingForScore ? 'text-yellow-300 animate-pulse' : isTerminalScoreSelection(myWins, myLosses, winTarget) ? 'text-emerald-300' : 'text-slate-400'}`}>
@@ -6774,14 +6779,14 @@ function App() {
       )}
 
       {resultFx && (
-        <div className="fixed inset-0 z-[260] pointer-events-none flex items-center justify-center">
+        <div className="fixed inset-0 z-[420] pointer-events-none flex items-center justify-center">
           <div
             className={`absolute inset-0 ${
               resultFx.type === 'win'
                 ? 'bg-[radial-gradient(circle_at_18%_20%,rgba(250,204,21,0.22),transparent_36%),radial-gradient(circle_at_78%_28%,rgba(244,114,182,0.18),transparent_38%),radial-gradient(circle_at_54%_84%,rgba(34,211,238,0.2),transparent_42%)]'
                 : 'bg-[radial-gradient(circle_at_20%_20%,rgba(244,114,182,0.18),transparent_40%),radial-gradient(circle_at_78%_26%,rgba(251,191,36,0.13),transparent_42%),radial-gradient(circle_at_50%_86%,rgba(239,68,68,0.2),transparent_44%)]'
             }`}
-            style={{ animation: `${resultFx.type === 'win' ? 'fx-win-pulse' : 'fx-lose-pulse'} 1.5s ease-out` }}
+            style={{ animation: `${resultFx.type === 'win' ? 'fx-win-pulse' : 'fx-lose-pulse'} 10s ease-out` }}
           ></div>
           {resultFx.type === 'win' &&
             resultVictoryStars.map((s) => (
@@ -6829,7 +6834,7 @@ function App() {
                   height: `${b.size}px`,
                   background: 'radial-gradient(circle, rgba(250,204,21,0.96) 0%, rgba(34,211,238,0.9) 55%, rgba(232,121,249,0.85) 100%)',
                   boxShadow: '0 0 18px rgba(34,211,238,0.7)',
-                  animation: `firework-burst 1.1s ease-out ${b.delay} forwards`,
+                  animation: `firework-burst 2.4s ease-out ${b.delay} forwards`,
                 }}
               />
             ))}
