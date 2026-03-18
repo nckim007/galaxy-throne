@@ -1775,18 +1775,11 @@ function App() {
       return;
     }
 
-    const fieldCandidatesMap: Record<'rp' | 'sp' | 'gp', string[]> = {
-      // 운영 중 구/신 스키마 혼용을 대비해 컬럼 후보를 순차적으로 안전 시도합니다.
-      rp: ['rp', 'regular_rp', 'regular_points'],
-      sp: ['sp', 'season_sp', 'season_points'],
-      gp: ['gc', 'gp', 'galaxy_credits'],
-    };
     const unitMap: Record<'rp' | 'sp' | 'gp', 'RP' | 'SP' | 'GC'> = {
       rp: 'RP',
       sp: 'SP',
       gp: 'GC',
     };
-    const fieldCandidates = fieldCandidatesMap[resource];
     const unit = unitMap[resource];
     const deltaRequest = amount * direction;
     let currentVal = 0;
@@ -1822,43 +1815,84 @@ function App() {
     let appliedField = '';
     let lastError: any = null;
     let appliedWriteValue = writeValue;
-    const resolveWriteValue = (field: string) => {
-      if (resource === 'gp') return nextVal;
-      if (resource === 'rp') return field === 'rp' ? writeValue : nextVal;
-      if (resource === 'sp') return field === 'sp' ? writeValue : nextVal;
-      return writeValue;
-    };
-    for (const field of fieldCandidates) {
-      const candidateValue = resolveWriteValue(field);
-      const res = await supabase.from('profiles').update({ [field]: candidateValue }).eq('id', selectedPlayer.id);
-      if (!res.error) {
-        updatedRow = null;
-        appliedField = field;
-        appliedWriteValue = candidateValue;
-        break;
-      }
-      lastError = res.error;
-      const msg = String(res.error?.message || '').toLowerCase();
-      const missingColumn = msg.includes('could not find') || msg.includes('column') || msg.includes('schema cache');
-      if (!missingColumn) {
-        break;
+
+    // 1) 서버 RPC 우선 시도 (재발 방지용: 컬럼명/스키마 캐시 이슈를 서버에서 흡수)
+    const rpcResult = await supabase.rpc('master_adjust_points', {
+      p_target: selectedPlayer.id,
+      p_resource: resource,
+      p_delta: delta,
+    });
+    if (!rpcResult.error && rpcResult.data) {
+      updatedRow = Array.isArray(rpcResult.data) ? rpcResult.data[0] : rpcResult.data;
+      appliedField = 'rpc';
+    } else {
+      lastError = rpcResult.error;
+    }
+
+    // 2) RPC가 없는 환경 대비 폴백
+    if (!appliedField) {
+      const fallbackPayloads: Record<string, number>[] =
+        resource === 'sp'
+          ? [
+              { sp: writeValue, season_sp: nextVal },
+              { sp: writeValue },
+              { season_sp: nextVal },
+            ]
+          : resource === 'rp'
+            ? [
+                { rp: writeValue, regular_rp: nextVal },
+                { rp: writeValue },
+                { regular_rp: nextVal },
+              ]
+            : [{ gc: nextVal }];
+
+      for (const payload of fallbackPayloads) {
+        const res = await supabase.from('profiles').update(payload).eq('id', selectedPlayer.id);
+        if (!res.error) {
+          appliedField = Object.keys(payload).join(',');
+          if (resource === 'gp') appliedWriteValue = nextVal;
+          if (resource === 'rp') appliedWriteValue = 'rp' in payload ? writeValue : nextVal;
+          if (resource === 'sp') appliedWriteValue = 'sp' in payload ? writeValue : nextVal;
+          updatedRow = payload;
+          break;
+        }
+        lastError = res.error;
+        const msg = String(res.error?.message || '').toLowerCase();
+        const missingColumn = msg.includes('could not find') || msg.includes('column') || msg.includes('schema cache');
+        if (!missingColumn) break;
       }
     }
-    if (!updatedRow && !appliedField) {
+
+    if (!appliedField) {
       showStatusPopup('error', '수정 실패', `포인트 수정 중 오류가 발생했습니다.\n${lastError?.message || '알 수 없는 오류'}`);
       return;
     }
 
-    const canonicalPatch: Record<string, number> = { [appliedField]: appliedWriteValue };
-    if (resource === 'rp') canonicalPatch.regular_rp = nextVal;
-    if (resource === 'sp') canonicalPatch.season_sp = nextVal;
-    if (resource === 'sp') canonicalPatch.season_points = nextVal;
-    if (resource === 'gp') canonicalPatch.gc = nextVal;
-    if (resource === 'sp') canonicalPatch.sp = writeValue;
-    if (resource === 'rp') canonicalPatch.rp = writeValue;
+    const canonicalPatch: Record<string, number> =
+      appliedField === 'rpc' && updatedRow
+        ? {
+            rp: Math.max(0, Number((updatedRow as any).rp ?? 0) || 0),
+            regular_rp: Math.max(0, Number((updatedRow as any).regular_rp ?? 0) || 0),
+            sp: Math.max(0, Number((updatedRow as any).sp ?? 0) || 0),
+            season_sp: Math.max(0, Number((updatedRow as any).season_sp ?? 0) || 0),
+            season_points: Math.max(0, Number((updatedRow as any).season_points ?? (updatedRow as any).season_sp ?? 0) || 0),
+            gc: Math.max(0, Number((updatedRow as any).gc ?? 0) || 0),
+          }
+        : {
+            [appliedField]: appliedWriteValue,
+            ...(resource === 'rp' ? { regular_rp: nextVal, rp: writeValue } : {}),
+            ...(resource === 'sp' ? { season_sp: nextVal, season_points: nextVal, sp: writeValue } : {}),
+            ...(resource === 'gp' ? { gc: nextVal } : {}),
+          };
+
     const merged = { ...(selectedPlayer as any), ...(updatedRow || {}), ...canonicalPatch };
     const resolved = resolveIngameProfile(merged);
-    const hydrated = { ...merged, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform };
+    const hydrated = {
+      ...merged,
+      ingame_nickname: resolved.nickname,
+      ingame_platform: resolved.platform,
+      ingame_play_window: resolved.playWindow,
+    };
     setSelectedPlayer((prev) => (prev && prev.id === selectedPlayer.id ? hydrated : prev));
     setRankers((prev) => prev.map((row) => (row.id === selectedPlayer.id ? { ...row, ...hydrated } : row)));
     if (profile?.id && String(profile.id) === String(selectedPlayer.id)) {
@@ -3114,18 +3148,23 @@ function App() {
         seasonWinStreak: 0,
         seasonDefenseStack: 0,
       };
-      const regularOffset = Number.isFinite(Number((r as any)?.rp))
-        ? Number((r as any).rp)
-        : Number.isFinite(Number((r as any)?.regular_rp))
-          ? Number((r as any).regular_rp) - s.regularRp
-          : 0;
-      const seasonOffset = Number.isFinite(Number((r as any)?.sp))
-        ? Number((r as any).sp)
-        : Number.isFinite(Number((r as any)?.season_sp))
-          ? Number((r as any).season_sp) - s.seasonSp
-          : Number.isFinite(Number((r as any)?.season_points))
-            ? Number((r as any).season_points) - s.seasonSp
-            : 0;
+      const rawRpOffset = Number.isFinite(Number((r as any)?.rp)) ? Number((r as any).rp) : null;
+      const rawRegularTotal = Number.isFinite(Number((r as any)?.regular_rp)) ? Number((r as any).regular_rp) : null;
+      const offsetFromRegularTotal = rawRegularTotal === null ? null : rawRegularTotal - s.regularRp;
+      const regularOffset =
+        offsetFromRegularTotal !== null && (rawRpOffset === null || Math.abs((s.regularRp + rawRpOffset) - rawRegularTotal) > 0.5)
+          ? offsetFromRegularTotal
+          : rawRpOffset ?? offsetFromRegularTotal ?? 0;
+
+      const rawSpOffset = Number.isFinite(Number((r as any)?.sp)) ? Number((r as any).sp) : null;
+      const rawSeasonTotal = Number.isFinite(Number((r as any)?.season_sp)) ? Number((r as any).season_sp) : null;
+      const rawSeasonLegacyTotal = Number.isFinite(Number((r as any)?.season_points)) ? Number((r as any).season_points) : null;
+      const offsetFromSeasonTotal = rawSeasonTotal === null ? null : rawSeasonTotal - s.seasonSp;
+      const offsetFromLegacySeasonTotal = rawSeasonLegacyTotal === null ? null : rawSeasonLegacyTotal - s.seasonSp;
+      const seasonOffset =
+        offsetFromSeasonTotal !== null && (rawSpOffset === null || Math.abs((s.seasonSp + rawSpOffset) - rawSeasonTotal) > 0.5)
+          ? offsetFromSeasonTotal
+          : rawSpOffset ?? offsetFromSeasonTotal ?? offsetFromLegacySeasonTotal ?? 0;
       const regularTotal = Math.max(0, s.regularRp + regularOffset);
       const seasonTotal = Math.max(0, s.seasonSp + seasonOffset);
       return {
@@ -8312,5 +8351,3 @@ function App() {
 }
 
 export default App;
-
-
