@@ -33,6 +33,12 @@ type ShopItem = {
   preview: string;
   accentClass: string;
 };
+type EventShopItem = {
+  id: string;
+  name: string;
+  cost: number;
+  image: string;
+};
 
 type RegularChallengeMode = 'free';
 type SeasonChallengeMode = 'random' | 'season_free' | 'season_watson_melee' | 'season_vantage_sniper' | 'season_wraith_knife';
@@ -94,6 +100,44 @@ const SHOP_ITEMS: ShopItem[] = [
   { id: 'border_grad_abyss', category: 'borderFx', name: '어비스 코일', description: '로즈-바이올렛 심연 링 이펙트', cost: 8300, preview: '◎', accentClass: 'text-rose-200 drop-shadow-[0_0_18px_rgba(244,63,94,0.76)]' },
 ];
 
+const buildEventItemImage = (emoji: string, bgA: string, bgB: string, label: string) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 180'>
+      <defs>
+        <linearGradient id='g' x1='0' x2='1' y1='0' y2='1'>
+          <stop offset='0%' stop-color='${bgA}'/>
+          <stop offset='100%' stop-color='${bgB}'/>
+        </linearGradient>
+      </defs>
+      <rect width='320' height='180' rx='24' fill='url(#g)'/>
+      <circle cx='66' cy='90' r='42' fill='rgba(255,255,255,0.15)'/>
+      <text x='66' y='104' font-size='56' text-anchor='middle'>${emoji}</text>
+      <text x='132' y='82' font-size='25' font-weight='900' fill='white'>EVENT</text>
+      <text x='132' y='116' font-size='22' font-weight='700' fill='white'>${label}</text>
+    </svg>`
+  )}`;
+
+const EVENT_SHOP_ITEMS: EventShopItem[] = [
+  {
+    id: 'event_burger_set',
+    name: '햄버거 세트',
+    cost: 50000,
+    image: buildEventItemImage('🍔', '#0f172a', '#0ea5e9', 'Burger Set'),
+  },
+  {
+    id: 'event_chicken',
+    name: '치킨',
+    cost: 100000,
+    image: buildEventItemImage('🍗', '#3f1d2e', '#fb7185', 'Chicken'),
+  },
+  {
+    id: 'event_gift_30000',
+    name: '3만원 상품권',
+    cost: 150000,
+    image: buildEventItemImage('🎁', '#312e81', '#a855f7', 'Gift Card'),
+  },
+];
+
 const SEASON_MODE_MENU: { mode: SeasonChallengeMode; label: string; description: string }[] = [
   { mode: 'random', label: '랜덤 대전', description: '레전드/무기 랜덤 선택' },
   { mode: 'season_free', label: '자유 대전', description: '레전드/무기 자유 선택' },
@@ -109,7 +153,10 @@ type MasterUiPrefs = {
   seasonTitle: string;
   titleScalePercent: number;
   showDiscordEntry: boolean;
+  discordButtonTopPx: number;
+  discordButtonLeftPx: number;
   showSeasonTitle: boolean;
+  headerBadges: string[];
   homeGapPx: number;
   homeTopOffsetPx: number;
   showOnlineBoard: boolean;
@@ -123,7 +170,10 @@ const DEFAULT_MASTER_UI_PREFS: MasterUiPrefs = {
   seasonTitle: '별들의 전쟁 : 시즌 1',
   titleScalePercent: 100,
   showDiscordEntry: true,
+  discordButtonTopPx: -4,
+  discordButtonLeftPx: 12,
   showSeasonTitle: true,
+  headerBadges: [],
   homeGapPx: 24,
   homeTopOffsetPx: 0,
   showOnlineBoard: true,
@@ -182,6 +232,12 @@ function App() {
   const [regularRankMoves, setRegularRankMoves] = useState<Record<string, number>>({});
   const [seasonRankMoves, setSeasonRankMoves] = useState<Record<string, number>>({});
   const [resultFx, setResultFx] = useState<{ type: 'win' | 'lose'; message: string } | null>(null);
+  const [resultVictoryStars, setResultVictoryStars] = useState<
+    { id: number; left: number; delay: number; duration: number; size: number; drift: number; hue: number }[]
+  >([]);
+  const [resultLoseTaunts, setResultLoseTaunts] = useState<
+    { id: number; left: number; delay: number; duration: number; size: number; drift: number; rotate: number }[]
+  >([]);
   const [resultBursts, setResultBursts] = useState<
     { id: number; left: string; top: string; size: number; delay: string }[]
   >([]);
@@ -207,17 +263,26 @@ function App() {
   const [sfxEnabled, setSfxEnabled] = useState(localStorage.getItem('sfxEnabled') !== 'false');
   const [bgmVolume, setBgmVolume] = useState(parseFloat(localStorage.getItem('bgmVolume') || '0.10'));
   const [sfxVolume, setSfxVolume] = useState(parseFloat(localStorage.getItem('sfxVolume') || '0.60'));
+  const [eventItemCounts, setEventItemCounts] = useState<Record<string, number>>({});
+  const [masterUiEditorOpen, setMasterUiEditorOpen] = useState(true);
+  const [masterNewBadgeText, setMasterNewBadgeText] = useState('');
   const [masterUiPrefs, setMasterUiPrefs] = useState<MasterUiPrefs>(() => {
     try {
       const raw = localStorage.getItem(MASTER_UI_PREFS_KEY);
       if (!raw) return DEFAULT_MASTER_UI_PREFS;
       const parsed = JSON.parse(raw);
+      const parsedBadges = Array.isArray(parsed?.headerBadges)
+        ? parsed.headerBadges.filter((v: unknown) => typeof v === 'string').map((v: string) => v.trim()).filter(Boolean).slice(0, 8)
+        : DEFAULT_MASTER_UI_PREFS.headerBadges;
       return {
         ...DEFAULT_MASTER_UI_PREFS,
         ...parsed,
         titleScalePercent: Math.max(70, Math.min(140, Number(parsed?.titleScalePercent ?? DEFAULT_MASTER_UI_PREFS.titleScalePercent))),
         homeGapPx: Math.max(8, Math.min(48, Number(parsed?.homeGapPx ?? DEFAULT_MASTER_UI_PREFS.homeGapPx))),
         homeTopOffsetPx: Math.max(-80, Math.min(120, Number(parsed?.homeTopOffsetPx ?? DEFAULT_MASTER_UI_PREFS.homeTopOffsetPx))),
+        discordButtonTopPx: Math.max(-18, Math.min(28, Number(parsed?.discordButtonTopPx ?? DEFAULT_MASTER_UI_PREFS.discordButtonTopPx))),
+        discordButtonLeftPx: Math.max(0, Math.min(40, Number(parsed?.discordButtonLeftPx ?? DEFAULT_MASTER_UI_PREFS.discordButtonLeftPx))),
+        headerBadges: parsedBadges,
       };
     } catch {
       return DEFAULT_MASTER_UI_PREFS;
@@ -225,6 +290,33 @@ function App() {
   });
   const updateMasterUiPrefs = <K extends keyof MasterUiPrefs>(key: K, value: MasterUiPrefs[K]) => {
     setMasterUiPrefs((prev) => ({ ...prev, [key]: value }));
+  };
+  const addMasterHeaderBadge = () => {
+    const next = masterNewBadgeText.trim();
+    if (!next) return;
+    updateMasterUiPrefs('headerBadges', [...masterUiPrefs.headerBadges, next].slice(0, 8));
+    setMasterNewBadgeText('');
+  };
+  const updateMasterHeaderBadge = (index: number, value: string) => {
+    updateMasterUiPrefs(
+      'headerBadges',
+      masterUiPrefs.headerBadges.map((badge, idx) => (idx === index ? value : badge))
+    );
+  };
+  const removeMasterHeaderBadge = (index: number) => {
+    updateMasterUiPrefs(
+      'headerBadges',
+      masterUiPrefs.headerBadges.filter((_, idx) => idx !== index)
+    );
+  };
+  const moveMasterHeaderBadge = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= masterUiPrefs.headerBadges.length) return;
+    const next = [...masterUiPrefs.headerBadges];
+    const current = next[index];
+    next[index] = next[target];
+    next[target] = current;
+    updateMasterUiPrefs('headerBadges', next);
   };
 
   const currentUserName = profile?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name;
@@ -236,6 +328,7 @@ function App() {
   const visibleMenuItems = isMasterAccount ? [...BASE_MENU_ITEMS, MASTER_MENU_ITEM] : BASE_MENU_ITEMS;
   const lastOpponentStorageKey = user?.id ? `gt_last_opponent_v1_${user.id}` : null;
   const manualLoadoutStorageKey = user?.id ? `gt_manual_loadout_v2_${user.id}` : null;
+  const eventShopStorageKey = user?.id ? `gt_event_shop_v1_${user.id}` : null;
   const DISCORD_GUILD_ID = (import.meta.env.VITE_DISCORD_GUILD_ID as string | undefined)?.trim();
   const REGULAR_TICKET_COST = 200;
   const SEASON_TICKET_COST = 0;
@@ -279,7 +372,65 @@ function App() {
     return -Math.max(0, basePenalty);
   };
   const cosmeticsStorageKey = user?.id ? `gt_cosmetics_v1_${user.id}` : null;
+  const purchaseHistoryStorageKey = user?.id ? `gt_purchase_history_v1_${user.id}` : null;
+  const purchaseRecoveryStorageKey = user?.id ? `gt_purchase_recovery_v1_${user.id}` : null;
   const defaultOwnedIds = ['name_default', 'style_default', 'border_default'];
+  const eventOwnedPrefix = 'event_owned:';
+  const parseEventCountsFromOwnedCosmetics = (ownedRaw: unknown): Record<string, number> => {
+    const owned = Array.isArray(ownedRaw) ? (ownedRaw as string[]) : [];
+    const next: Record<string, number> = {};
+    owned.forEach((entry) => {
+      const value = String(entry || '').trim();
+      if (!value.startsWith(eventOwnedPrefix)) return;
+      const [_, eventId = '', countRaw = '0'] = value.split(':');
+      const count = Math.max(0, Math.floor(Number(countRaw || 0)));
+      if (!eventId || !count) return;
+      next[eventId] = Math.max(next[eventId] || 0, count);
+    });
+    return next;
+  };
+  const encodeEventCountsIntoOwnedCosmetics = (cosmeticOwnedRaw: string[], eventCountsRaw: Record<string, number>) => {
+    const shopIdSet = new Set(SHOP_ITEMS.map((item) => item.id));
+    const cosmeticOwned = Array.from(new Set((cosmeticOwnedRaw || []).filter((id) => shopIdSet.has(id))));
+    const cleanedEventCounts = Object.entries(eventCountsRaw || {}).reduce<Record<string, number>>((acc, [eventId, countRaw]) => {
+      const count = Math.max(0, Math.floor(Number(countRaw || 0)));
+      if (!eventId || !count) return acc;
+      acc[eventId] = count;
+      return acc;
+    }, {});
+    const encodedEventEntries = Object.entries(cleanedEventCounts).map(([eventId, count]) => `${eventOwnedPrefix}${eventId}:${count}`);
+    return Array.from(new Set([...cosmeticOwned, ...defaultOwnedIds, ...encodedEventEntries]));
+  };
+  const readLocalCosmeticSnapshot = () => {
+    try {
+      if (!cosmeticsStorageKey) return { owned: [...defaultOwnedIds] };
+      const raw = localStorage.getItem(cosmeticsStorageKey);
+      if (!raw) return { owned: [...defaultOwnedIds] };
+      const parsed = JSON.parse(raw) as { owned?: string[] };
+      const shopIdSet = new Set(SHOP_ITEMS.map((item) => item.id));
+      const owned = Array.from(new Set([...(parsed?.owned || []), ...defaultOwnedIds])).filter((id) => shopIdSet.has(id));
+      return { owned };
+    } catch {
+      return { owned: [...defaultOwnedIds] };
+    }
+  };
+  const readLocalEventSnapshot = () => {
+    try {
+      if (!eventShopStorageKey) return {};
+      const raw = localStorage.getItem(eventShopStorageKey);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Record<string, number>;
+      if (!parsed || typeof parsed !== 'object') return {};
+      return Object.entries(parsed).reduce<Record<string, number>>((acc, [eventId, countRaw]) => {
+        const count = Math.max(0, Math.floor(Number(countRaw || 0)));
+        if (!eventId || !count) return acc;
+        acc[eventId] = count;
+        return acc;
+      }, {});
+    } catch {
+      return {};
+    }
+  };
   const isCurrentUserDisplayName = (name?: string | null) => (name || '').trim() === (currentUserName || '').trim();
   const normalizeChallengeMode = (modeRaw: unknown): ChallengeMode => {
     const raw = String(modeRaw || '').trim();
@@ -825,6 +976,7 @@ function App() {
   const resultPopupChannelRef = useRef<any>(null);
   const lastResultPopupMatchIdRef = useRef<string>('');
   const ingameProfileBackfillRef = useRef<string>('');
+  const purchaseRecoveryRunningRef = useRef(false);
   const scoringSessionChallengeIdRef = useRef<string | null>(null);
   const autoScoreSubmitKeyRef = useRef('');
   const manualLoadoutRef = useRef<{
@@ -1211,9 +1363,33 @@ function App() {
         delay: `${Math.random() * 0.32}s`,
       }));
       setResultBursts(bursts);
+      const stars = Array.from({ length: 140 }).map((_, i) => ({
+        id: Date.now() + 1000 + i,
+        left: Math.random() * 100,
+        delay: Math.random() * 0.8,
+        duration: 1.3 + Math.random() * 1.8,
+        size: 8 + Math.random() * 14,
+        drift: -120 + Math.random() * 240,
+        hue: Math.floor(Math.random() * 360),
+      }));
+      setResultVictoryStars(stars);
+      setResultLoseTaunts([]);
       setTimeout(() => setResultBursts([]), 1800);
+      setTimeout(() => setResultVictoryStars([]), 2400);
     } else {
       setResultBursts([]);
+      const taunts = Array.from({ length: 22 }).map((_, i) => ({
+        id: Date.now() + 2000 + i,
+        left: Math.random() * 100,
+        delay: Math.random() * 0.8,
+        duration: 1.4 + Math.random() * 1.6,
+        size: 20 + Math.random() * 24,
+        drift: -90 + Math.random() * 180,
+        rotate: -30 + Math.random() * 60,
+      }));
+      setResultLoseTaunts(taunts);
+      setResultVictoryStars([]);
+      setTimeout(() => setResultLoseTaunts([]), 2400);
     }
     setTimeout(() => setResultFx(null), 2600);
   };
@@ -1470,17 +1646,168 @@ function App() {
   }, [cosmeticsStorageKey, ownedItemIds, equippedItems]);
 
   useEffect(() => {
-    if (!profile) return;
+    if (!eventShopStorageKey) {
+      setEventItemCounts({});
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(eventShopStorageKey);
+      if (!raw) {
+        setEventItemCounts({});
+        return;
+      }
+      const parsed = JSON.parse(raw) as Record<string, number>;
+      setEventItemCounts(parsed && typeof parsed === 'object' ? parsed : {});
+    } catch {
+      setEventItemCounts({});
+    }
+  }, [eventShopStorageKey]);
 
-    const dbOwned = Array.isArray((profile as any).owned_cosmetics) ? (profile as any).owned_cosmetics : [];
-    const mergedOwned = Array.from(new Set([...dbOwned, ...defaultOwnedIds]));
-    setOwnedItemIds(mergedOwned);
+  useEffect(() => {
+    if (!eventShopStorageKey) return;
+    localStorage.setItem(eventShopStorageKey, JSON.stringify(eventItemCounts));
+  }, [eventShopStorageKey, eventItemCounts]);
+
+  useEffect(() => {
+    if (!profile) return;
+    const shopIdSet = new Set(SHOP_ITEMS.map((item) => item.id));
+    const dbOwnedRaw = Array.isArray((profile as any).owned_cosmetics) ? ((profile as any).owned_cosmetics as string[]) : [];
+    const dbCosmeticOwned = dbOwnedRaw.filter((id) => shopIdSet.has(id));
+    const dbEventCounts = parseEventCountsFromOwnedCosmetics(dbOwnedRaw);
+    const localCosmetics = readLocalCosmeticSnapshot().owned;
+    const localEventCounts = readLocalEventSnapshot();
+
+    const mergedCosmeticOwned = Array.from(new Set([...dbCosmeticOwned, ...localCosmetics, ...defaultOwnedIds]));
+    const mergedEventCounts = Object.keys({ ...dbEventCounts, ...localEventCounts }).reduce<Record<string, number>>((acc, key) => {
+      acc[key] = Math.max(dbEventCounts[key] || 0, localEventCounts[key] || 0);
+      return acc;
+    }, {});
+
+    setOwnedItemIds(mergedCosmeticOwned);
+    setEventItemCounts(mergedEventCounts);
     setEquippedItems({
       nameColor: (profile as any).equipped_name_color || 'name_default',
       nameStyle: (profile as any).equipped_name_style || 'style_default',
       borderFx: (profile as any).equipped_border_fx || 'border_default',
     });
   }, [profile?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !profile || purchaseRecoveryRunningRef.current) return;
+    const dbOwnedRaw = Array.isArray((profile as any).owned_cosmetics) ? ((profile as any).owned_cosmetics as string[]) : [];
+    const dbEventCounts = parseEventCountsFromOwnedCosmetics(dbOwnedRaw);
+    const shopIdSet = new Set(SHOP_ITEMS.map((item) => item.id));
+    const dbCosmeticOwned = dbOwnedRaw.filter((id) => shopIdSet.has(id));
+
+    const localCosmeticOwned = readLocalCosmeticSnapshot().owned;
+    const localEventCounts = readLocalEventSnapshot();
+
+    const missingCosmetics = localCosmeticOwned.filter((id) => !dbCosmeticOwned.includes(id) && !defaultOwnedIds.includes(id));
+    const missingEventCounts = Object.entries(localEventCounts).reduce<Record<string, number>>((acc, [eventId, localCount]) => {
+      const gap = Math.max(0, Math.floor(Number(localCount || 0)) - Math.floor(Number(dbEventCounts[eventId] || 0)));
+      if (gap > 0) acc[eventId] = gap;
+      return acc;
+    }, {});
+
+    if (!purchaseHistoryStorageKey) return;
+    let purchaseHistory: Record<string, number> = {};
+    try {
+      const raw = localStorage.getItem(purchaseHistoryStorageKey);
+      purchaseHistory = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    } catch {
+      purchaseHistory = {};
+    }
+
+    Object.entries(purchaseHistory).forEach(([key, countRaw]) => {
+      const count = Math.max(0, Math.floor(Number(countRaw || 0)));
+      if (!count) return;
+      if (key.startsWith('event:')) {
+        const eventId = key.replace(/^event:/, '');
+        const dbCount = Math.floor(Number(dbEventCounts[eventId] || 0));
+        const localCount = Math.floor(Number(localEventCounts[eventId] || 0));
+        const maxKnown = Math.max(dbCount, localCount);
+        const gap = Math.max(0, count - maxKnown);
+        if (gap > 0) {
+          missingEventCounts[eventId] = Math.max(missingEventCounts[eventId] || 0, gap);
+        }
+      } else if (shopIdSet.has(key) && !defaultOwnedIds.includes(key) && !dbCosmeticOwned.includes(key)) {
+        if (!missingCosmetics.includes(key)) missingCosmetics.push(key);
+      }
+    });
+
+    const missingCosmeticRefund = missingCosmetics.reduce((sum, itemId) => {
+      const item = SHOP_ITEMS.find((v) => v.id === itemId);
+      return sum + (item?.cost || 0);
+    }, 0);
+    const missingEventRefund = Object.entries(missingEventCounts).reduce((sum, [eventId, gap]) => {
+      const item = EVENT_SHOP_ITEMS.find((v) => v.id === eventId);
+      return sum + (item?.cost || 0) * Math.max(0, Math.floor(Number(gap || 0)));
+    }, 0);
+    const totalRefund = missingCosmeticRefund + missingEventRefund;
+
+    const recoverySignature = `c:${missingCosmetics.slice().sort().join(',')}|e:${Object.entries(missingEventCounts).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}:${v}`).join(',')}|r:${totalRefund}`;
+    if (recoverySignature === 'c:|e:|r:0') return;
+    if (purchaseRecoveryStorageKey) {
+      try {
+        const prevSig = localStorage.getItem(purchaseRecoveryStorageKey) || '';
+        if (prevSig === recoverySignature) return;
+      } catch {
+        // ignore
+      }
+    }
+
+    purchaseRecoveryRunningRef.current = true;
+    (async () => {
+      try {
+        const currentGc = Math.max(0, Number((profile as any)?.gc ?? 1000));
+        const nextGc = currentGc + totalRefund;
+        const mergedCosmetics = Array.from(new Set([...dbCosmeticOwned, ...localCosmeticOwned, ...missingCosmetics, ...defaultOwnedIds]));
+        const mergedEventCounts = Object.keys({ ...dbEventCounts, ...localEventCounts, ...missingEventCounts }).reduce<Record<string, number>>((acc, key) => {
+          acc[key] = Math.max(
+            Math.floor(Number(dbEventCounts[key] || 0)),
+            Math.floor(Number(localEventCounts[key] || 0)),
+            Math.floor(Number(missingEventCounts[key] || 0)) + Math.floor(Number(dbEventCounts[key] || 0))
+          );
+          return acc;
+        }, {});
+        const mergedOwnedPayload = encodeEventCountsIntoOwnedCosmetics(mergedCosmetics, mergedEventCounts);
+
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            gc: nextGc,
+            owned_cosmetics: mergedOwnedPayload,
+          })
+          .eq('id', user.id);
+        if (error) {
+          console.warn('[purchase-recovery] failed:', error.message);
+          return;
+        }
+
+        setOwnedItemIds(mergedCosmetics);
+        setEventItemCounts(mergedEventCounts);
+        setProfile((prev: any) => (prev ? { ...prev, gc: nextGc, owned_cosmetics: mergedOwnedPayload } : prev));
+        setRankers((prev) => prev.map((r) => (r.id === user.id ? { ...r, gc: nextGc, owned_cosmetics: mergedOwnedPayload } : r)));
+        if (purchaseRecoveryStorageKey) {
+          try {
+            localStorage.setItem(purchaseRecoveryStorageKey, recoverySignature);
+          } catch {
+            // ignore
+          }
+        }
+        if (totalRefund > 0) {
+          showStatusPopup(
+            'success',
+            '구매 복구 완료',
+            `누락된 아이템 소유권을 복구했고, 차감되었던 ${totalRefund.toLocaleString()} GP를 환급했습니다.`,
+            { autoCloseMs: 2200, hideConfirm: true }
+          );
+        }
+      } finally {
+        purchaseRecoveryRunningRef.current = false;
+      }
+    })();
+  }, [user?.id, profile?.id, profile?.gc, purchaseHistoryStorageKey, purchaseRecoveryStorageKey]);
 
   useEffect(() => {
     if (!user?.id || !profile) {
@@ -1526,8 +1853,12 @@ function App() {
   useEffect(() => {
     if (!user || !profile) return;
     const timer = window.setTimeout(async () => {
+      const ownedCosmeticsPayload = encodeEventCountsIntoOwnedCosmetics(
+        Array.from(new Set([...ownedItemIds, ...defaultOwnedIds])),
+        eventItemCounts
+      );
       const payload = {
-        owned_cosmetics: Array.from(new Set([...ownedItemIds, ...defaultOwnedIds])),
+        owned_cosmetics: ownedCosmeticsPayload,
         equipped_name_color: equippedItems.nameColor,
         equipped_name_style: equippedItems.nameStyle,
         equipped_border_fx: equippedItems.borderFx,
@@ -1539,7 +1870,7 @@ function App() {
       }
     }, 200);
     return () => window.clearTimeout(timer);
-  }, [user?.id, profile?.id, ownedItemIds, equippedItems]);
+  }, [user?.id, profile?.id, ownedItemIds, eventItemCounts, equippedItems]);
 
   useEffect(() => { if (currentUserName) { checkActiveChallenge(currentUserName); } }, [currentUserName]);
 
@@ -2515,8 +2846,27 @@ function App() {
     }
 
     playSFX('click');
-    const nextGc = (profile.gc ?? 1000) - item.cost;
-    const { error } = await supabase.from('profiles').update({ gc: nextGc }).eq('id', user.id);
+    const currentGc = Number(profile.gc ?? 1000);
+    const nextGc = currentGc - item.cost;
+    const dbOwnedRaw = Array.isArray((profile as any).owned_cosmetics) ? ((profile as any).owned_cosmetics as string[]) : [];
+    const dbEventCounts = parseEventCountsFromOwnedCosmetics(dbOwnedRaw);
+    const nextOwnedCosmetics = Array.from(
+      new Set([
+        ...dbOwnedRaw.filter((id) => !String(id || '').startsWith(eventOwnedPrefix)),
+        ...ownedItemIds,
+        ...defaultOwnedIds,
+        item.id,
+      ])
+    );
+    const nextOwnedPayload = encodeEventCountsIntoOwnedCosmetics(nextOwnedCosmetics, dbEventCounts);
+    const updatePayload: any = {
+      gc: nextGc,
+      owned_cosmetics: nextOwnedPayload,
+      equipped_name_color: item.category === 'nameColor' ? item.id : equippedItems.nameColor,
+      equipped_name_style: item.category === 'nameStyle' ? item.id : equippedItems.nameStyle,
+      equipped_border_fx: item.category === 'borderFx' ? item.id : equippedItems.borderFx,
+    };
+    const { error } = await supabase.from('profiles').update(updatePayload).eq('id', user.id);
     if (error) {
       playSFX('error');
       alert(`구매 실패: ${error.message}`);
@@ -2526,19 +2876,108 @@ function App() {
     const nextOwned = Array.from(new Set([...ownedItemIds, item.id]));
     setOwnedItemIds(nextOwned);
     equipCosmeticItem(item);
+    setProfile((prev: any) =>
+      prev
+        ? {
+            ...prev,
+            gc: nextGc,
+            owned_cosmetics: nextOwnedPayload,
+            equipped_name_color: updatePayload.equipped_name_color,
+            equipped_name_style: updatePayload.equipped_name_style,
+            equipped_border_fx: updatePayload.equipped_border_fx,
+          }
+        : prev
+    );
+    if (purchaseHistoryStorageKey) {
+      try {
+        const raw = localStorage.getItem(purchaseHistoryStorageKey);
+        const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+        parsed[item.id] = Math.max(0, Math.floor(Number(parsed[item.id] || 0))) + 1;
+        localStorage.setItem(purchaseHistoryStorageKey, JSON.stringify(parsed));
+      } catch {
+        // ignore local history failures
+      }
+    }
     setRankers((prev) =>
       prev.map((r) =>
         r.id === user.id
           ? {
               ...r,
               gc: nextGc,
-              owned_cosmetics: nextOwned,
+              owned_cosmetics: nextOwnedPayload,
             }
           : r
       )
     );
     fetchProfile(user.id);
     fetchRankers();
+  };
+
+  const handleBuyEventItem = async (item: EventShopItem) => {
+    if (!user || !profile) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+    const currentGc = Number(profile?.gc ?? 1000);
+    if (currentGc < item.cost) {
+      playSFX('error');
+      alert(`GC가 부족합니다. (필요: ${item.cost.toLocaleString()} / 보유: ${currentGc.toLocaleString()})`);
+      return;
+    }
+
+    playSFX('click');
+    const nextGc = currentGc - item.cost;
+    const dbOwnedRaw = Array.isArray((profile as any).owned_cosmetics) ? ((profile as any).owned_cosmetics as string[]) : [];
+    const dbEventCounts = parseEventCountsFromOwnedCosmetics(dbOwnedRaw);
+    const nextEventCounts = { ...dbEventCounts, [item.id]: Math.max(0, Number(dbEventCounts[item.id] || 0)) + 1 };
+    const cosmeticOwned = Array.from(new Set([...(ownedItemIds || []), ...defaultOwnedIds]));
+    const nextOwnedPayload = encodeEventCountsIntoOwnedCosmetics(cosmeticOwned, nextEventCounts);
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        gc: nextGc,
+        owned_cosmetics: nextOwnedPayload,
+      })
+      .eq('id', user.id);
+    if (error) {
+      playSFX('error');
+      alert(`구매 실패: ${error.message}`);
+      return;
+    }
+
+    setEventItemCounts(nextEventCounts);
+    setProfile((prev: any) =>
+      prev
+        ? {
+            ...prev,
+            gc: nextGc,
+            owned_cosmetics: nextOwnedPayload,
+          }
+        : prev
+    );
+    if (purchaseHistoryStorageKey) {
+      try {
+        const key = `event:${item.id}`;
+        const raw = localStorage.getItem(purchaseHistoryStorageKey);
+        const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+        parsed[key] = Math.max(0, Math.floor(Number(parsed[key] || 0))) + 1;
+        localStorage.setItem(purchaseHistoryStorageKey, JSON.stringify(parsed));
+      } catch {
+        // ignore local history failures
+      }
+    }
+    setRankers((prev) =>
+      prev.map((r) =>
+        r.id === user.id
+          ? {
+              ...r,
+              gc: nextGc,
+              owned_cosmetics: nextOwnedPayload,
+            }
+          : r
+      )
+    );
+    showStatusPopup('success', '이벤트 상품 구매 완료', `${item.name} 구매 완료!`, { autoCloseMs: 1400, hideConfirm: true });
   };
 
   const handleTargetLock = (name = entryOpponent) => {
@@ -4339,6 +4778,36 @@ function App() {
           0 0 22px rgba(248, 113, 113, 0.7),
           0 0 32px rgba(34, 211, 238, 0.36);
       }
+      @keyframes victory-star-fall {
+        0% { opacity: 0; transform: translate3d(0,-10vh,0) scale(0.75) rotate(0deg); }
+        10% { opacity: 1; }
+        100% { opacity: 0; transform: translate3d(var(--drift),108vh,0) scale(1.2) rotate(320deg); }
+      }
+      .victory-star-item {
+        position: absolute;
+        top: -12vh;
+        animation-name: victory-star-fall;
+        animation-timing-function: linear;
+        animation-fill-mode: forwards;
+        text-shadow: 0 0 10px rgba(255,255,255,0.8), 0 0 24px rgba(34,211,238,0.65);
+      }
+      @keyframes taunt-fall {
+        0% { opacity: 0; transform: translate3d(0,-8vh,0) rotate(var(--rot)) scale(0.8); }
+        10% { opacity: 1; }
+        60% { opacity: 1; transform: translate3d(calc(var(--drift) * 0.45),42vh,0) rotate(calc(var(--rot) * -0.8)) scale(1.05); }
+        100% { opacity: 0; transform: translate3d(var(--drift),96vh,0) rotate(calc(var(--rot) * 1.5)) scale(0.95); }
+      }
+      .taunt-fall-item {
+        position: absolute;
+        top: -10vh;
+        animation-name: taunt-fall;
+        animation-timing-function: ease-in-out;
+        animation-fill-mode: forwards;
+        color: rgba(255, 210, 230, 0.98);
+        font-weight: 900;
+        text-shadow: 0 0 10px rgba(244,114,182,0.65), 0 0 20px rgba(251,191,36,0.45);
+        white-space: nowrap;
+      }
     `}</style>
   );
 
@@ -4397,26 +4866,27 @@ function App() {
       </aside>
 
       <div ref={mainScrollRef} className="flex-1 flex flex-col z-10 relative ml-14 sm:ml-16 lg:ml-20 h-screen overflow-y-auto custom-scrollbar">
-        <header className="px-3 sm:px-4 lg:px-10 py-3 sm:py-4 lg:py-6 flex flex-col xl:flex-row xl:justify-between items-stretch xl:items-center gap-3 sm:gap-4 shrink-0 border-b border-cyan-500/30 bg-black/20 backdrop-blur-md">
-          <div onMouseEnter={() => playSFX('hover')} className="min-w-0 flex-1 cursor-pointer flex items-center gap-3 sm:gap-4 lg:gap-6" onClick={() => setActiveMenu('home')}>
+        <header className="relative px-3 sm:px-4 lg:px-10 py-3 sm:py-4 lg:py-6 flex flex-col xl:flex-row xl:justify-between items-stretch xl:items-center gap-3 sm:gap-4 shrink-0 border-b border-cyan-500/30 bg-black/20 backdrop-blur-md">
+          {masterUiPrefs.showDiscordEntry && (
+            <a
+              href="https://discord.com/channels/146930111478890496/1469829921630064721"
+              target="_blank"
+              rel="noreferrer"
+              title="디스코드 서버 바로가기"
+              onMouseEnter={() => playSFX('hover')}
+              onClick={() => playSFX('click')}
+              className="absolute z-20 inline-flex items-center gap-1.5 rounded-lg border border-indigo-400/45 bg-black/50 px-2 py-1 text-[11px] sm:text-xs font-black text-indigo-200 hover:border-indigo-300/65 hover:text-indigo-100 transition-all"
+              style={{
+                top: `${masterUiPrefs.discordButtonTopPx}px`,
+                left: `${masterUiPrefs.discordButtonLeftPx}px`,
+              }}
+            >
+              <img src={discordCustomIcon} alt="discord" className="w-4 h-4 sm:w-[18px] sm:h-[18px] object-contain drop-shadow-[0_0_8px_rgba(129,140,248,0.55)]" />
+              입장하기
+            </a>
+          )}
+          <div onMouseEnter={() => playSFX('hover')} className={`min-w-0 flex-1 cursor-pointer flex items-center gap-3 sm:gap-4 lg:gap-6 ${masterUiPrefs.showDiscordEntry ? 'pt-4 sm:pt-5' : ''}`} onClick={() => setActiveMenu('home')}>
             <div className="flex flex-col items-start gap-1 sm:gap-2 shrink-0">
-              {masterUiPrefs.showDiscordEntry && (
-                <a
-                  href="https://discord.com/channels/146930111478890496/1469829921630064721"
-                  target="_blank"
-                  rel="noreferrer"
-                  title="디스코드 서버 바로가기"
-                  onMouseEnter={() => playSFX('hover')}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    playSFX('click');
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-400/40 bg-black/35 px-2 py-1 text-[11px] sm:text-xs font-black text-indigo-200 hover:border-indigo-300/60 hover:text-indigo-100 transition-all"
-                >
-                  <img src={discordCustomIcon} alt="discord" className="w-4 h-4 sm:w-[18px] sm:h-[18px] object-contain drop-shadow-[0_0_8px_rgba(129,140,248,0.55)]" />
-                  입장하기
-                </a>
-              )}
               <h1
                 className="font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple] leading-none whitespace-nowrap"
                 style={{
@@ -4436,6 +4906,18 @@ function App() {
                   <p className="hidden lg:block text-[12px] lg:text-[15px] font-bold text-cyan-300/90 italic tracking-wide">
                     SEASON 01 BATTLE FOR THE STAR THRONE
                   </p>
+                  {masterUiPrefs.headerBadges.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {masterUiPrefs.headerBadges.filter((badge) => badge.trim().length > 0).map((badge, idx) => (
+                        <span
+                          key={`${badge}-${idx}`}
+                          className="px-2.5 py-1 rounded-full border border-cyan-400/40 bg-cyan-500/10 text-cyan-200 text-[11px] font-black tracking-wide"
+                        >
+                          {badge}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -5074,6 +5556,36 @@ function App() {
                 </div>
               </section>
 
+              <section className="bg-black/45 backdrop-blur-2xl border border-fuchsia-400/30 rounded-[2rem] p-4 sm:p-6">
+                <div className="flex items-center justify-between gap-3 mb-4 sm:mb-5">
+                  <div>
+                    <h3 className="text-xl sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-pink-400 to-cyan-300">
+                      이벤트 상품
+                    </h3>
+                    <p className="text-slate-400 text-xs sm:text-sm font-bold mt-1">
+                      기간 한정 상품입니다. 구매 시 즉시 GC 차감됩니다.
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                  {EVENT_SHOP_ITEMS.map((item) => (
+                    <div key={item.id} className="rounded-[1.3rem] border border-fuchsia-400/30 bg-black/60 p-4 sm:p-5 shadow-[0_0_16px_rgba(232,121,249,0.18)]">
+                      <img src={item.image} alt={item.name} className="w-full h-32 sm:h-36 object-cover rounded-2xl border border-white/10 mb-3" />
+                      <h4 className="text-lg sm:text-xl font-black text-white">{item.name}</h4>
+                      <p className="text-yellow-300 font-black text-base sm:text-lg mt-1">{item.cost.toLocaleString()} GC</p>
+                      <p className="text-slate-400 text-xs sm:text-sm font-bold mt-1">보유 수량: {eventItemCounts[item.id] || 0}</p>
+                      <button
+                        onMouseEnter={() => playSFX('hover')}
+                        onClick={() => handleBuyEventItem(item)}
+                        className="mt-3 w-full rounded-xl border border-fuchsia-400/50 bg-fuchsia-500/20 text-fuchsia-200 font-black py-2.5 hover:bg-fuchsia-500 hover:text-white transition-all cursor-pointer"
+                      >
+                        구매하기
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
               {(['nameColor', 'nameStyle', 'borderFx'] as CosmeticCategory[]).map((category) => {
                 const sectionTitle =
                   category === 'nameColor'
@@ -5709,115 +6221,205 @@ function App() {
                   로컬 캐시 정리
                 </button>
               </div>
-              <div className="mt-6 rounded-2xl border border-cyan-400/35 bg-black/45 p-4 sm:p-5">
-                <h3 className="text-cyan-200 font-black text-base sm:text-lg mb-3">실시간 UI 편집 (마스터)</h3>
-                <p className="text-slate-400 text-xs sm:text-sm font-bold mb-4">
-                  위치·폰트·표시/숨김을 바로 바꿔보고 저장할 수 있습니다. 이 설정은 현재 브라우저에 저장됩니다.
-                </p>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-                  <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                    헤더 타이틀
-                    <input
-                      value={masterUiPrefs.headerTitle}
-                      onChange={(e) => updateMasterUiPrefs('headerTitle', e.target.value)}
-                      className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-cyan-400"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                    시즌 문구
-                    <input
-                      value={masterUiPrefs.seasonTitle}
-                      onChange={(e) => updateMasterUiPrefs('seasonTitle', e.target.value)}
-                      className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-cyan-400"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                    타이틀 폰트 크기 {masterUiPrefs.titleScalePercent}%
-                    <input
-                      type="range"
-                      min={70}
-                      max={140}
-                      step={1}
-                      value={masterUiPrefs.titleScalePercent}
-                      onChange={(e) => updateMasterUiPrefs('titleScalePercent', Math.max(70, Math.min(140, Number(e.target.value) || 100)))}
-                      className="w-full"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                    홈 보드 간격 {masterUiPrefs.homeGapPx}px
-                    <input
-                      type="range"
-                      min={8}
-                      max={48}
-                      step={1}
-                      value={masterUiPrefs.homeGapPx}
-                      onChange={(e) => updateMasterUiPrefs('homeGapPx', Math.max(8, Math.min(48, Number(e.target.value) || 24)))}
-                      className="w-full"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-sm font-bold text-slate-300 lg:col-span-2">
-                    홈 보드 세로 위치 (오프셋) {masterUiPrefs.homeTopOffsetPx}px
-                    <input
-                      type="range"
-                      min={-80}
-                      max={120}
-                      step={1}
-                      value={masterUiPrefs.homeTopOffsetPx}
-                      onChange={(e) => updateMasterUiPrefs('homeTopOffsetPx', Math.max(-80, Math.min(120, Number(e.target.value) || 0)))}
-                      className="w-full"
-                    />
-                  </label>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 mt-4">
-                  <button
-                    onClick={() => updateMasterUiPrefs('showDiscordEntry', !masterUiPrefs.showDiscordEntry)}
-                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showDiscordEntry ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
-                  >
-                    디스코드 버튼 {masterUiPrefs.showDiscordEntry ? 'ON' : 'OFF'}
-                  </button>
-                  <button
-                    onClick={() => updateMasterUiPrefs('showSeasonTitle', !masterUiPrefs.showSeasonTitle)}
-                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showSeasonTitle ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
-                  >
-                    시즌 문구 {masterUiPrefs.showSeasonTitle ? 'ON' : 'OFF'}
-                  </button>
-                  <button
-                    onClick={() => updateMasterUiPrefs('showOnlineBoard', !masterUiPrefs.showOnlineBoard)}
-                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showOnlineBoard ? 'border-cyan-400/55 bg-cyan-500/15 text-cyan-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
-                  >
-                    접속현황 {masterUiPrefs.showOnlineBoard ? '표시' : '숨김'}
-                  </button>
-                  <button
-                    onClick={() => updateMasterUiPrefs('showMatchBoard', !masterUiPrefs.showMatchBoard)}
-                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showMatchBoard ? 'border-cyan-400/55 bg-cyan-500/15 text-cyan-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
-                  >
-                    대전신청 {masterUiPrefs.showMatchBoard ? '표시' : '숨김'}
-                  </button>
-                  <button
-                    onClick={() => updateMasterUiPrefs('showRecentBoard', !masterUiPrefs.showRecentBoard)}
-                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showRecentBoard ? 'border-cyan-400/55 bg-cyan-500/15 text-cyan-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
-                  >
-                    최근기록 {masterUiPrefs.showRecentBoard ? '표시' : '숨김'}
-                  </button>
-                  <button
-                    onClick={() => updateMasterUiPrefs('showRankingBoard', !masterUiPrefs.showRankingBoard)}
-                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showRankingBoard ? 'border-cyan-400/55 bg-cyan-500/15 text-cyan-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
-                  >
-                    랭킹보드 {masterUiPrefs.showRankingBoard ? '표시' : '숨김'}
-                  </button>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    onClick={() => {
-                      setMasterUiPrefs(DEFAULT_MASTER_UI_PREFS);
-                      showStatusPopup('info', '초기화 완료', 'UI 편집 설정을 기본값으로 되돌렸습니다.', { autoCloseMs: 1200, hideConfirm: true });
-                    }}
-                    className="rounded-lg border border-amber-400/55 bg-amber-500/15 text-amber-200 text-sm font-black px-4 py-2 hover:bg-amber-500/25 transition-all cursor-pointer"
-                  >
-                    UI 설정 초기화
-                  </button>
-                </div>
+              <div className="mt-6 flex flex-wrap gap-2">
+                <button
+                  onMouseEnter={() => playSFX('hover')}
+                  onClick={() => {
+                    playSFX('click');
+                    setMasterUiEditorOpen((prev) => !prev);
+                  }}
+                  className={`rounded-lg border px-4 py-2 text-sm font-black transition-all cursor-pointer flex items-center gap-2 ${masterUiEditorOpen ? 'border-cyan-300/70 bg-cyan-500/20 text-cyan-100 shadow-[0_0_12px_rgba(34,211,238,0.35)]' : 'border-slate-500/60 bg-slate-700/30 text-slate-200'}`}
+                >
+                  <Palette size={16} />
+                  UI 편집 {masterUiEditorOpen ? '닫기' : '열기'}
+                </button>
               </div>
+              {masterUiEditorOpen && (
+                <div className="mt-3 rounded-2xl border border-cyan-400/35 bg-black/45 p-4 sm:p-5">
+                  <h3 className="text-cyan-200 font-black text-base sm:text-lg mb-3">실시간 UI 편집 (마스터)</h3>
+                  <p className="text-slate-400 text-xs sm:text-sm font-bold mb-4">
+                    이동·변경·삭제·추가 기능을 여기서 즉시 적용할 수 있습니다. 설정은 현재 브라우저에 저장됩니다.
+                  </p>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                      헤더 타이틀
+                      <input
+                        value={masterUiPrefs.headerTitle}
+                        onChange={(e) => updateMasterUiPrefs('headerTitle', e.target.value)}
+                        className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                      시즌 문구
+                      <input
+                        value={masterUiPrefs.seasonTitle}
+                        onChange={(e) => updateMasterUiPrefs('seasonTitle', e.target.value)}
+                        className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                      타이틀 폰트 크기 {masterUiPrefs.titleScalePercent}%
+                      <input
+                        type="range"
+                        min={70}
+                        max={140}
+                        step={1}
+                        value={masterUiPrefs.titleScalePercent}
+                        onChange={(e) => updateMasterUiPrefs('titleScalePercent', Math.max(70, Math.min(140, Number(e.target.value) || 100)))}
+                        className="w-full"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                      홈 보드 간격 {masterUiPrefs.homeGapPx}px
+                      <input
+                        type="range"
+                        min={8}
+                        max={48}
+                        step={1}
+                        value={masterUiPrefs.homeGapPx}
+                        onChange={(e) => updateMasterUiPrefs('homeGapPx', Math.max(8, Math.min(48, Number(e.target.value) || 24)))}
+                        className="w-full"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                      디스코드 버튼 세로 {masterUiPrefs.discordButtonTopPx}px
+                      <input
+                        type="range"
+                        min={-18}
+                        max={28}
+                        step={1}
+                        value={masterUiPrefs.discordButtonTopPx}
+                        onChange={(e) => updateMasterUiPrefs('discordButtonTopPx', Math.max(-18, Math.min(28, Number(e.target.value) || 0)))}
+                        className="w-full"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                      디스코드 버튼 가로 {masterUiPrefs.discordButtonLeftPx}px
+                      <input
+                        type="range"
+                        min={0}
+                        max={40}
+                        step={1}
+                        value={masterUiPrefs.discordButtonLeftPx}
+                        onChange={(e) => updateMasterUiPrefs('discordButtonLeftPx', Math.max(0, Math.min(40, Number(e.target.value) || 0)))}
+                        className="w-full"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300 lg:col-span-2">
+                      홈 보드 세로 위치 (오프셋) {masterUiPrefs.homeTopOffsetPx}px
+                      <input
+                        type="range"
+                        min={-80}
+                        max={120}
+                        step={1}
+                        value={masterUiPrefs.homeTopOffsetPx}
+                        onChange={(e) => updateMasterUiPrefs('homeTopOffsetPx', Math.max(-80, Math.min(120, Number(e.target.value) || 0)))}
+                        className="w-full"
+                      />
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 mt-4">
+                    <button
+                      onClick={() => updateMasterUiPrefs('showDiscordEntry', !masterUiPrefs.showDiscordEntry)}
+                      className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showDiscordEntry ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
+                    >
+                      디스코드 버튼 {masterUiPrefs.showDiscordEntry ? 'ON' : 'OFF'}
+                    </button>
+                    <button
+                      onClick={() => updateMasterUiPrefs('showSeasonTitle', !masterUiPrefs.showSeasonTitle)}
+                      className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showSeasonTitle ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
+                    >
+                      시즌 문구 {masterUiPrefs.showSeasonTitle ? 'ON' : 'OFF'}
+                    </button>
+                    <button
+                      onClick={() => updateMasterUiPrefs('showOnlineBoard', !masterUiPrefs.showOnlineBoard)}
+                      className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showOnlineBoard ? 'border-cyan-400/55 bg-cyan-500/15 text-cyan-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
+                    >
+                      접속현황 {masterUiPrefs.showOnlineBoard ? '표시' : '숨김'}
+                    </button>
+                    <button
+                      onClick={() => updateMasterUiPrefs('showMatchBoard', !masterUiPrefs.showMatchBoard)}
+                      className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showMatchBoard ? 'border-cyan-400/55 bg-cyan-500/15 text-cyan-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
+                    >
+                      대전신청 {masterUiPrefs.showMatchBoard ? '표시' : '숨김'}
+                    </button>
+                    <button
+                      onClick={() => updateMasterUiPrefs('showRecentBoard', !masterUiPrefs.showRecentBoard)}
+                      className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showRecentBoard ? 'border-cyan-400/55 bg-cyan-500/15 text-cyan-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
+                    >
+                      최근기록 {masterUiPrefs.showRecentBoard ? '표시' : '숨김'}
+                    </button>
+                    <button
+                      onClick={() => updateMasterUiPrefs('showRankingBoard', !masterUiPrefs.showRankingBoard)}
+                      className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showRankingBoard ? 'border-cyan-400/55 bg-cyan-500/15 text-cyan-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
+                    >
+                      랭킹보드 {masterUiPrefs.showRankingBoard ? '표시' : '숨김'}
+                    </button>
+                  </div>
+                  <div className="mt-4 rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/5 p-3 sm:p-4">
+                    <h4 className="text-fuchsia-200 font-black text-sm sm:text-base mb-2">헤더 배지 편집 (추가/이동/삭제)</h4>
+                    <div className="flex gap-2 mb-3">
+                      <input
+                        value={masterNewBadgeText}
+                        onChange={(e) => setMasterNewBadgeText(e.target.value)}
+                        placeholder="예: 베타 테스트 진행 중"
+                        className="flex-1 rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-sm text-white outline-none focus:border-fuchsia-400"
+                      />
+                      <button
+                        onClick={addMasterHeaderBadge}
+                        className="rounded-lg border border-fuchsia-400/45 bg-fuchsia-500/20 px-3 py-2 text-xs sm:text-sm font-black text-fuchsia-200 hover:bg-fuchsia-500/30 transition-all cursor-pointer"
+                      >
+                        배지 추가
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {masterUiPrefs.headerBadges.length === 0 && (
+                        <p className="text-xs sm:text-sm text-slate-400 font-bold">추가된 배지가 없습니다.</p>
+                      )}
+                      {masterUiPrefs.headerBadges.map((badge, index) => (
+                        <div key={`master-badge-${index}`} className="flex flex-wrap items-center gap-2">
+                          <input
+                            value={badge}
+                            onChange={(e) => updateMasterHeaderBadge(index, e.target.value)}
+                            className="flex-1 min-w-[180px] rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-sm text-white outline-none focus:border-fuchsia-400"
+                          />
+                          <button
+                            onClick={() => moveMasterHeaderBadge(index, -1)}
+                            disabled={index === 0}
+                            className="rounded-lg border border-slate-500/70 px-2.5 py-1.5 text-xs font-black text-slate-200 disabled:opacity-35 cursor-pointer"
+                          >
+                            위로
+                          </button>
+                          <button
+                            onClick={() => moveMasterHeaderBadge(index, 1)}
+                            disabled={index === masterUiPrefs.headerBadges.length - 1}
+                            className="rounded-lg border border-slate-500/70 px-2.5 py-1.5 text-xs font-black text-slate-200 disabled:opacity-35 cursor-pointer"
+                          >
+                            아래로
+                          </button>
+                          <button
+                            onClick={() => removeMasterHeaderBadge(index)}
+                            className="rounded-lg border border-rose-400/55 bg-rose-500/15 px-2.5 py-1.5 text-xs font-black text-rose-200 hover:bg-rose-500/25 transition-all cursor-pointer"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => {
+                        setMasterUiPrefs(DEFAULT_MASTER_UI_PREFS);
+                        showStatusPopup('info', '초기화 완료', 'UI 편집 설정을 기본값으로 되돌렸습니다.', { autoCloseMs: 1200, hideConfirm: true });
+                      }}
+                      className="rounded-lg border border-amber-400/55 bg-amber-500/15 text-amber-200 text-sm font-black px-4 py-2 hover:bg-amber-500/25 transition-all cursor-pointer"
+                    >
+                      UI 설정 초기화
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="mt-6 rounded-2xl border border-white/10 bg-black/45 p-4 sm:p-5">
                 <h3 className="text-white font-black text-base sm:text-lg mb-2">마스터 계정 안내</h3>
                 <ul className="text-slate-300 text-sm sm:text-base font-bold leading-7 list-disc pl-5 space-y-1">
@@ -6040,6 +6642,40 @@ function App() {
         <div className="fixed inset-0 z-[260] pointer-events-none flex items-center justify-center">
           <div className={`absolute inset-0 ${resultFx.type === 'win' ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`} style={{ animation: `${resultFx.type === 'win' ? 'fx-win-pulse' : 'fx-lose-pulse'} 1.2s ease-out` }}></div>
           {resultFx.type === 'win' &&
+            resultVictoryStars.map((s) => (
+              <span
+                key={s.id}
+                className="victory-star-item"
+                style={{
+                  left: `${s.left}%`,
+                  animationDelay: `${s.delay}s`,
+                  animationDuration: `${s.duration}s`,
+                  fontSize: `${s.size}px`,
+                  color: `hsl(${s.hue} 98% 72%)`,
+                  ['--drift' as any]: `${s.drift}px`,
+                }}
+              >
+                ✦
+              </span>
+            ))}
+          {resultFx.type === 'lose' &&
+            resultLoseTaunts.map((t) => (
+              <span
+                key={t.id}
+                className="taunt-fall-item"
+                style={{
+                  left: `${t.left}%`,
+                  animationDelay: `${t.delay}s`,
+                  animationDuration: `${t.duration}s`,
+                  fontSize: `${t.size}px`,
+                  ['--drift' as any]: `${t.drift}px`,
+                  ['--rot' as any]: `${t.rotate}deg`,
+                }}
+              >
+                😝 메롱
+              </span>
+            ))}
+          {resultFx.type === 'win' &&
             resultBursts.map((b) => (
               <span
                 key={b.id}
@@ -6055,7 +6691,13 @@ function App() {
                 }}
               />
             ))}
-          <div className={`px-7 py-4 rounded-2xl border font-black text-xl sm:text-2xl ${resultFx.type === 'win' ? 'text-emerald-300 border-emerald-400/60 bg-black/65' : 'text-rose-300 border-rose-400/60 bg-black/65'}`}>
+          <div
+            className={`px-7 py-4 rounded-2xl border font-black text-xl sm:text-2xl ${
+              resultFx.type === 'win'
+                ? 'text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-cyan-200 to-fuchsia-300 border-cyan-300/60 bg-black/70 shadow-[0_0_24px_rgba(34,211,238,0.35)]'
+                : 'text-rose-300 border-rose-400/60 bg-black/65'
+            }`}
+          >
             {resultFx.message}
           </div>
         </div>
