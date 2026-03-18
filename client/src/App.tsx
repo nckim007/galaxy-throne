@@ -165,6 +165,9 @@ type MasterUiPrefs = {
   showMatchBoard: boolean;
   showRecentBoard: boolean;
   showRankingBoard: boolean;
+  showLeftSidebar: boolean;
+  leftMenuScalePercent: number;
+  leftMenuGapPx: number;
 };
 const MASTER_UI_PREFS_KEY = 'gt_master_ui_prefs_v1';
 const DEFAULT_MASTER_UI_PREFS: MasterUiPrefs = {
@@ -183,6 +186,9 @@ const DEFAULT_MASTER_UI_PREFS: MasterUiPrefs = {
   showMatchBoard: true,
   showRecentBoard: true,
   showRankingBoard: true,
+  showLeftSidebar: true,
+  leftMenuScalePercent: 100,
+  leftMenuGapPx: 32,
 };
 
 function App() {
@@ -282,6 +288,7 @@ function App() {
   const [eventItemCounts, setEventItemCounts] = useState<Record<string, number>>({});
   const [ownedMetaEntries, setOwnedMetaEntries] = useState<string[]>([]);
   const [masterUiEditorOpen, setMasterUiEditorOpen] = useState(true);
+  const [masterQuickEditorOpen, setMasterQuickEditorOpen] = useState(false);
   const [masterNewBadgeText, setMasterNewBadgeText] = useState('');
   const [masterDiscordUrlDraft, setMasterDiscordUrlDraft] = useState(DEFAULT_MASTER_UI_PREFS.discordInviteUrl);
   const [masterPointDrafts, setMasterPointDrafts] = useState<{ rp: string; sp: string; gp: string }>({
@@ -303,6 +310,8 @@ function App() {
         titleScalePercent: Math.max(70, Math.min(140, Number(parsed?.titleScalePercent ?? DEFAULT_MASTER_UI_PREFS.titleScalePercent))),
         homeGapPx: Math.max(8, Math.min(48, Number(parsed?.homeGapPx ?? DEFAULT_MASTER_UI_PREFS.homeGapPx))),
         homeTopOffsetPx: Math.max(-80, Math.min(120, Number(parsed?.homeTopOffsetPx ?? DEFAULT_MASTER_UI_PREFS.homeTopOffsetPx))),
+        leftMenuScalePercent: Math.max(80, Math.min(160, Number(parsed?.leftMenuScalePercent ?? DEFAULT_MASTER_UI_PREFS.leftMenuScalePercent))),
+        leftMenuGapPx: Math.max(16, Math.min(58, Number(parsed?.leftMenuGapPx ?? DEFAULT_MASTER_UI_PREFS.leftMenuGapPx))),
         discordInviteUrl:
           typeof parsed?.discordInviteUrl === 'string' && parsed.discordInviteUrl.trim()
             ? parsed.discordInviteUrl.trim()
@@ -353,6 +362,9 @@ function App() {
   const isMasterFallback = MASTER_ACCOUNT_EMAILS.includes(currentUserEmail);
   const isMasterAccount = hasDbMasterGrant || isMasterFallback;
   const visibleMenuItems = isMasterAccount ? [...BASE_MENU_ITEMS, MASTER_MENU_ITEM] : BASE_MENU_ITEMS;
+  const leftMenuScale = Math.max(0.8, Math.min(1.6, (masterUiPrefs.leftMenuScalePercent || 100) / 100));
+  const leftMenuIconSize = Math.round(20 * leftMenuScale);
+  const sidebarVisible = masterUiPrefs.showLeftSidebar;
   const lastOpponentStorageKey = user?.id ? `gt_last_opponent_v1_${user.id}` : null;
   const manualLoadoutStorageKey = user?.id ? `gt_manual_loadout_v2_${user.id}` : null;
   const eventShopStorageKey = user?.id ? `gt_event_shop_v1_${user.id}` : null;
@@ -1210,6 +1222,12 @@ function App() {
   }, [activeMenu, isMasterAccount]);
 
   useEffect(() => {
+    if (!isMasterAccount) {
+      setMasterQuickEditorOpen(false);
+    }
+  }, [isMasterAccount]);
+
+  useEffect(() => {
     return () => {
       if (starRainTimerRef.current) {
         window.clearTimeout(starRainTimerRef.current);
@@ -1474,21 +1492,22 @@ function App() {
       return;
     }
 
-    const fieldMap: Record<'rp' | 'sp' | 'gp', 'regular_rp' | 'season_sp' | 'gc'> = {
-      rp: 'regular_rp',
-      sp: 'season_sp',
-      gp: 'gc',
+    const fieldCandidatesMap: Record<'rp' | 'sp' | 'gp', string[]> = {
+      rp: ['regular_rp', 'rp', 'regular_points'],
+      sp: ['season_sp', 'season_points', 'sp'],
+      gp: ['gc', 'galaxy_credits', 'gp'],
     };
     const unitMap: Record<'rp' | 'sp' | 'gp', 'RP' | 'SP' | 'GP'> = {
       rp: 'RP',
       sp: 'SP',
       gp: 'GP',
     };
-    const field = fieldMap[resource];
+    const fieldCandidates = fieldCandidatesMap[resource];
     const unit = unitMap[resource];
+    const readField = fieldCandidates.find((f) => Number.isFinite(Number((selectedPlayer as any)?.[f]))) || fieldCandidates[0];
     const currentVal = Math.max(
       0,
-      Number((selectedPlayer as any)?.[field] ?? (resource === 'gp' ? 1000 : 0)) || 0
+      Number((selectedPlayer as any)?.[readField] ?? (resource === 'gp' ? 1000 : 0)) || 0
     );
     const nextVal = Math.max(0, currentVal + amount * direction);
     const delta = nextVal - currentVal;
@@ -1497,25 +1516,44 @@ function App() {
       return;
     }
 
-    const { data: updatedRow, error } = await supabase
-      .from('profiles')
-      .update({ [field]: nextVal })
-      .eq('id', selectedPlayer.id)
-      .select('*')
-      .maybeSingle();
-
-    if (error) {
-      showStatusPopup('error', '수정 실패', `포인트 수정 중 오류가 발생했습니다.\n${error.message}`);
+    let updatedRow: any = null;
+    let appliedField = '';
+    let lastError: any = null;
+    for (const field of fieldCandidates) {
+      const res = await supabase
+        .from('profiles')
+        .update({ [field]: nextVal })
+        .eq('id', selectedPlayer.id)
+        .select('*')
+        .maybeSingle();
+      if (!res.error) {
+        updatedRow = res.data;
+        appliedField = field;
+        break;
+      }
+      lastError = res.error;
+      const msg = String(res.error?.message || '').toLowerCase();
+      const missingColumn = msg.includes('could not find') || msg.includes('column') || msg.includes('schema cache');
+      if (!missingColumn) {
+        break;
+      }
+    }
+    if (!updatedRow && !appliedField) {
+      showStatusPopup('error', '수정 실패', `포인트 수정 중 오류가 발생했습니다.\n${lastError?.message || '알 수 없는 오류'}`);
       return;
     }
 
-    const merged = { ...(selectedPlayer as any), ...(updatedRow || {}), [field]: nextVal };
+    const canonicalPatch: Record<string, number> = { [appliedField]: nextVal };
+    if (resource === 'rp') canonicalPatch.regular_rp = nextVal;
+    if (resource === 'sp') canonicalPatch.season_sp = nextVal;
+    if (resource === 'gp') canonicalPatch.gc = nextVal;
+    const merged = { ...(selectedPlayer as any), ...(updatedRow || {}), ...canonicalPatch };
     const resolved = resolveIngameProfile(merged);
     const hydrated = { ...merged, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform };
     setSelectedPlayer((prev) => (prev && prev.id === selectedPlayer.id ? hydrated : prev));
     setRankers((prev) => prev.map((row) => (row.id === selectedPlayer.id ? { ...row, ...hydrated } : row)));
     if (profile?.id && String(profile.id) === String(selectedPlayer.id)) {
-      setProfile((prev: any) => (prev ? { ...prev, [field]: nextVal } : prev));
+      setProfile((prev: any) => (prev ? { ...prev, ...canonicalPatch } : prev));
     }
 
     const absDelta = Math.abs(delta);
@@ -3669,7 +3707,7 @@ function App() {
   };
 
   const handleStartMatch = async () => {
-    const targetExists = Boolean(regularRankMap.get(normalizeName(entryOpponent.trim())));
+    const targetExists = rankers.some((r) => normalizeName(r.display_name) === normalizeName(entryOpponent.trim()));
     if (!targetExists) {
       playSFX('error');
       return alert('대상 닉네임을 찾을 수 없습니다. 접속 현황/랭킹에서 다시 선택해주세요.');
@@ -4704,6 +4742,10 @@ function App() {
     if (matchPhase !== 'idle') {
       return { label: '도전불가', hint: '', clickable: false, className: 'bg-slate-800/50 border border-slate-700 text-slate-500' };
     }
+    if (!isRegularMode(entryMode)) {
+      // 시즌 대전은 티어/순위 제한 없이 신청 가능
+      return { label: '도전가능', hint: '', clickable: true, className: 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-500 hover:text-black' };
+    }
     if (canChallengeTargetByRegularRule(targetName)) {
       return { label: '도전가능', hint: '', clickable: true, className: 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-500 hover:text-black' };
     }
@@ -5101,9 +5143,16 @@ function App() {
         <div className="absolute inset-0 backdrop-blur-[1.2px]"></div>
       </div>
       
-      <aside className="w-14 sm:w-16 lg:w-20 bg-black/20 backdrop-blur-md border-r border-cyan-500/30 shadow-2xl flex flex-col items-center py-6 sm:py-8 lg:py-10 gap-6 sm:gap-8 lg:gap-10 z-20 shrink-0 h-screen fixed left-0">
-        <div onMouseEnter={() => playSFX('hover')} onClick={triggerStarRain} className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 shadow-lg cursor-pointer">
-          <Star className="text-cyan-400 animate-pulse" size={20}/>
+      <aside
+        className={`${sidebarVisible ? 'flex' : 'hidden'} w-14 sm:w-16 lg:w-20 bg-black/20 backdrop-blur-md border-r border-cyan-500/30 shadow-2xl flex-col items-center py-6 sm:py-8 lg:py-10 z-20 shrink-0 h-screen fixed left-0`}
+        style={{ gap: `${masterUiPrefs.leftMenuGapPx}px` }}
+      >
+        <div
+          onMouseEnter={() => playSFX('hover')}
+          onClick={triggerStarRain}
+          className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 shadow-lg cursor-pointer"
+        >
+          <Star className="text-cyan-400 animate-pulse" size={leftMenuIconSize}/>
         </div>
         <div className="flex flex-col gap-6 sm:gap-8 lg:gap-10 text-slate-500 w-full items-center">
           {visibleMenuItems.map((item) => (
@@ -5118,16 +5167,19 @@ function App() {
               }}
               className={`cursor-pointer transition-all ${activeMenu === item.id ? 'text-cyan-400 drop-shadow-[0_0_10px_cyan] scale-110' : 'hover:text-slate-300'}`}
             >
-              <item.icon size={20}/>
+              <item.icon size={leftMenuIconSize}/>
             </div>
           ))}
         </div>
         <div onMouseEnter={() => playSFX('hover')} className="mt-auto mb-4 sm:mb-6 hover:text-pink-500 cursor-pointer transition-colors" onClick={handleLogout}>
-          <LogOut size={20}/>
+          <LogOut size={leftMenuIconSize}/>
         </div>
       </aside>
 
-      <div ref={mainScrollRef} className="flex-1 flex flex-col z-10 relative ml-14 sm:ml-16 lg:ml-20 h-screen overflow-y-auto custom-scrollbar">
+      <div
+        ref={mainScrollRef}
+        className={`flex-1 flex flex-col z-10 relative h-screen overflow-y-auto custom-scrollbar ${sidebarVisible ? 'ml-14 sm:ml-16 lg:ml-20' : 'ml-0'}`}
+      >
         <header className="relative px-3 sm:px-4 lg:px-10 py-3 sm:py-4 lg:py-6 flex flex-col xl:flex-row xl:justify-between items-stretch xl:items-center gap-3 sm:gap-4 shrink-0 border-b border-cyan-500/30 bg-black/20 backdrop-blur-md">
           {masterUiPrefs.showDiscordEntry && (
             <a
@@ -5214,6 +5266,23 @@ function App() {
                     GC 코인 {Number(profile?.gc ?? 1000).toLocaleString()}
                   </div>
                 </div>
+                {isMasterAccount && (
+                  <button
+                    onMouseEnter={() => playSFX('hover')}
+                    onClick={() => {
+                      playSFX('click');
+                      setMasterQuickEditorOpen((prev) => !prev);
+                    }}
+                    title="관리자 UI 퀵 편집"
+                    className={`px-4 py-3 rounded-xl border font-black transition-all cursor-pointer ${
+                      masterQuickEditorOpen
+                        ? 'border-cyan-300/70 bg-cyan-500/20 text-cyan-100 shadow-[0_0_14px_rgba(34,211,238,0.35)]'
+                        : 'border-cyan-400/40 bg-black/45 text-cyan-300 hover:bg-cyan-500/20'
+                    }`}
+                  >
+                    <Settings size={20} />
+                  </button>
+                )}
                 <button
                   onMouseEnter={() => playSFX('hover')}
                   onClick={handleLogout}
@@ -5228,6 +5297,157 @@ function App() {
             </button>
           )}
         </header>
+
+        {isMasterAccount && masterQuickEditorOpen && (
+          <div className="fixed top-20 right-3 sm:right-4 lg:right-6 z-[260] w-[min(92vw,460px)] max-h-[78vh] overflow-y-auto custom-scrollbar rounded-2xl border border-cyan-400/45 bg-[#060b17]/95 backdrop-blur-xl shadow-[0_0_26px_rgba(34,211,238,0.25)] p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-cyan-200 text-base sm:text-lg font-black">관리자 UI 퀵 편집</h3>
+              <button
+                onClick={() => setMasterQuickEditorOpen(false)}
+                className="rounded-lg border border-white/20 px-2 py-1 text-xs font-black text-slate-300 hover:text-white hover:border-cyan-300/60 cursor-pointer"
+              >
+                닫기
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5 mb-3">
+              <button
+                onClick={() => updateMasterUiPrefs('showLeftSidebar', !masterUiPrefs.showLeftSidebar)}
+                className={`rounded-lg border px-3 py-2 text-xs font-black cursor-pointer ${masterUiPrefs.showLeftSidebar ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100' : 'border-slate-600 bg-slate-800/50 text-slate-300'}`}
+              >
+                좌측 카테고리 {masterUiPrefs.showLeftSidebar ? 'ON' : 'OFF'}
+              </button>
+              <button
+                onClick={() => updateMasterUiPrefs('showSeasonTitle', !masterUiPrefs.showSeasonTitle)}
+                className={`rounded-lg border px-3 py-2 text-xs font-black cursor-pointer ${masterUiPrefs.showSeasonTitle ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100' : 'border-slate-600 bg-slate-800/50 text-slate-300'}`}
+              >
+                배너 시즌문구 {masterUiPrefs.showSeasonTitle ? 'ON' : 'OFF'}
+              </button>
+              <button
+                onClick={() => updateMasterUiPrefs('showOnlineBoard', !masterUiPrefs.showOnlineBoard)}
+                className={`rounded-lg border px-3 py-2 text-xs font-black cursor-pointer ${masterUiPrefs.showOnlineBoard ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100' : 'border-slate-600 bg-slate-800/50 text-slate-300'}`}
+              >
+                접속현황 {masterUiPrefs.showOnlineBoard ? '표시' : '숨김'}
+              </button>
+              <button
+                onClick={() => updateMasterUiPrefs('showMatchBoard', !masterUiPrefs.showMatchBoard)}
+                className={`rounded-lg border px-3 py-2 text-xs font-black cursor-pointer ${masterUiPrefs.showMatchBoard ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100' : 'border-slate-600 bg-slate-800/50 text-slate-300'}`}
+              >
+                대전신청 {masterUiPrefs.showMatchBoard ? '표시' : '숨김'}
+              </button>
+              <button
+                onClick={() => updateMasterUiPrefs('showRecentBoard', !masterUiPrefs.showRecentBoard)}
+                className={`rounded-lg border px-3 py-2 text-xs font-black cursor-pointer ${masterUiPrefs.showRecentBoard ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100' : 'border-slate-600 bg-slate-800/50 text-slate-300'}`}
+              >
+                최근기록 {masterUiPrefs.showRecentBoard ? '표시' : '숨김'}
+              </button>
+              <button
+                onClick={() => updateMasterUiPrefs('showRankingBoard', !masterUiPrefs.showRankingBoard)}
+                className={`rounded-lg border px-3 py-2 text-xs font-black cursor-pointer ${masterUiPrefs.showRankingBoard ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100' : 'border-slate-600 bg-slate-800/50 text-slate-300'}`}
+              >
+                랭킹보드 {masterUiPrefs.showRankingBoard ? '표시' : '숨김'}
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs sm:text-sm font-bold text-slate-300">
+              <label className="flex flex-col gap-1">
+                헤더 제목
+                <input
+                  value={masterUiPrefs.headerTitle}
+                  onChange={(e) => updateMasterUiPrefs('headerTitle', e.target.value)}
+                  className="rounded-lg border border-white/15 bg-black/55 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                시즌 제목
+                <input
+                  value={masterUiPrefs.seasonTitle}
+                  onChange={(e) => updateMasterUiPrefs('seasonTitle', e.target.value)}
+                  className="rounded-lg border border-white/15 bg-black/55 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                타이틀 크기 {masterUiPrefs.titleScalePercent}%
+                <input
+                  type="range"
+                  min={70}
+                  max={140}
+                  step={1}
+                  value={masterUiPrefs.titleScalePercent}
+                  onChange={(e) => updateMasterUiPrefs('titleScalePercent', Math.max(70, Math.min(140, Number(e.target.value) || 100)))}
+                  className="w-full"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                좌측 카테고리 아이콘 크기 {masterUiPrefs.leftMenuScalePercent}%
+                <input
+                  type="range"
+                  min={80}
+                  max={160}
+                  step={1}
+                  value={masterUiPrefs.leftMenuScalePercent}
+                  onChange={(e) => updateMasterUiPrefs('leftMenuScalePercent', Math.max(80, Math.min(160, Number(e.target.value) || 100)))}
+                  className="w-full"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                좌측 카테고리 간격 {masterUiPrefs.leftMenuGapPx}px
+                <input
+                  type="range"
+                  min={16}
+                  max={58}
+                  step={1}
+                  value={masterUiPrefs.leftMenuGapPx}
+                  onChange={(e) => updateMasterUiPrefs('leftMenuGapPx', Math.max(16, Math.min(58, Number(e.target.value) || 32)))}
+                  className="w-full"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                홈 보드 간격 {masterUiPrefs.homeGapPx}px
+                <input
+                  type="range"
+                  min={8}
+                  max={48}
+                  step={1}
+                  value={masterUiPrefs.homeGapPx}
+                  onChange={(e) => updateMasterUiPrefs('homeGapPx', Math.max(8, Math.min(48, Number(e.target.value) || 24)))}
+                  className="w-full"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                홈 보드 세로 위치 {masterUiPrefs.homeTopOffsetPx}px
+                <input
+                  type="range"
+                  min={-80}
+                  max={120}
+                  step={1}
+                  value={masterUiPrefs.homeTopOffsetPx}
+                  onChange={(e) => updateMasterUiPrefs('homeTopOffsetPx', Math.max(-80, Math.min(120, Number(e.target.value) || 0)))}
+                  className="w-full"
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  onClick={() => {
+                    setMasterQuickEditorOpen(false);
+                    setActiveMenu('master');
+                  }}
+                  className="rounded-lg border border-indigo-400/55 bg-indigo-500/20 px-3 py-2 text-xs font-black text-indigo-200 hover:bg-indigo-500/30 transition-all cursor-pointer"
+                >
+                  상세 편집 열기
+                </button>
+                <button
+                  onClick={() => {
+                    setMasterUiPrefs(DEFAULT_MASTER_UI_PREFS);
+                    showStatusPopup('info', '초기화 완료', 'UI 편집 설정을 기본값으로 되돌렸습니다.', { autoCloseMs: 1200, hideConfirm: true });
+                  }}
+                  className="rounded-lg border border-amber-400/55 bg-amber-500/20 px-3 py-2 text-xs font-black text-amber-200 hover:bg-amber-500/30 transition-all cursor-pointer"
+                >
+                  기본값 복원
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {activeMenu === 'home' && (
           <main
