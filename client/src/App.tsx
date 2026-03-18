@@ -3148,25 +3148,47 @@ function App() {
         seasonWinStreak: 0,
         seasonDefenseStack: 0,
       };
-      const rawRpOffset = Number.isFinite(Number((r as any)?.rp)) ? Number((r as any).rp) : null;
+      const rawRpOffset = Number.isFinite(Number((r as any)?.rp)) ? Number((r as any).rp) : 0;
       const rawRegularTotal = Number.isFinite(Number((r as any)?.regular_rp)) ? Number((r as any).regular_rp) : null;
-      const offsetFromRegularTotal = rawRegularTotal === null ? null : rawRegularTotal - s.regularRp;
-      const regularOffset =
-        offsetFromRegularTotal !== null && (rawRpOffset === null || Math.abs((s.regularRp + rawRpOffset) - rawRegularTotal) > 0.5)
-          ? offsetFromRegularTotal
-          : rawRpOffset ?? offsetFromRegularTotal ?? 0;
+      // 우선순위:
+      // 1) 경기기록 기반 점수(s.regularRp) + 오프셋(rp)
+      // 2) 과거 total 컬럼(regular_rp)은 fallback으로만 사용
+      // -> total 컬럼이 0으로 잘못 들어가도 랭킹 점수가 0으로 고정되지 않게 함
+      let regularTotal = Math.max(0, s.regularRp + rawRpOffset);
+      if (
+        regularTotal <= 0 &&
+        s.regularRp <= 0 &&
+        rawRegularTotal !== null &&
+        rawRegularTotal > 0
+      ) {
+        regularTotal = Math.max(0, rawRegularTotal);
+      }
 
-      const rawSpOffset = Number.isFinite(Number((r as any)?.sp)) ? Number((r as any).sp) : null;
+      const rawSpOffset = Number.isFinite(Number((r as any)?.sp)) ? Number((r as any).sp) : 0;
       const rawSeasonTotal = Number.isFinite(Number((r as any)?.season_sp)) ? Number((r as any).season_sp) : null;
       const rawSeasonLegacyTotal = Number.isFinite(Number((r as any)?.season_points)) ? Number((r as any).season_points) : null;
-      const offsetFromSeasonTotal = rawSeasonTotal === null ? null : rawSeasonTotal - s.seasonSp;
-      const offsetFromLegacySeasonTotal = rawSeasonLegacyTotal === null ? null : rawSeasonLegacyTotal - s.seasonSp;
-      const seasonOffset =
-        offsetFromSeasonTotal !== null && (rawSpOffset === null || Math.abs((s.seasonSp + rawSpOffset) - rawSeasonTotal) > 0.5)
-          ? offsetFromSeasonTotal
-          : rawSpOffset ?? offsetFromSeasonTotal ?? offsetFromLegacySeasonTotal ?? 0;
-      const regularTotal = Math.max(0, s.regularRp + regularOffset);
-      const seasonTotal = Math.max(0, s.seasonSp + seasonOffset);
+      // 우선순위:
+      // 1) 경기기록 기반 점수(s.seasonSp) + 오프셋(sp)
+      // 2) season_sp, season_points는 fallback
+      let seasonTotal = Math.max(0, s.seasonSp + rawSpOffset);
+      if (
+        seasonTotal <= 0 &&
+        s.seasonSp <= 0 &&
+        rawSeasonTotal !== null &&
+        rawSeasonTotal > 0
+      ) {
+        seasonTotal = Math.max(0, rawSeasonTotal);
+      }
+      if (
+        seasonTotal <= 0 &&
+        s.seasonSp <= 0 &&
+        rawSeasonLegacyTotal !== null &&
+        rawSeasonLegacyTotal > 0
+      ) {
+        seasonTotal = Math.max(0, rawSeasonLegacyTotal);
+      }
+      const regularOffset = regularTotal - s.regularRp;
+      const seasonOffset = seasonTotal - s.seasonSp;
       return {
         ...r,
         display_name: r.display_name || 'GUEST',
