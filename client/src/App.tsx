@@ -353,6 +353,8 @@ function App() {
   const [starRainParticles, setStarRainParticles] = useState<
     { id: number; left: number; delay: number; duration: number; size: number; drift: number; kind: 'star' | 'meteor' }[]
   >([]);
+  const [isWindowFocused, setIsWindowFocused] = useState(() => (typeof document !== 'undefined' ? document.hasFocus() : true));
+  const [isDocumentVisible, setIsDocumentVisible] = useState(() => (typeof document !== 'undefined' ? !document.hidden : true));
 
   const [bgmEnabled, setBgmEnabled] = useState(localStorage.getItem('bgmEnabled') !== 'false');
   const [sfxEnabled, setSfxEnabled] = useState(localStorage.getItem('sfxEnabled') !== 'false');
@@ -445,6 +447,7 @@ function App() {
   const updateMasterUiPrefs = <K extends keyof MasterUiPrefs>(key: K, value: MasterUiPrefs[K]) => {
     setMasterUiPrefs((prev) => ({ ...prev, [key]: value }));
   };
+  const isLowPowerMode = !isWindowFocused || !isDocumentVisible;
   const boardEditorConfig: Record<
     BoardEditorTarget,
     {
@@ -1333,6 +1336,22 @@ function App() {
     });
   };
 
+  useEffect(() => {
+    const syncPowerState = () => {
+      setIsDocumentVisible(!document.hidden);
+      setIsWindowFocused(document.hasFocus());
+    };
+    syncPowerState();
+    document.addEventListener('visibilitychange', syncPowerState);
+    window.addEventListener('focus', syncPowerState);
+    window.addEventListener('blur', syncPowerState);
+    return () => {
+      document.removeEventListener('visibilitychange', syncPowerState);
+      window.removeEventListener('focus', syncPowerState);
+      window.removeEventListener('blur', syncPowerState);
+    };
+  }, []);
+
   useEffect(() => { activeMatchRef.current = activeMatch; }, [activeMatch]);
   useEffect(() => { matchPhaseRef.current = matchPhase; }, [matchPhase]);
   useEffect(() => { waitingForScoreRef.current = waitingForScore; }, [waitingForScore]);
@@ -1508,6 +1527,7 @@ function App() {
     if (!currentUserName) return;
     let polling = false;
     let mounted = true;
+    let timer: number | null = null;
     const run = async () => {
       if (!mounted || polling) return;
       polling = true;
@@ -1517,15 +1537,21 @@ function App() {
         polling = false;
       }
     };
+    const scheduleNext = () => {
+      if (!mounted) return;
+      const interval = isLowPowerMode ? 10000 : 2500;
+      timer = window.setTimeout(async () => {
+        await run();
+        scheduleNext();
+      }, interval);
+    };
     void run();
-    const timer = window.setInterval(() => {
-      void run();
-    }, 2500);
+    scheduleNext();
     return () => {
       mounted = false;
-      window.clearInterval(timer);
+      if (timer !== null) window.clearTimeout(timer);
     };
-  }, [currentUserName]);
+  }, [currentUserName, isLowPowerMode]);
 
   useEffect(() => {
     if (!originalDocumentTitleRef.current) {
@@ -1723,8 +1749,9 @@ function App() {
     }
 
     const fieldCandidatesMap: Record<'rp' | 'sp' | 'gp', string[]> = {
-      rp: ['rp', 'regular_rp', 'regular_points'],
-      sp: ['sp', 'season_sp', 'season_points', 'rp'],
+      // rp/sp는 매치 재계산값 위에 더해지는 "관리자 보정치"로 저장
+      rp: ['rp', 'regular_points'],
+      sp: ['sp', 'season_points'],
       gp: ['gc', 'gp', 'galaxy_credits'],
     };
     const unitMap: Record<'rp' | 'sp' | 'gp', 'RP' | 'SP' | 'GC'> = {
@@ -1734,15 +1761,31 @@ function App() {
     };
     const fieldCandidates = fieldCandidatesMap[resource];
     const unit = unitMap[resource];
-    const readField =
-      fieldCandidates.find((f) => Number.isFinite(Number((selectedPlayer as any)?.[f]))) ||
-      fieldCandidates[0];
-    const currentVal = Math.max(
-      0,
-      Number((selectedPlayer as any)?.[readField] ?? (resource === 'gp' ? 1000 : 0)) || 0
-    );
-    const nextVal = Math.max(0, currentVal + amount * direction);
-    const delta = nextVal - currentVal;
+    const deltaRequest = amount * direction;
+    let currentVal = 0;
+    let nextVal = 0;
+    let delta = 0;
+    let writeValue = 0;
+
+    if (resource === 'gp') {
+      currentVal = Math.max(0, Number((selectedPlayer as any)?.gc ?? 1000) || 1000);
+      nextVal = Math.max(0, currentVal + deltaRequest);
+      delta = nextVal - currentVal;
+      writeValue = nextVal;
+    } else if (resource === 'rp') {
+      currentVal = Math.max(0, Number((selectedPlayer as any)?.regular_rp ?? 0) || 0);
+      nextVal = Math.max(0, currentVal + deltaRequest);
+      delta = nextVal - currentVal;
+      const currentOffset = Number((selectedPlayer as any)?.rp ?? 0) || 0;
+      writeValue = currentOffset + delta;
+    } else {
+      currentVal = Math.max(0, Number((selectedPlayer as any)?.season_sp ?? 0) || 0);
+      nextVal = Math.max(0, currentVal + deltaRequest);
+      delta = nextVal - currentVal;
+      const currentOffset = Number((selectedPlayer as any)?.sp ?? 0) || 0;
+      writeValue = currentOffset + delta;
+    }
+
     if (delta === 0) {
       showStatusPopup('info', '변경 없음', `${unit} 값이 변경되지 않았습니다.`);
       return;
@@ -1752,7 +1795,7 @@ function App() {
     let appliedField = '';
     let lastError: any = null;
     for (const field of fieldCandidates) {
-      const res = await supabase.from('profiles').update({ [field]: nextVal }).eq('id', selectedPlayer.id);
+      const res = await supabase.from('profiles').update({ [field]: writeValue }).eq('id', selectedPlayer.id);
       if (!res.error) {
         updatedRow = null;
         appliedField = field;
@@ -1770,12 +1813,12 @@ function App() {
       return;
     }
 
-    const canonicalPatch: Record<string, number> = { [appliedField]: nextVal };
+    const canonicalPatch: Record<string, number> = { [appliedField]: writeValue };
     if (resource === 'rp') canonicalPatch.regular_rp = nextVal;
     if (resource === 'sp') canonicalPatch.season_sp = nextVal;
     if (resource === 'gp') canonicalPatch.gc = nextVal;
-    if (resource === 'sp') canonicalPatch.sp = nextVal;
-    if (resource === 'rp') canonicalPatch.rp = nextVal;
+    if (resource === 'sp') canonicalPatch.sp = writeValue;
+    if (resource === 'rp') canonicalPatch.rp = writeValue;
     const merged = { ...(selectedPlayer as any), ...(updatedRow || {}), ...canonicalPatch };
     const resolved = resolveIngameProfile(merged);
     const hydrated = { ...merged, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform };
@@ -1793,6 +1836,9 @@ function App() {
       { autoCloseMs: 1400, hideConfirm: true }
     );
 
+    // 점수 변경 후 랭킹 순위/표시 인덱스를 즉시 재계산해서 실제 보드에 반영
+    await fetchRankers();
+
     const channel = adminNoticeChannelRef.current;
     if (channel && String(selectedPlayer.id) !== String(user?.id || '')) {
       await channel.send({
@@ -1809,6 +1855,7 @@ function App() {
   };
 
   const triggerStarRain = () => {
+    if (isLowPowerMode) return;
     playSFX('click');
     starRainClickCountRef.current += 1;
     const meteorMode = starRainClickCountRef.current >= 5;
@@ -1846,6 +1893,15 @@ function App() {
   };
 
   const triggerResultFx = (didWin: boolean, message: string) => {
+    if (isLowPowerMode) {
+      setResultBursts([]);
+      setResultVictoryStars([]);
+      setResultLoseTaunts([]);
+      setResultFxTexts([]);
+      setResultFx({ type: didWin ? 'win' : 'lose', message });
+      window.setTimeout(() => setResultFx(null), 1200);
+      return;
+    }
     setResultFx({ type: didWin ? 'win' : 'lose', message });
     if (didWin) {
       const winPhrasePool = ['ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ', '이겨버렸쥬!??ㅋㅋ', '쨉도 안되쥬??', 'ㅎㅎㅎㅎㅎㅎ'];
@@ -2449,14 +2505,14 @@ function App() {
     };
 
     fetchDiscordPresence();
-    const timer = window.setInterval(fetchDiscordPresence, 30000);
+    const timer = window.setInterval(fetchDiscordPresence, isLowPowerMode ? 120000 : 30000);
 
     return () => {
       isMounted = false;
       window.clearInterval(timer);
       setDiscordOnlineUsers(new Set());
     };
-  }, [DISCORD_GUILD_ID]);
+  }, [DISCORD_GUILD_ID, isLowPowerMode]);
 
   useEffect(() => {
     if (!currentUserName?.trim()) {
@@ -3000,6 +3056,10 @@ function App() {
         seasonWinStreak: 0,
         seasonDefenseStack: 0,
       };
+      const regularOffset = Number.isFinite(Number((r as any)?.rp)) ? Number((r as any).rp) : 0;
+      const seasonOffset = Number.isFinite(Number((r as any)?.sp)) ? Number((r as any).sp) : 0;
+      const regularTotal = Math.max(0, s.regularRp + regularOffset);
+      const seasonTotal = Math.max(0, s.seasonSp + seasonOffset);
       return {
         ...r,
         display_name: r.display_name || 'GUEST',
@@ -3010,9 +3070,10 @@ function App() {
         ingame_nickname: ingame.nickname,
         ingame_platform: ingame.platform,
         gc: typeof r.gc === 'number' ? r.gc : 1000,
-        regular_rp: s.regularRp,
-        season_sp: s.seasonSp,
-        rp: s.seasonSp,
+        regular_rp: regularTotal,
+        season_sp: seasonTotal,
+        rp: regularOffset,
+        sp: seasonOffset,
         regular_matches: s.regularMatches,
         regular_wins: s.regularWins,
         regular_losses: s.regularLosses,
@@ -5197,6 +5258,17 @@ function App() {
           0 0 26px rgba(34, 211, 238, 0.2),
           0 0 52px rgba(167, 139, 250, 0.12);
       }
+      .gt-low-power * {
+        animation-duration: 0ms !important;
+        animation-delay: 0ms !important;
+        transition-duration: 0ms !important;
+      }
+      .gt-low-power .board-soft-glow {
+        box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.16) !important;
+      }
+      .gt-low-power [class*='backdrop-blur'] {
+        backdrop-filter: none !important;
+      }
       /* hover.css 스타일 감성을 참고한 인터랙션 */
       .hvr-grow {
         transform: translateZ(0);
@@ -5345,9 +5417,9 @@ function App() {
   );
 
   return (
-    <div className="flex h-screen bg-black text-slate-300 overflow-hidden relative select-none">
+    <div className={`flex h-screen bg-black text-slate-300 overflow-hidden relative select-none ${isLowPowerMode ? 'gt-low-power' : ''}`}>
       {globalFontStyle}
-      {starRainActive && (
+      {!isLowPowerMode && starRainActive && (
         <div className="fixed inset-0 z-[48] pointer-events-none overflow-hidden">
           {starRainParticles.map((particle) => (
             <span
@@ -5369,19 +5441,19 @@ function App() {
       <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 brightness-[0.76] contrast-[1.08] saturate-[1.04]" style={{ backgroundImage: `url(${bgImage})` }}>
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.30),rgba(2,6,23,0.62))]"></div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_18%,rgba(56,189,248,0.08),transparent_40%),radial-gradient(circle_at_80%_22%,rgba(217,70,239,0.08),transparent_42%)]"></div>
-        <div className="absolute inset-0 backdrop-blur-[1.2px]"></div>
+        <div className={`absolute inset-0 ${isLowPowerMode ? '' : 'backdrop-blur-[1.2px]'}`}></div>
       </div>
       
       <aside
         className={`${sidebarVisible ? 'flex' : 'hidden'} w-14 sm:w-16 lg:w-20 bg-black/20 backdrop-blur-md border-r border-cyan-500/30 shadow-2xl flex-col items-center py-6 sm:py-8 lg:py-10 z-20 shrink-0 h-screen fixed left-0`}
-        style={{ gap: `${masterUiPrefs.leftMenuGapPx}px` }}
+        style={{ gap: `${masterUiPrefs.leftMenuGapPx}px`, backdropFilter: isLowPowerMode ? 'none' : undefined }}
       >
         <div
           onMouseEnter={() => playSFX('hover')}
           onClick={triggerStarRain}
           className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 shadow-lg cursor-pointer"
         >
-          <Star className="text-cyan-400 animate-pulse" size={leftMenuIconSize}/>
+            <Star className={`text-cyan-400 ${isLowPowerMode ? '' : 'animate-pulse'}`} size={leftMenuIconSize}/>
         </div>
         <div className="flex flex-col gap-6 sm:gap-8 lg:gap-10 text-slate-500 w-full items-center">
           {visibleMenuItems.map((item) => (
@@ -5409,7 +5481,10 @@ function App() {
         ref={mainScrollRef}
         className={`flex-1 flex flex-col z-10 relative h-screen overflow-y-auto custom-scrollbar ${sidebarVisible ? 'ml-14 sm:ml-16 lg:ml-20' : 'ml-0'}`}
       >
-        <header className="relative px-3 sm:px-4 lg:px-10 py-3 sm:py-4 lg:py-6 flex flex-col xl:flex-row xl:justify-between items-stretch xl:items-center gap-3 sm:gap-4 shrink-0 border-b border-cyan-500/30 bg-black/20 backdrop-blur-md">
+        <header
+          className="relative px-3 sm:px-4 lg:px-10 py-3 sm:py-4 lg:py-6 flex flex-col xl:flex-row xl:justify-between items-stretch xl:items-center gap-3 sm:gap-4 shrink-0 border-b border-cyan-500/30 bg-black/20 backdrop-blur-md"
+          style={{ backdropFilter: isLowPowerMode ? 'none' : undefined }}
+        >
           {masterUiPrefs.showDiscordEntry && (
             <a
               href={masterUiPrefs.discordInviteUrl || DEFAULT_DISCORD_INVITE_URL}
@@ -7792,7 +7867,7 @@ function App() {
         </div>
       )}
 
-      {resultFx && (
+      {!isLowPowerMode && resultFx && (
         <div className="fixed inset-0 z-[420] pointer-events-none flex items-center justify-center">
           <div
             className={`absolute inset-0 ${

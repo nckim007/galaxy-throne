@@ -65,16 +65,35 @@ if (typeof window !== 'undefined') {
     window.removeEventListener('click', unlockAudio);
   };
 
+  const resumeAmbientAudio = () => {
+    if (!isAudioUnlocked || !globalBgmEnabled) return;
+    if (currentMatchPhase === 'idle' || currentMatchPhase === 'setup_mode') {
+      audioCache['waiting']?.pause();
+      audioCache['bgm']?.play().catch(() => {});
+      return;
+    }
+    if (currentMatchPhase === 'waiting_sync' || currentMatchPhase === 'waiting_ready') {
+      audioCache['bgm']?.pause();
+      audioCache['waiting']?.play().catch(() => {});
+      return;
+    }
+    audioCache['bgm']?.pause();
+    audioCache['waiting']?.pause();
+  };
+
   window.addEventListener('click', unlockAudio);
   window.addEventListener('focus', () => {
     Object.values(audioCache).forEach((a) => {
       a.muted = false;
     });
+    resumeAmbientAudio();
   });
   window.addEventListener('blur', () => {
     Object.values(audioCache).forEach((a) => {
       a.muted = true;
     });
+    audioCache['bgm']?.pause();
+    audioCache['waiting']?.pause();
   });
 }
 
