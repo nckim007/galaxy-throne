@@ -241,6 +241,19 @@ function App() {
   const [resultLoseTaunts, setResultLoseTaunts] = useState<
     { id: number; left: number; delay: number; duration: number; size: number; drift: number; rotate: number; label: string }[]
   >([]);
+  const [resultFxTexts, setResultFxTexts] = useState<
+    {
+      id: number;
+      left: number;
+      delay: number;
+      duration: number;
+      size: number;
+      drift: number;
+      rotate: number;
+      label: string;
+      tone: 'win' | 'lose';
+    }[]
+  >([]);
   const [resultBursts, setResultBursts] = useState<
     { id: number; left: string; top: string; size: number; delay: string }[]
   >([]);
@@ -271,6 +284,11 @@ function App() {
   const [masterUiEditorOpen, setMasterUiEditorOpen] = useState(true);
   const [masterNewBadgeText, setMasterNewBadgeText] = useState('');
   const [masterDiscordUrlDraft, setMasterDiscordUrlDraft] = useState(DEFAULT_MASTER_UI_PREFS.discordInviteUrl);
+  const [masterPointDrafts, setMasterPointDrafts] = useState<{ rp: string; sp: string; gp: string }>({
+    rp: '100',
+    sp: '100',
+    gp: '100',
+  });
   const [masterUiPrefs, setMasterUiPrefs] = useState<MasterUiPrefs>(() => {
     try {
       const raw = localStorage.getItem(MASTER_UI_PREFS_KEY);
@@ -1035,6 +1053,7 @@ function App() {
   const titleBlinkTimerRef = useRef<number | null>(null);
   const originalDocumentTitleRef = useRef('');
   const resultPopupChannelRef = useRef<any>(null);
+  const adminNoticeChannelRef = useRef<any>(null);
   const lastResultPopupMatchIdRef = useRef<string>('');
   const ingameProfileBackfillRef = useRef<string>('');
   const purchaseRecoveryRunningRef = useRef(false);
@@ -1350,6 +1369,11 @@ function App() {
   }, [selectedPlayer?.id, selectedPlayer?.display_name, selectedPlayer?.regular_rp, selectedPlayer?.season_sp]);
 
   useEffect(() => {
+    if (!selectedPlayer?.id) return;
+    setMasterPointDrafts({ rp: '100', sp: '100', gp: '100' });
+  }, [selectedPlayer?.id]);
+
+  useEffect(() => {
     localStorage.setItem('bgmEnabled', bgmEnabled.toString());
     localStorage.setItem('sfxEnabled', sfxEnabled.toString());
     localStorage.setItem('bgmVolume', bgmVolume.toString());
@@ -1380,6 +1404,37 @@ function App() {
     setStatusPopup({ type, title, message, autoCloseMs: options?.autoCloseMs, hideConfirm: options?.hideConfirm });
   };
 
+  useEffect(() => {
+    if (!user?.id) return;
+    const adminNoticeChannel = supabase
+      .channel('admin_notice_sync')
+      .on('broadcast', { event: 'admin_adjust' }, ({ payload }: any) => {
+        const targetUserId = String(payload?.targetUserId || '');
+        if (!targetUserId || targetUserId !== String(user.id)) return;
+        const amount = Math.max(0, Math.floor(Number(payload?.amount || 0)));
+        if (!amount) return;
+        const resourceRaw = String(payload?.resource || 'GP').toUpperCase();
+        const resource = resourceRaw === 'RP' || resourceRaw === 'SP' || resourceRaw === 'GP' ? resourceRaw : 'GP';
+        const direction = String(payload?.direction || 'add') === 'sub' ? 'sub' : 'add';
+        const message =
+          direction === 'sub'
+            ? `운영자가 ${amount}${resource}를 차감했습니다.`
+            : `운영자가 ${amount}${resource}를 추가했습니다.`;
+        showStatusPopup(direction === 'sub' ? 'error' : 'info', '운영자 알림', message, {
+          autoCloseMs: 3000,
+          hideConfirm: true,
+        });
+      })
+      .subscribe();
+    adminNoticeChannelRef.current = adminNoticeChannel;
+    return () => {
+      if (adminNoticeChannelRef.current === adminNoticeChannel) {
+        adminNoticeChannelRef.current = null;
+      }
+      supabase.removeChannel(adminNoticeChannel);
+    };
+  }, [user?.id]);
+
   const handleSaveMasterDiscordUrl = () => {
     const nextUrl = String(masterDiscordUrlDraft || '').trim();
     if (!nextUrl) {
@@ -1401,6 +1456,89 @@ function App() {
     }
     updateMasterUiPrefs('discordInviteUrl', nextUrl);
     showStatusPopup('success', '저장 완료', '디스코드 버튼 URL이 바로 반영되었습니다.', { autoCloseMs: 1200, hideConfirm: true });
+  };
+
+  const handleMasterAdjustPoints = async (resource: 'rp' | 'sp' | 'gp', direction: 1 | -1) => {
+    if (!isMasterAccount) {
+      showStatusPopup('error', '권한 없음', '마스터 계정만 포인트를 수정할 수 있습니다.');
+      return;
+    }
+    if (!selectedPlayer?.id) {
+      showStatusPopup('error', '대상 없음', '수정할 유저 프로필을 먼저 선택해주세요.');
+      return;
+    }
+    const amountRaw = Number(masterPointDrafts[resource] || 0);
+    const amount = Math.max(0, Math.floor(Math.abs(amountRaw)));
+    if (!amount) {
+      showStatusPopup('error', '입력 필요', '수정할 포인트 수치를 입력해주세요.');
+      return;
+    }
+
+    const fieldMap: Record<'rp' | 'sp' | 'gp', 'regular_rp' | 'season_sp' | 'gc'> = {
+      rp: 'regular_rp',
+      sp: 'season_sp',
+      gp: 'gc',
+    };
+    const unitMap: Record<'rp' | 'sp' | 'gp', 'RP' | 'SP' | 'GP'> = {
+      rp: 'RP',
+      sp: 'SP',
+      gp: 'GP',
+    };
+    const field = fieldMap[resource];
+    const unit = unitMap[resource];
+    const currentVal = Math.max(
+      0,
+      Number((selectedPlayer as any)?.[field] ?? (resource === 'gp' ? 1000 : 0)) || 0
+    );
+    const nextVal = Math.max(0, currentVal + amount * direction);
+    const delta = nextVal - currentVal;
+    if (delta === 0) {
+      showStatusPopup('info', '변경 없음', `${unit} 값이 변경되지 않았습니다.`);
+      return;
+    }
+
+    const { data: updatedRow, error } = await supabase
+      .from('profiles')
+      .update({ [field]: nextVal })
+      .eq('id', selectedPlayer.id)
+      .select('*')
+      .maybeSingle();
+
+    if (error) {
+      showStatusPopup('error', '수정 실패', `포인트 수정 중 오류가 발생했습니다.\n${error.message}`);
+      return;
+    }
+
+    const merged = { ...(selectedPlayer as any), ...(updatedRow || {}), [field]: nextVal };
+    const resolved = resolveIngameProfile(merged);
+    const hydrated = { ...merged, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform };
+    setSelectedPlayer((prev) => (prev && prev.id === selectedPlayer.id ? hydrated : prev));
+    setRankers((prev) => prev.map((row) => (row.id === selectedPlayer.id ? { ...row, ...hydrated } : row)));
+    if (profile?.id && String(profile.id) === String(selectedPlayer.id)) {
+      setProfile((prev: any) => (prev ? { ...prev, [field]: nextVal } : prev));
+    }
+
+    const absDelta = Math.abs(delta);
+    showStatusPopup(
+      'success',
+      '포인트 수정 완료',
+      `${selectedPlayer.display_name} ${absDelta}${unit} ${delta > 0 ? '추가' : '차감'} 완료`,
+      { autoCloseMs: 1400, hideConfirm: true }
+    );
+
+    const channel = adminNoticeChannelRef.current;
+    if (channel && String(selectedPlayer.id) !== String(user?.id || '')) {
+      await channel.send({
+        type: 'broadcast',
+        event: 'admin_adjust',
+        payload: {
+          targetUserId: selectedPlayer.id,
+          amount: absDelta,
+          resource: unit,
+          direction: delta > 0 ? 'add' : 'sub',
+        },
+      });
+    }
   };
 
   const triggerStarRain = () => {
@@ -1443,6 +1581,7 @@ function App() {
   const triggerResultFx = (didWin: boolean, message: string) => {
     setResultFx({ type: didWin ? 'win' : 'lose', message });
     if (didWin) {
+      const winPhrasePool = ['ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ', '이겨버렸쥬!??ㅋㅋ', '쨉도 안되쥬??', 'ㅎㅎㅎㅎㅎㅎ'];
       const bursts = Array.from({ length: 44 }).map((_, i) => ({
         id: Date.now() + i,
         left: `${2 + Math.random() * 96}%`,
@@ -1464,12 +1603,26 @@ function App() {
       }));
       setResultVictoryStars(stars);
       setResultLoseTaunts([]);
+      const winTexts = Array.from({ length: 18 }).map((_, i) => ({
+        id: Date.now() + 3000 + i,
+        left: Math.random() * 100,
+        delay: Math.random() * 1.6,
+        duration: 8 + Math.random() * 2,
+        size: 20 + Math.random() * 14,
+        drift: -170 + Math.random() * 340,
+        rotate: -28 + Math.random() * 56,
+        label: winPhrasePool[Math.floor(Math.random() * winPhrasePool.length)],
+        tone: 'win' as const,
+      }));
+      setResultFxTexts(winTexts);
       setTimeout(() => setResultBursts([]), 10000);
       setTimeout(() => setResultVictoryStars([]), 10000);
+      setTimeout(() => setResultFxTexts([]), 10000);
     } else {
+      const losePhrasePool = ['ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ', '져버렸쥬!??ㅋㅋ', '쨉도 안되쥬??', '한 판 더? ㅎㅎㅎㅎㅎㅎ'];
       setResultBursts([]);
       const tauntLabels = ['😝 메롱', '🤪 메롱', '😛 메롱', '😜 메롱'];
-      const taunts = Array.from({ length: 56 }).map((_, i) => ({
+      const taunts = Array.from({ length: 24 }).map((_, i) => ({
         id: Date.now() + 2000 + i,
         left: Math.random() * 100,
         delay: Math.random() * 1.2,
@@ -1481,7 +1634,20 @@ function App() {
       }));
       setResultLoseTaunts(taunts);
       setResultVictoryStars([]);
+      const loseTexts = Array.from({ length: 16 }).map((_, i) => ({
+        id: Date.now() + 5000 + i,
+        left: Math.random() * 100,
+        delay: Math.random() * 1.8,
+        duration: 8 + Math.random() * 2,
+        size: 20 + Math.random() * 14,
+        drift: -180 + Math.random() * 360,
+        rotate: -34 + Math.random() * 68,
+        label: losePhrasePool[Math.floor(Math.random() * losePhrasePool.length)],
+        tone: 'lose' as const,
+      }));
+      setResultFxTexts(loseTexts);
       setTimeout(() => setResultLoseTaunts([]), 10000);
+      setTimeout(() => setResultFxTexts([]), 10000);
     }
     setTimeout(() => setResultFx(null), 10000);
   };
@@ -6684,6 +6850,63 @@ function App() {
                  </div>
              </div>
 
+             {isMasterAccount && (
+               <div className="mb-4 sm:mb-6 rounded-2xl border border-fuchsia-400/35 bg-fuchsia-500/10 p-3 sm:p-4">
+                 <div className="flex items-center justify-between gap-3 mb-3">
+                   <h4 className="text-fuchsia-200 text-sm sm:text-base font-black">마스터 포인트 수정</h4>
+                   <p className="text-[11px] sm:text-xs text-slate-300 font-bold">선택 유저: {selectedPlayer.display_name}</p>
+                 </div>
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                   {(
+                     [
+                       { key: 'rp', label: 'RP (정규)' },
+                       { key: 'sp', label: 'SP (시즌)' },
+                       { key: 'gp', label: 'GP (갤럭시 코인)' },
+                     ] as const
+                   ).map((item) => (
+                     <div key={`master-adjust-${item.key}`} className="rounded-xl border border-white/15 bg-black/35 p-2.5">
+                       <p className="text-[11px] sm:text-xs text-slate-300 font-black mb-1.5">{item.label}</p>
+                       <input
+                         type="number"
+                         min={0}
+                         value={masterPointDrafts[item.key]}
+                         onChange={(e) =>
+                           setMasterPointDrafts((prev) => ({
+                             ...prev,
+                             [item.key]: e.target.value.replace(/[^\d]/g, ''),
+                           }))
+                         }
+                         className="w-full rounded-lg border border-white/15 bg-black/50 px-2.5 py-2 text-white text-sm font-black outline-none focus:border-fuchsia-400"
+                         placeholder="수치 입력"
+                       />
+                       <div className="mt-2 grid grid-cols-2 gap-2">
+                         <button
+                           onMouseEnter={() => playSFX('hover')}
+                           onClick={() => {
+                             playSFX('click');
+                             void handleMasterAdjustPoints(item.key, 1);
+                           }}
+                           className="rounded-lg border border-emerald-400/55 bg-emerald-500/20 px-2 py-1.5 text-xs font-black text-emerald-200 hover:bg-emerald-500/30 transition-all cursor-pointer"
+                         >
+                           + 추가
+                         </button>
+                         <button
+                           onMouseEnter={() => playSFX('hover')}
+                           onClick={() => {
+                             playSFX('click');
+                             void handleMasterAdjustPoints(item.key, -1);
+                           }}
+                           className="rounded-lg border border-rose-400/55 bg-rose-500/20 px-2 py-1.5 text-xs font-black text-rose-200 hover:bg-rose-500/30 transition-all cursor-pointer"
+                         >
+                           - 차감
+                         </button>
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+             )}
+
              <div className="flex gap-2 sm:gap-3 mb-6 sm:mb-8 justify-center">
                 <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setProfileTab('overview'); }} className={`px-5 sm:px-8 lg:px-10 py-2.5 sm:py-3.5 rounded-full font-bold text-sm sm:text-base lg:text-lg transition-all cursor-pointer ${profileTab === 'overview' ? 'bg-cyan-500 text-black shadow-[0_0_20px_cyan]' : 'bg-white/5 text-slate-400 hover:text-white border border-white/10'}`}>
                   요약 정보
@@ -6822,6 +7045,27 @@ function App() {
                 {t.label}
               </span>
             ))}
+          {resultFxTexts.map((t) => (
+            <span
+              key={t.id}
+              className="taunt-fall-item"
+              style={{
+                left: `${t.left}%`,
+                animationDelay: `${t.delay}s`,
+                animationDuration: `${t.duration}s`,
+                fontSize: `${t.size}px`,
+                ['--drift' as any]: `${t.drift}px`,
+                ['--rot' as any]: `${t.rotate}deg`,
+                color: t.tone === 'win' ? 'rgba(186, 251, 255, 0.98)' : 'rgba(255, 205, 225, 0.98)',
+                textShadow:
+                  t.tone === 'win'
+                    ? '0 0 10px rgba(34,211,238,0.72), 0 0 24px rgba(250,204,21,0.5)'
+                    : '0 0 10px rgba(244,114,182,0.68), 0 0 20px rgba(251,191,36,0.45)',
+              }}
+            >
+              {t.label}
+            </span>
+          ))}
           {resultFx.type === 'win' &&
             resultBursts.map((b) => (
               <span
