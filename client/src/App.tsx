@@ -188,6 +188,22 @@ type MasterUiPrefs = {
   matchBoardBorderColor: string;
   recentBoardBorderColor: string;
   rankingBoardBorderColor: string;
+  onlineBoardBorderWidthPx: number;
+  matchBoardBorderWidthPx: number;
+  recentBoardBorderWidthPx: number;
+  rankingBoardBorderWidthPx: number;
+  onlineBoardWidthPercent: number;
+  matchBoardWidthPercent: number;
+  recentBoardWidthPercent: number;
+  rankingBoardWidthPercent: number;
+  onlineBoardOffsetXpx: number;
+  matchBoardOffsetXpx: number;
+  recentBoardOffsetXpx: number;
+  rankingBoardOffsetXpx: number;
+  onlineBoardOffsetYpx: number;
+  matchBoardOffsetYpx: number;
+  recentBoardOffsetYpx: number;
+  rankingBoardOffsetYpx: number;
 };
 const MASTER_UI_PREFS_KEY = 'gt_master_ui_prefs_v1';
 const DEFAULT_MASTER_UI_PREFS: MasterUiPrefs = {
@@ -229,6 +245,22 @@ const DEFAULT_MASTER_UI_PREFS: MasterUiPrefs = {
   matchBoardBorderColor: '#22d3ee',
   recentBoardBorderColor: '#22d3ee',
   rankingBoardBorderColor: '#22d3ee',
+  onlineBoardBorderWidthPx: 2,
+  matchBoardBorderWidthPx: 2,
+  recentBoardBorderWidthPx: 2,
+  rankingBoardBorderWidthPx: 2,
+  onlineBoardWidthPercent: 100,
+  matchBoardWidthPercent: 100,
+  recentBoardWidthPercent: 100,
+  rankingBoardWidthPercent: 100,
+  onlineBoardOffsetXpx: 0,
+  matchBoardOffsetXpx: 0,
+  recentBoardOffsetXpx: 0,
+  rankingBoardOffsetXpx: 0,
+  onlineBoardOffsetYpx: 0,
+  matchBoardOffsetYpx: 0,
+  recentBoardOffsetYpx: 0,
+  rankingBoardOffsetYpx: 0,
 };
 type BoardEditorTarget = 'online' | 'match' | 'recent' | 'ranking';
 
@@ -366,6 +398,22 @@ function App() {
         matchBoardMinHeightPx: Math.max(360, Math.min(1300, Number(parsed?.matchBoardMinHeightPx ?? DEFAULT_MASTER_UI_PREFS.matchBoardMinHeightPx))),
         recentBoardHeightVh: Math.max(45, Math.min(95, Number(parsed?.recentBoardHeightVh ?? DEFAULT_MASTER_UI_PREFS.recentBoardHeightVh))),
         rankingBoardHeightScalePercent: Math.max(70, Math.min(140, Number(parsed?.rankingBoardHeightScalePercent ?? DEFAULT_MASTER_UI_PREFS.rankingBoardHeightScalePercent))),
+        onlineBoardBorderWidthPx: Math.max(1, Math.min(8, Number(parsed?.onlineBoardBorderWidthPx ?? DEFAULT_MASTER_UI_PREFS.onlineBoardBorderWidthPx))),
+        matchBoardBorderWidthPx: Math.max(1, Math.min(8, Number(parsed?.matchBoardBorderWidthPx ?? DEFAULT_MASTER_UI_PREFS.matchBoardBorderWidthPx))),
+        recentBoardBorderWidthPx: Math.max(1, Math.min(8, Number(parsed?.recentBoardBorderWidthPx ?? DEFAULT_MASTER_UI_PREFS.recentBoardBorderWidthPx))),
+        rankingBoardBorderWidthPx: Math.max(1, Math.min(8, Number(parsed?.rankingBoardBorderWidthPx ?? DEFAULT_MASTER_UI_PREFS.rankingBoardBorderWidthPx))),
+        onlineBoardWidthPercent: Math.max(70, Math.min(130, Number(parsed?.onlineBoardWidthPercent ?? DEFAULT_MASTER_UI_PREFS.onlineBoardWidthPercent))),
+        matchBoardWidthPercent: Math.max(70, Math.min(130, Number(parsed?.matchBoardWidthPercent ?? DEFAULT_MASTER_UI_PREFS.matchBoardWidthPercent))),
+        recentBoardWidthPercent: Math.max(70, Math.min(130, Number(parsed?.recentBoardWidthPercent ?? DEFAULT_MASTER_UI_PREFS.recentBoardWidthPercent))),
+        rankingBoardWidthPercent: Math.max(70, Math.min(130, Number(parsed?.rankingBoardWidthPercent ?? DEFAULT_MASTER_UI_PREFS.rankingBoardWidthPercent))),
+        onlineBoardOffsetXpx: Math.max(-240, Math.min(240, Number(parsed?.onlineBoardOffsetXpx ?? DEFAULT_MASTER_UI_PREFS.onlineBoardOffsetXpx))),
+        matchBoardOffsetXpx: Math.max(-240, Math.min(240, Number(parsed?.matchBoardOffsetXpx ?? DEFAULT_MASTER_UI_PREFS.matchBoardOffsetXpx))),
+        recentBoardOffsetXpx: Math.max(-240, Math.min(240, Number(parsed?.recentBoardOffsetXpx ?? DEFAULT_MASTER_UI_PREFS.recentBoardOffsetXpx))),
+        rankingBoardOffsetXpx: Math.max(-240, Math.min(240, Number(parsed?.rankingBoardOffsetXpx ?? DEFAULT_MASTER_UI_PREFS.rankingBoardOffsetXpx))),
+        onlineBoardOffsetYpx: Math.max(-240, Math.min(240, Number(parsed?.onlineBoardOffsetYpx ?? DEFAULT_MASTER_UI_PREFS.onlineBoardOffsetYpx))),
+        matchBoardOffsetYpx: Math.max(-240, Math.min(240, Number(parsed?.matchBoardOffsetYpx ?? DEFAULT_MASTER_UI_PREFS.matchBoardOffsetYpx))),
+        recentBoardOffsetYpx: Math.max(-240, Math.min(240, Number(parsed?.recentBoardOffsetYpx ?? DEFAULT_MASTER_UI_PREFS.recentBoardOffsetYpx))),
+        rankingBoardOffsetYpx: Math.max(-240, Math.min(240, Number(parsed?.rankingBoardOffsetYpx ?? DEFAULT_MASTER_UI_PREFS.rankingBoardOffsetYpx))),
         discordInviteUrl:
           typeof parsed?.discordInviteUrl === 'string' && parsed.discordInviteUrl.trim()
             ? parsed.discordInviteUrl.trim()
@@ -406,7 +454,11 @@ function App() {
       titleScaleKey: keyof MasterUiPrefs;
       paddingKey: keyof MasterUiPrefs;
       borderColorKey: keyof MasterUiPrefs;
+      borderWidthKey: keyof MasterUiPrefs;
       sizeKey: keyof MasterUiPrefs;
+      widthKey: keyof MasterUiPrefs;
+      offsetXKey: keyof MasterUiPrefs;
+      offsetYKey: keyof MasterUiPrefs;
       sizeLabel: string;
       sizeMin: number;
       sizeMax: number;
@@ -420,7 +472,11 @@ function App() {
       titleScaleKey: 'onlineBoardTitleScalePercent',
       paddingKey: 'onlineBoardPaddingPx',
       borderColorKey: 'onlineBoardBorderColor',
+      borderWidthKey: 'onlineBoardBorderWidthPx',
       sizeKey: 'onlineBoardMinHeightPx',
+      widthKey: 'onlineBoardWidthPercent',
+      offsetXKey: 'onlineBoardOffsetXpx',
+      offsetYKey: 'onlineBoardOffsetYpx',
       sizeLabel: '보드 최소 높이',
       sizeMin: 300,
       sizeMax: 1100,
@@ -433,7 +489,11 @@ function App() {
       titleScaleKey: 'matchBoardTitleScalePercent',
       paddingKey: 'matchBoardPaddingPx',
       borderColorKey: 'matchBoardBorderColor',
+      borderWidthKey: 'matchBoardBorderWidthPx',
       sizeKey: 'matchBoardMinHeightPx',
+      widthKey: 'matchBoardWidthPercent',
+      offsetXKey: 'matchBoardOffsetXpx',
+      offsetYKey: 'matchBoardOffsetYpx',
       sizeLabel: '보드 최소 높이',
       sizeMin: 360,
       sizeMax: 1300,
@@ -446,7 +506,11 @@ function App() {
       titleScaleKey: 'recentBoardTitleScalePercent',
       paddingKey: 'recentBoardPaddingPx',
       borderColorKey: 'recentBoardBorderColor',
+      borderWidthKey: 'recentBoardBorderWidthPx',
       sizeKey: 'recentBoardHeightVh',
+      widthKey: 'recentBoardWidthPercent',
+      offsetXKey: 'recentBoardOffsetXpx',
+      offsetYKey: 'recentBoardOffsetYpx',
       sizeLabel: '보드 높이 (vh)',
       sizeMin: 45,
       sizeMax: 95,
@@ -459,7 +523,11 @@ function App() {
       titleScaleKey: 'rankingBoardTitleScalePercent',
       paddingKey: 'rankingBoardPaddingPx',
       borderColorKey: 'rankingBoardBorderColor',
+      borderWidthKey: 'rankingBoardBorderWidthPx',
       sizeKey: 'rankingBoardHeightScalePercent',
+      widthKey: 'rankingBoardWidthPercent',
+      offsetXKey: 'rankingBoardOffsetXpx',
+      offsetYKey: 'rankingBoardOffsetYpx',
       sizeLabel: '높이 배율 (%)',
       sizeMin: 70,
       sizeMax: 140,
@@ -476,6 +544,17 @@ function App() {
       Number(((2.2 * scalePercent) / 100).toFixed(2))
     )}vw, ${Math.round((34 * scalePercent) / 100)}px)`,
     lineHeight: 1.15,
+  });
+  const boardShellStyle = (
+    widthPercent: number,
+    offsetX: number,
+    offsetY: number,
+    base: React.CSSProperties = {}
+  ): React.CSSProperties => ({
+    ...base,
+    width: `${Math.max(70, Math.min(130, Number(widthPercent) || 100))}%`,
+    transform: `translate(${Math.max(-240, Math.min(240, Number(offsetX) || 0))}px, ${Math.max(-240, Math.min(240, Number(offsetY) || 0))}px)`,
+    transformOrigin: 'top left',
   });
   const addMasterHeaderBadge = () => {
     const next = masterNewBadgeText.trim();
@@ -1582,8 +1661,8 @@ function App() {
         if (!targetUserId || targetUserId !== String(user.id)) return;
         const amount = Math.max(0, Math.floor(Number(payload?.amount || 0)));
         if (!amount) return;
-        const resourceRaw = String(payload?.resource || 'GP').toUpperCase();
-        const resource = resourceRaw === 'RP' || resourceRaw === 'SP' || resourceRaw === 'GP' ? resourceRaw : 'GP';
+        const resourceRaw = String(payload?.resource || 'GC').toUpperCase();
+        const resource = resourceRaw === 'RP' || resourceRaw === 'SP' || resourceRaw === 'GC' ? resourceRaw : 'GC';
         const direction = String(payload?.direction || 'add') === 'sub' ? 'sub' : 'add';
         const message =
           direction === 'sub'
@@ -1644,18 +1723,20 @@ function App() {
     }
 
     const fieldCandidatesMap: Record<'rp' | 'sp' | 'gp', string[]> = {
-      rp: ['regular_rp', 'rp', 'regular_points'],
-      sp: ['season_sp', 'season_points', 'sp'],
-      gp: ['gc', 'galaxy_credits', 'gp'],
+      rp: ['rp', 'regular_rp', 'regular_points'],
+      sp: ['sp', 'season_sp', 'season_points', 'rp'],
+      gp: ['gc', 'gp', 'galaxy_credits'],
     };
-    const unitMap: Record<'rp' | 'sp' | 'gp', 'RP' | 'SP' | 'GP'> = {
+    const unitMap: Record<'rp' | 'sp' | 'gp', 'RP' | 'SP' | 'GC'> = {
       rp: 'RP',
       sp: 'SP',
-      gp: 'GP',
+      gp: 'GC',
     };
     const fieldCandidates = fieldCandidatesMap[resource];
     const unit = unitMap[resource];
-    const readField = fieldCandidates.find((f) => Number.isFinite(Number((selectedPlayer as any)?.[f]))) || fieldCandidates[0];
+    const readField =
+      fieldCandidates.find((f) => Number.isFinite(Number((selectedPlayer as any)?.[f]))) ||
+      fieldCandidates[0];
     const currentVal = Math.max(
       0,
       Number((selectedPlayer as any)?.[readField] ?? (resource === 'gp' ? 1000 : 0)) || 0
@@ -1671,14 +1752,9 @@ function App() {
     let appliedField = '';
     let lastError: any = null;
     for (const field of fieldCandidates) {
-      const res = await supabase
-        .from('profiles')
-        .update({ [field]: nextVal })
-        .eq('id', selectedPlayer.id)
-        .select('*')
-        .maybeSingle();
+      const res = await supabase.from('profiles').update({ [field]: nextVal }).eq('id', selectedPlayer.id);
       if (!res.error) {
-        updatedRow = res.data;
+        updatedRow = null;
         appliedField = field;
         break;
       }
@@ -1698,6 +1774,8 @@ function App() {
     if (resource === 'rp') canonicalPatch.regular_rp = nextVal;
     if (resource === 'sp') canonicalPatch.season_sp = nextVal;
     if (resource === 'gp') canonicalPatch.gc = nextVal;
+    if (resource === 'sp') canonicalPatch.sp = nextVal;
+    if (resource === 'rp') canonicalPatch.rp = nextVal;
     const merged = { ...(selectedPlayer as any), ...(updatedRow || {}), ...canonicalPatch };
     const resolved = resolveIngameProfile(merged);
     const hydrated = { ...merged, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform };
@@ -5607,7 +5685,11 @@ function App() {
           const titleScale = Number(masterUiPrefs[cfg.titleScaleKey] as number) || 100;
           const padding = Number(masterUiPrefs[cfg.paddingKey] as number) || 18;
           const borderColor = String(masterUiPrefs[cfg.borderColorKey] as string) || '#22d3ee';
+          const borderWidth = Number(masterUiPrefs[cfg.borderWidthKey] as number) || 2;
           const sizeVal = Number(masterUiPrefs[cfg.sizeKey] as number) || cfg.sizeMin;
+          const widthVal = Number(masterUiPrefs[cfg.widthKey] as number) || 100;
+          const offsetX = Number(masterUiPrefs[cfg.offsetXKey] as number) || 0;
+          const offsetY = Number(masterUiPrefs[cfg.offsetYKey] as number) || 0;
           const resetBoardPrefs = () => {
             setMasterUiPrefs((prev) => ({
               ...prev,
@@ -5616,7 +5698,11 @@ function App() {
               [cfg.titleScaleKey]: DEFAULT_MASTER_UI_PREFS[cfg.titleScaleKey],
               [cfg.paddingKey]: DEFAULT_MASTER_UI_PREFS[cfg.paddingKey],
               [cfg.borderColorKey]: DEFAULT_MASTER_UI_PREFS[cfg.borderColorKey],
+              [cfg.borderWidthKey]: DEFAULT_MASTER_UI_PREFS[cfg.borderWidthKey],
               [cfg.sizeKey]: DEFAULT_MASTER_UI_PREFS[cfg.sizeKey],
+              [cfg.widthKey]: DEFAULT_MASTER_UI_PREFS[cfg.widthKey],
+              [cfg.offsetXKey]: DEFAULT_MASTER_UI_PREFS[cfg.offsetXKey],
+              [cfg.offsetYKey]: DEFAULT_MASTER_UI_PREFS[cfg.offsetYKey],
             } as MasterUiPrefs));
             showStatusPopup('info', '초기화 완료', `${cfg.label} 설정을 기본값으로 복원했습니다.`, { autoCloseMs: 1200, hideConfirm: true });
           };
@@ -5717,6 +5803,70 @@ function App() {
                     />
                   </label>
 
+                  <label className="flex flex-col gap-1.5">
+                    보드 너비 {Math.round(widthVal)}%
+                    <input
+                      type="range"
+                      min={70}
+                      max={130}
+                      step={1}
+                      value={widthVal}
+                      onChange={(e) => {
+                        const next = Math.max(70, Math.min(130, Number(e.target.value) || 100));
+                        setMasterUiPrefs((prev) => ({ ...prev, [cfg.widthKey]: next } as MasterUiPrefs));
+                      }}
+                      className="w-full"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    가로 위치 (X) {Math.round(offsetX)}px
+                    <input
+                      type="range"
+                      min={-240}
+                      max={240}
+                      step={1}
+                      value={offsetX}
+                      onChange={(e) => {
+                        const next = Math.max(-240, Math.min(240, Number(e.target.value) || 0));
+                        setMasterUiPrefs((prev) => ({ ...prev, [cfg.offsetXKey]: next } as MasterUiPrefs));
+                      }}
+                      className="w-full"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    세로 위치 (Y) {Math.round(offsetY)}px
+                    <input
+                      type="range"
+                      min={-240}
+                      max={240}
+                      step={1}
+                      value={offsetY}
+                      onChange={(e) => {
+                        const next = Math.max(-240, Math.min(240, Number(e.target.value) || 0));
+                        setMasterUiPrefs((prev) => ({ ...prev, [cfg.offsetYKey]: next } as MasterUiPrefs));
+                      }}
+                      className="w-full"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    보드 테두리 굵기 {Math.round(borderWidth)}px
+                    <input
+                      type="range"
+                      min={1}
+                      max={8}
+                      step={1}
+                      value={borderWidth}
+                      onChange={(e) => {
+                        const next = Math.max(1, Math.min(8, Number(e.target.value) || 2));
+                        setMasterUiPrefs((prev) => ({ ...prev, [cfg.borderWidthKey]: next } as MasterUiPrefs));
+                      }}
+                      className="w-full"
+                    />
+                  </label>
+
                   <label className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/40 px-3 py-2">
                     <span className="font-black text-slate-200">보드 테두리 색상</span>
                     <div className="flex items-center gap-2">
@@ -5749,10 +5899,22 @@ function App() {
                 } gap-2 sm:gap-4 lg:gap-8 items-start`}
               >
                 {masterUiPrefs.showOnlineBoard && (
-                <div className="flex flex-col h-auto relative" style={{ minHeight: `${masterUiPrefs.onlineBoardMinHeightPx}px` }}>
+                <div
+                  className="flex flex-col h-auto relative"
+                  style={boardShellStyle(
+                    masterUiPrefs.onlineBoardWidthPercent,
+                    masterUiPrefs.onlineBoardOffsetXpx,
+                    masterUiPrefs.onlineBoardOffsetYpx,
+                    { minHeight: `${masterUiPrefs.onlineBoardMinHeightPx}px` }
+                  )}
+                >
                <section
                  className="board-soft-glow bg-black/50 backdrop-blur-2xl border-2 rounded-[2rem] lg:rounded-[2.5rem] flex flex-col h-full overflow-hidden shadow-lg relative z-10"
-                 style={{ borderColor: masterUiPrefs.onlineBoardBorderColor, padding: `${masterUiPrefs.onlineBoardPaddingPx}px` }}
+                 style={{
+                   borderColor: masterUiPrefs.onlineBoardBorderColor,
+                   borderWidth: `${masterUiPrefs.onlineBoardBorderWidthPx}px`,
+                   padding: `${masterUiPrefs.onlineBoardPaddingPx}px`,
+                 }}
                >
                   {isMasterAccount && (
                     <button
@@ -5829,10 +5991,22 @@ function App() {
                 )}
 
                 {masterUiPrefs.showMatchBoard && (
-                <div className="flex flex-col h-auto relative" style={{ minHeight: `${masterUiPrefs.matchBoardMinHeightPx}px` }}>
+                <div
+                  className="flex flex-col h-auto relative"
+                  style={boardShellStyle(
+                    masterUiPrefs.matchBoardWidthPercent,
+                    masterUiPrefs.matchBoardOffsetXpx,
+                    masterUiPrefs.matchBoardOffsetYpx,
+                    { minHeight: `${masterUiPrefs.matchBoardMinHeightPx}px` }
+                  )}
+                >
                <section
                  className="board-soft-glow bg-black/50 backdrop-blur-3xl border-2 shadow-2xl rounded-[2rem] lg:rounded-[3rem] flex flex-col h-auto shrink-0 relative z-10 overflow-visible"
-                 style={{ borderColor: masterUiPrefs.matchBoardBorderColor, padding: `${masterUiPrefs.matchBoardPaddingPx}px` }}
+                 style={{
+                   borderColor: masterUiPrefs.matchBoardBorderColor,
+                   borderWidth: `${masterUiPrefs.matchBoardBorderWidthPx}px`,
+                   padding: `${masterUiPrefs.matchBoardPaddingPx}px`,
+                 }}
                >
                   {isMasterAccount && (
                     <button
@@ -6223,11 +6397,20 @@ function App() {
             <div
               ref={recentLogsBoardRef}
               className="flex flex-col relative"
-              style={{ height: `clamp(480px, ${masterUiPrefs.recentBoardHeightVh}vh, 1400px)` }}
+              style={boardShellStyle(
+                masterUiPrefs.recentBoardWidthPercent,
+                masterUiPrefs.recentBoardOffsetXpx,
+                masterUiPrefs.recentBoardOffsetYpx,
+                { height: `clamp(480px, ${masterUiPrefs.recentBoardHeightVh}vh, 1400px)` }
+              )}
             >
                <section
                  className="board-soft-glow bg-black/45 backdrop-blur-2xl border-2 rounded-[2rem] lg:rounded-[2.5rem] flex flex-col h-full overflow-hidden shadow-xl relative z-10"
-                 style={{ borderColor: masterUiPrefs.recentBoardBorderColor, padding: `${masterUiPrefs.recentBoardPaddingPx}px` }}
+                 style={{
+                   borderColor: masterUiPrefs.recentBoardBorderColor,
+                   borderWidth: `${masterUiPrefs.recentBoardBorderWidthPx}px`,
+                   padding: `${masterUiPrefs.recentBoardPaddingPx}px`,
+                 }}
                >
                   {isMasterAccount && (
                     <button
@@ -6262,15 +6445,22 @@ function App() {
             <div
               ref={rankingBoardRef}
               className="col-span-12 xl:col-span-4 flex flex-col relative order-2 xl:order-2"
-              style={
+              style={boardShellStyle(
+                masterUiPrefs.rankingBoardWidthPercent,
+                masterUiPrefs.rankingBoardOffsetXpx,
+                masterUiPrefs.rankingBoardOffsetYpx,
                 homeRankingHeight
                   ? { height: `${Math.round(homeRankingHeight * ((masterUiPrefs.rankingBoardHeightScalePercent || 100) / 100))}px` }
                   : { height: `clamp(520px, ${masterUiPrefs.recentBoardHeightVh}vh, 1400px)` }
-              }
+              )}
             >
                <section
                  className="board-soft-glow bg-[#060b18]/95 border-2 shadow-xl rounded-[2.4rem] sm:rounded-[3rem] lg:rounded-[3.5rem] flex flex-col h-full shrink-0 relative z-10 overflow-hidden"
-                 style={{ borderColor: masterUiPrefs.rankingBoardBorderColor, padding: `${masterUiPrefs.rankingBoardPaddingPx}px` }}
+                 style={{
+                   borderColor: masterUiPrefs.rankingBoardBorderColor,
+                   borderWidth: `${masterUiPrefs.rankingBoardBorderWidthPx}px`,
+                   padding: `${masterUiPrefs.rankingBoardPaddingPx}px`,
+                 }}
                >
                   {isMasterAccount && (
                     <button
@@ -7462,7 +7652,7 @@ function App() {
                      [
                        { key: 'rp', label: 'RP (정규)' },
                        { key: 'sp', label: 'SP (시즌)' },
-                       { key: 'gp', label: 'GP (갤럭시 코인)' },
+                      { key: 'gp', label: 'GC (갤럭시 코인)' },
                      ] as const
                    ).map((item) => (
                      <div key={`master-adjust-${item.key}`} className="rounded-xl border border-white/15 bg-black/35 p-2.5">
