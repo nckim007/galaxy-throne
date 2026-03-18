@@ -1849,7 +1849,7 @@ function App() {
       for (const payload of fallbackPayloads) {
         const res = await supabase.from('profiles').update(payload).eq('id', selectedPlayer.id);
         if (!res.error) {
-          appliedField = Object.keys(payload).join(',');
+          appliedField = Object.keys(payload)[0] || '';
           if (resource === 'gp') appliedWriteValue = nextVal;
           if (resource === 'rp') appliedWriteValue = 'rp' in payload ? writeValue : nextVal;
           if (resource === 'sp') appliedWriteValue = 'sp' in payload ? writeValue : nextVal;
@@ -3148,42 +3148,26 @@ function App() {
         seasonWinStreak: 0,
         seasonDefenseStack: 0,
       };
-      const rawRpOffset = Number.isFinite(Number((r as any)?.rp)) ? Number((r as any).rp) : null;
       const rawRegularTotal = Number.isFinite(Number((r as any)?.regular_rp)) ? Number((r as any).regular_rp) : null;
-      let regularOffset = 0;
-      if (rawRpOffset !== null) {
-        regularOffset = rawRpOffset;
-        if (
-          rawRegularTotal !== null &&
-          Math.abs((s.regularRp + rawRpOffset) - rawRegularTotal) > 0.5
-        ) {
-          // total/offset가 어긋난 경우 total 쪽을 신뢰해 즉시 반영
-          regularOffset = rawRegularTotal - s.regularRp;
-        }
-      } else if (rawRegularTotal !== null) {
-        regularOffset = rawRegularTotal - s.regularRp;
+      const rawRegularAlias = Number.isFinite(Number((r as any)?.rp)) ? Number((r as any).rp) : null;
+      // 단일 기준(우선순위): regular_rp -> rp(alias) -> 매치 시뮬레이션
+      // 단, 과거 꼬임으로 DB가 0이고 시뮬레이션이 양수면 시뮬레이션 값으로 복구 표시
+      let regularTotal = rawRegularTotal ?? rawRegularAlias ?? s.regularRp;
+      if ((rawRegularTotal ?? rawRegularAlias ?? 0) <= 0 && s.regularRp > 0) {
+        regularTotal = s.regularRp;
       }
-      const regularTotal = Math.max(0, s.regularRp + regularOffset);
+      regularTotal = Math.max(0, Number(regularTotal) || 0);
 
-      const rawSpOffset = Number.isFinite(Number((r as any)?.sp)) ? Number((r as any).sp) : null;
       const rawSeasonTotal = Number.isFinite(Number((r as any)?.season_sp)) ? Number((r as any).season_sp) : null;
       const rawSeasonLegacyTotal = Number.isFinite(Number((r as any)?.season_points)) ? Number((r as any).season_points) : null;
-      let seasonOffset = 0;
-      if (rawSpOffset !== null) {
-        seasonOffset = rawSpOffset;
-        if (
-          rawSeasonTotal !== null &&
-          Math.abs((s.seasonSp + rawSpOffset) - rawSeasonTotal) > 0.5
-        ) {
-          // SP도 RP와 동일하게 total/offset 충돌 시 total 기준으로 정규화
-          seasonOffset = rawSeasonTotal - s.seasonSp;
-        }
-      } else if (rawSeasonTotal !== null) {
-        seasonOffset = rawSeasonTotal - s.seasonSp;
-      } else if (rawSeasonLegacyTotal !== null) {
-        seasonOffset = rawSeasonLegacyTotal - s.seasonSp;
+      const rawSeasonAlias = Number.isFinite(Number((r as any)?.sp)) ? Number((r as any).sp) : null;
+      // 단일 기준(우선순위): season_sp -> season_points(레거시) -> sp(alias) -> 매치 시뮬레이션
+      // 단, 과거 꼬임으로 DB가 0이고 시뮬레이션이 양수면 시뮬레이션 값으로 복구 표시
+      let seasonTotal = rawSeasonTotal ?? rawSeasonLegacyTotal ?? rawSeasonAlias ?? s.seasonSp;
+      if ((rawSeasonTotal ?? rawSeasonLegacyTotal ?? rawSeasonAlias ?? 0) <= 0 && s.seasonSp > 0) {
+        seasonTotal = s.seasonSp;
       }
-      const seasonTotal = Math.max(0, s.seasonSp + seasonOffset);
+      seasonTotal = Math.max(0, Number(seasonTotal) || 0);
       return {
         ...r,
         display_name: r.display_name || 'GUEST',
@@ -3197,8 +3181,9 @@ function App() {
         gc: typeof r.gc === 'number' ? r.gc : 1000,
         regular_rp: regularTotal,
         season_sp: seasonTotal,
-        rp: regularOffset,
-        sp: seasonOffset,
+        // 호환을 위해 alias 컬럼도 total과 동일하게 유지
+        rp: regularTotal,
+        sp: seasonTotal,
         regular_matches: s.regularMatches,
         regular_wins: s.regularWins,
         regular_losses: s.regularLosses,
@@ -4506,6 +4491,40 @@ function App() {
               targetPointDelta = seasonWinnerReward.sp;
             }
             currentPointDelta = didCurrentWin ? seasonWinnerReward.sp : seasonLoserReward.sp;
+          }
+
+          // 점수 단일 소스 동기화: 프로필 총점 컬럼을 직접 갱신해
+          // 랭킹보드/명예의 전당/프로필 카드가 동일 점수를 바라보게 유지
+          if (isRegular) {
+            const cBaseRp = Math.max(
+              0,
+              Number((cProfile as any)?.regular_rp ?? (cProfile as any)?.rp ?? 0) || 0
+            );
+            const tBaseRp = Math.max(
+              0,
+              Number((tProfile as any)?.regular_rp ?? (tProfile as any)?.rp ?? 0) || 0
+            );
+            const cNextRp = Math.max(0, cBaseRp + challengerPointDelta);
+            const tNextRp = Math.max(0, tBaseRp + targetPointDelta);
+            cUpdates.regular_rp = cNextRp;
+            cUpdates.rp = cNextRp;
+            tUpdates.regular_rp = tNextRp;
+            tUpdates.rp = tNextRp;
+          } else {
+            const cBaseSp = Math.max(
+              0,
+              Number((cProfile as any)?.season_sp ?? (cProfile as any)?.season_points ?? (cProfile as any)?.sp ?? 0) || 0
+            );
+            const tBaseSp = Math.max(
+              0,
+              Number((tProfile as any)?.season_sp ?? (tProfile as any)?.season_points ?? (tProfile as any)?.sp ?? 0) || 0
+            );
+            const cNextSp = Math.max(0, cBaseSp + challengerPointDelta);
+            const tNextSp = Math.max(0, tBaseSp + targetPointDelta);
+            cUpdates.season_sp = cNextSp;
+            cUpdates.sp = cNextSp;
+            tUpdates.season_sp = tNextSp;
+            tUpdates.sp = tNextSp;
           }
 
           currentGcDelta = isCurrentChallenger
