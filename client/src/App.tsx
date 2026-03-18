@@ -1749,9 +1749,10 @@ function App() {
     }
 
     const fieldCandidatesMap: Record<'rp' | 'sp' | 'gp', string[]> = {
-      // rp/sp는 매치 재계산값 위에 더해지는 "관리자 보정치"로 저장
-      rp: ['rp', 'regular_points'],
-      sp: ['sp', 'season_points'],
+      // DB 스키마가 프로젝트별로 조금씩 달라서 후보 컬럼을 넉넉하게 둡니다.
+      // rp/sp는 가능하면 offset 컬럼(rp/sp)을 우선 사용하고, 없으면 총점 컬럼(regular_rp/season_sp)을 사용합니다.
+      rp: ['rp', 'regular_rp', 'regular_points'],
+      sp: ['sp', 'season_sp', 'season_points'],
       gp: ['gc', 'gp', 'galaxy_credits'],
     };
     const unitMap: Record<'rp' | 'sp' | 'gp', 'RP' | 'SP' | 'GC'> = {
@@ -1794,11 +1795,20 @@ function App() {
     let updatedRow: any = null;
     let appliedField = '';
     let lastError: any = null;
+    let appliedWriteValue = writeValue;
+    const resolveWriteValue = (field: string) => {
+      if (resource === 'gp') return nextVal;
+      if (resource === 'rp') return field === 'rp' ? writeValue : nextVal;
+      if (resource === 'sp') return field === 'sp' ? writeValue : nextVal;
+      return writeValue;
+    };
     for (const field of fieldCandidates) {
-      const res = await supabase.from('profiles').update({ [field]: writeValue }).eq('id', selectedPlayer.id);
+      const candidateValue = resolveWriteValue(field);
+      const res = await supabase.from('profiles').update({ [field]: candidateValue }).eq('id', selectedPlayer.id);
       if (!res.error) {
         updatedRow = null;
         appliedField = field;
+        appliedWriteValue = candidateValue;
         break;
       }
       lastError = res.error;
@@ -1813,7 +1823,7 @@ function App() {
       return;
     }
 
-    const canonicalPatch: Record<string, number> = { [appliedField]: writeValue };
+    const canonicalPatch: Record<string, number> = { [appliedField]: appliedWriteValue };
     if (resource === 'rp') canonicalPatch.regular_rp = nextVal;
     if (resource === 'sp') canonicalPatch.season_sp = nextVal;
     if (resource === 'gp') canonicalPatch.gc = nextVal;
@@ -3056,8 +3066,18 @@ function App() {
         seasonWinStreak: 0,
         seasonDefenseStack: 0,
       };
-      const regularOffset = Number.isFinite(Number((r as any)?.rp)) ? Number((r as any).rp) : 0;
-      const seasonOffset = Number.isFinite(Number((r as any)?.sp)) ? Number((r as any).sp) : 0;
+      const regularOffset = Number.isFinite(Number((r as any)?.rp))
+        ? Number((r as any).rp)
+        : Number.isFinite(Number((r as any)?.regular_rp))
+          ? Number((r as any).regular_rp) - s.regularRp
+          : 0;
+      const seasonOffset = Number.isFinite(Number((r as any)?.sp))
+        ? Number((r as any).sp)
+        : Number.isFinite(Number((r as any)?.season_sp))
+          ? Number((r as any).season_sp) - s.seasonSp
+          : Number.isFinite(Number((r as any)?.season_points))
+            ? Number((r as any).season_points) - s.seasonSp
+            : 0;
       const regularTotal = Math.max(0, s.regularRp + regularOffset);
       const seasonTotal = Math.max(0, s.seasonSp + seasonOffset);
       return {
