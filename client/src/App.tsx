@@ -116,7 +116,7 @@ function App() {
   const [showRecentOpponentsDropdown, setShowRecentOpponentsDropdown] = useState(false);
   const [entryLegend, setEntryLegend] = useState('');
   const [entryWeapons, setEntryWeapons] = useState<string[]>(['', '']);
-  const [betAmount, setBetAmount] = useState<number>(200); 
+  const [betAmount, setBetAmount] = useState<number>(0); 
   const [rerollCount, setRerollCount] = useState<number>(0); 
 
   const [matchPhase, setMatchPhase] = useState<'idle' | 'waiting_sync' | 'scoring'>('idle');
@@ -189,6 +189,7 @@ function App() {
   const isMasterAccount = hasDbMasterGrant || isMasterFallback;
   const visibleMenuItems = isMasterAccount ? [...BASE_MENU_ITEMS, MASTER_MENU_ITEM] : BASE_MENU_ITEMS;
   const lastOpponentStorageKey = user?.id ? `gt_last_opponent_v1_${user.id}` : null;
+  const manualLoadoutStorageKey = user?.id ? `gt_manual_loadout_v2_${user.id}` : null;
   const DISCORD_GUILD_ID = (import.meta.env.VITE_DISCORD_GUILD_ID as string | undefined)?.trim();
   const REGULAR_TICKET_COST = 200;
   const SEASON_TICKET_COST = 0;
@@ -275,6 +276,13 @@ function App() {
     const weapons: [string, string] = [String(weaponsRaw?.[0] || '').trim(), String(weaponsRaw?.[1] || '').trim()];
     if (!legend && !weapons[0] && !weapons[1]) return;
     manualLoadoutRef.current[modeKey] = { legend, weapons };
+    if (manualLoadoutStorageKey) {
+      try {
+        localStorage.setItem(manualLoadoutStorageKey, JSON.stringify(manualLoadoutRef.current));
+      } catch {
+        // ignore storage failures
+      }
+    }
   };
   const getManualLoadout = (mode: ChallengeMode | string): { legend: string; weapons: [string, string] } | null => {
     const modeKey = normalizeChallengeMode(mode);
@@ -820,6 +828,36 @@ function App() {
       setMyLosses(null);
     }
   }, [matchPhase, activeMatch?.id]);
+  useEffect(() => {
+    const empty = {
+      free: { legend: '', weapons: ['', ''] as [string, string] },
+      season_free: { legend: '', weapons: ['', ''] as [string, string] },
+    };
+    if (!manualLoadoutStorageKey) {
+      manualLoadoutRef.current = empty;
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(manualLoadoutStorageKey);
+      if (!raw) {
+        manualLoadoutRef.current = empty;
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      const sanitize = (value: any): { legend: string; weapons: [string, string] } => {
+        const legend = String(value?.legend || '').trim();
+        const w0 = String(value?.weapons?.[0] || '').trim();
+        const w1 = String(value?.weapons?.[1] || '').trim();
+        return { legend, weapons: [w0, w1] };
+      };
+      manualLoadoutRef.current = {
+        free: sanitize(parsed?.free),
+        season_free: sanitize(parsed?.season_free),
+      };
+    } catch {
+      manualLoadoutRef.current = empty;
+    }
+  }, [manualLoadoutStorageKey]);
   useEffect(() => {
     const modeSource = matchPhase === 'scoring' && activeMatch ? activeMatch.mode : entryMode;
     rememberManualLoadout(modeSource, entryLegend, entryWeapons);
@@ -1587,7 +1625,7 @@ function App() {
   useEffect(() => {
     const matchLogChannel = supabase
       .channel('matches_realtime_sync')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
         fetchData();
         fetchRankers();
       })
@@ -2094,13 +2132,11 @@ function App() {
       if ((a.season_matches || 0) !== (b.season_matches || 0)) return (a.season_matches || 0) - (b.season_matches || 0);
       return normalize(a.display_name).localeCompare(normalize(b.display_name));
     });
-    const seasonPlayedCount = seasonSorted.filter((r: any) => (r.season_matches || 0) > 0).length;
-    let seasonDisplayIdx = 0;
+    const seasonRankedCount = seasonSorted.length;
     seasonSorted.forEach((r: any, i) => {
-      const played = (r.season_matches || 0) > 0;
       r.seasonRankIndex = i;
-      r.season_display_index = played ? seasonDisplayIdx++ : null;
-      r.season_tier_level = played ? tierLevelByRank((r.season_display_index ?? 0) + 1, seasonPlayedCount) : 0;
+      r.season_display_index = i;
+      r.season_tier_level = tierLevelByRank(i + 1, seasonRankedCount);
     });
 
     const seasonMetaMap = new Map<string, { seasonRankIndex: number; season_display_index: number | null; season_tier_level: number }>();
@@ -2259,11 +2295,20 @@ function App() {
         return;
       }
 
-      const { data: freshProfileRow } = await supabase
+      const { data: freshProfileRow, error: profileReadErr } = await supabase
         .from('profiles')
-        .select('gc')
+        .select('gc,daily_reward_kst')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
+      if (profileReadErr) {
+        console.warn('[daily-reward] profile read failed:', profileReadErr.message);
+        return;
+      }
+      const profileClaimKey = String((freshProfileRow as any)?.daily_reward_kst || '');
+      if (profileClaimKey === todayKst) {
+        dailyRewardSessionCheckedRef.current = checkKey;
+        return;
+      }
       const currentGc =
         typeof freshProfileRow?.gc === 'number'
           ? freshProfileRow.gc
@@ -2271,9 +2316,27 @@ function App() {
             ? profile.gc
             : 1000;
       const nextGc = currentGc + 100;
-      const { error: gcErr } = await supabase.from('profiles').update({ gc: nextGc }).eq('id', user.id);
+
+      // 원자적(낙관적 락) 1회 지급: 동일 날짜 키 + 현재 GC 스냅샷이 같을 때만 반영
+      const { data: claimRow, error: gcErr } = await supabase
+        .from('profiles')
+        .update({ gc: nextGc, daily_reward_kst: todayKst })
+        .eq('id', user.id)
+        .eq('gc', currentGc)
+        .or(`daily_reward_kst.is.null,daily_reward_kst.neq.${todayKst}`)
+        .select('gc,daily_reward_kst')
+        .maybeSingle();
       if (gcErr) {
-        console.warn('[daily-reward] gc update failed:', gcErr.message);
+        if (String(gcErr.message || '').toLowerCase().includes('daily_reward_kst')) {
+          console.warn('[daily-reward] daily_reward_kst column missing. run db/daily-reward-column.sql once.');
+        } else {
+          console.warn('[daily-reward] gc update failed:', gcErr.message);
+        }
+        return;
+      }
+      if (!claimRow) {
+        // 다른 기기/세션이 먼저 지급 완료
+        dailyRewardSessionCheckedRef.current = checkKey;
         return;
       }
 
@@ -2281,21 +2344,12 @@ function App() {
       const { error: metaErr } = await supabase.auth.updateUser({ data: nextMetadata });
       if (metaErr) {
         console.warn('[daily-reward] metadata update failed:', metaErr.message);
-        const { error: revertErr } = await supabase.from('profiles').update({ gc: currentGc }).eq('id', user.id);
-        if (revertErr) {
-          console.warn('[daily-reward] gc revert failed:', revertErr.message);
-        }
-        showStatusPopup(
-          'error',
-          '출석 보상 처리 실패',
-          '계정 동기화 중 오류가 발생해 보상을 지급하지 않았습니다.\n잠시 후 다시 시도해주세요.'
-        );
-        return;
       }
       setUser((prev: any) => (prev ? { ...prev, user_metadata: nextMetadata } : prev));
 
-      setProfile((prev: any) => (prev ? { ...prev, gc: nextGc } : prev));
-      setRankers((prev) => prev.map((r) => (r.id === user.id ? { ...r, gc: nextGc } : r)));
+      const awardedGc = typeof claimRow.gc === 'number' ? claimRow.gc : nextGc;
+      setProfile((prev: any) => (prev ? { ...prev, gc: awardedGc, daily_reward_kst: todayKst } : prev));
+      setRankers((prev) => prev.map((r) => (r.id === user.id ? { ...r, gc: awardedGc, daily_reward_kst: todayKst } : r)));
       playSFX('success');
       showStatusPopup(
         'success',
@@ -2444,11 +2498,7 @@ function App() {
     }
     setRerollCount(0);
     setWinTarget(3);
-    if (mode === 'free') {
-      if (betAmount < REGULAR_TICKET_COST) setBetAmount(REGULAR_TICKET_COST);
-    } else {
-      setBetAmount(SEASON_TICKET_COST);
-    }
+    if (betAmount < 0) setBetAmount(0);
   };
 
   const handleSeasonSubModeChange = (nextMode: SeasonChallengeMode) => {
@@ -2506,7 +2556,8 @@ function App() {
     targetName: string
   ) => {
     const stake = Math.max(0, Math.floor(stakeEach || 0));
-    if (stake <= 0) return { ok: true, message: '' };
+    const requiredEach = isRegularMode(mode) ? REGULAR_TICKET_COST + stake : stake;
+    if (requiredEach <= 0) return { ok: true, message: '' };
     const { data: cProfile } = await supabase.from('profiles').select('id,gc').eq('display_name', challengerName).single();
     const { data: tProfile } = await supabase.from('profiles').select('id,gc').eq('display_name', targetName).single();
     if (!cProfile || !tProfile) {
@@ -2514,22 +2565,27 @@ function App() {
     }
     const cGc = typeof cProfile.gc === 'number' ? cProfile.gc : 1000;
     const tGc = typeof tProfile.gc === 'number' ? tProfile.gc : 1000;
-    if (cGc < stake || tGc < stake) {
+    if (cGc < requiredEach || tGc < requiredEach) {
       return {
         ok: false,
-        message: `보유 GC 부족: ${challengerName}(${cGc}) / ${targetName}(${tGc}), 필요 ${stake}`,
+        message: `보유 GC 부족: ${challengerName}(${cGc}) / ${targetName}(${tGc}), 필요 ${requiredEach}`,
       };
     }
-    const { error: cErr } = await supabase.from('profiles').update({ gc: cGc - stake }).eq('id', cProfile.id);
+    const { error: cErr } = await supabase.from('profiles').update({ gc: cGc - requiredEach }).eq('id', cProfile.id);
     if (cErr) return { ok: false, message: cErr.message };
-    const { error: tErr } = await supabase.from('profiles').update({ gc: tGc - stake }).eq('id', tProfile.id);
+    const { error: tErr } = await supabase.from('profiles').update({ gc: tGc - requiredEach }).eq('id', tProfile.id);
     if (tErr) {
       await supabase.from('profiles').update({ gc: cGc }).eq('id', cProfile.id);
       return { ok: false, message: tErr.message };
     }
     if (user?.id) fetchProfile(user.id);
     fetchRankers();
-    return { ok: true, message: isRegularMode(mode) ? '정규 티켓/배팅이 즉시 차감되었습니다.' : '시즌 배팅이 즉시 차감되었습니다.' };
+    return {
+      ok: true,
+      message: isRegularMode(mode)
+        ? `정규 티켓 200GC + 배팅 ${stake}GC가 즉시 차감되었습니다.`
+        : `시즌 배팅 ${stake}GC가 즉시 차감되었습니다.`,
+    };
   };
 
   const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -2706,7 +2762,9 @@ function App() {
     const mode = String(challengeRow.mode || '').toLowerCase();
     if (!mode.includes('_accepted')) return;
     const stake = Math.max(0, Math.floor(Number(challengeRow.bet_gc || 0)));
-    if (stake <= 0) return;
+    const baseMode = normalizeChallengeMode(mode);
+    const requiredEach = isRegularMode(baseMode) ? REGULAR_TICKET_COST + stake : stake;
+    if (requiredEach <= 0) return;
     const challengerName = String(challengeRow.challenger_name || '').trim();
     const targetName = String(challengeRow.target_name || '').trim();
     if (!challengerName || !targetName) return;
@@ -2714,11 +2772,11 @@ function App() {
     const { data: tProfile } = await supabase.from('profiles').select('id,gc').eq('display_name', targetName).single();
     if (cProfile) {
       const cGc = typeof cProfile.gc === 'number' ? cProfile.gc : 1000;
-      await supabase.from('profiles').update({ gc: cGc + stake }).eq('id', cProfile.id);
+      await supabase.from('profiles').update({ gc: cGc + requiredEach }).eq('id', cProfile.id);
     }
     if (tProfile) {
       const tGc = typeof tProfile.gc === 'number' ? tProfile.gc : 1000;
-      await supabase.from('profiles').update({ gc: tGc + stake }).eq('id', tProfile.id);
+      await supabase.from('profiles').update({ gc: tGc + requiredEach }).eq('id', tProfile.id);
     }
     if (user?.id) fetchProfile(user.id);
     fetchRankers();
@@ -2747,12 +2805,6 @@ function App() {
     }
 
     if (!alreadyAccepted && baseMode === 'free') {
-      const stake = Math.max(0, Math.floor(Number(existing.bet_gc || 0)));
-      if (stake < REGULAR_TICKET_COST) {
-        playSFX('error');
-        showStatusPopup('error', '수락 실패', `정규 랭크전 최소 티켓 금액은 ${REGULAR_TICKET_COST}GC입니다.`);
-        return;
-      }
       if (!canAcceptIncomingByRegularRule(challengerName)) {
         playSFX('error');
         showStatusPopup('error', '수락 불가', '현재 정규 랭크 규칙상 해당 대전은 성립할 수 없습니다.');
@@ -2852,11 +2904,12 @@ function App() {
       playSFX('error');
       return alert('대상 닉네임을 찾을 수 없습니다. 접속 현황/랭킹에서 다시 선택해주세요.');
     }
-    if (isRegularMode(entryMode) && betAmount < REGULAR_TICKET_COST) {
+    const stake = Math.max(0, Math.floor(Number(betAmount || 0)));
+    const requiredMyGc = isRegularMode(entryMode) ? REGULAR_TICKET_COST + stake : stake;
+    if (requiredMyGc > 0 && (!profile || (profile.gc ?? 1000) < requiredMyGc)) {
       playSFX('error');
-      return alert(`정규 랭크전 티켓 포함 최소 금액은 ${REGULAR_TICKET_COST}GC 입니다.`);
+      return alert(`GC가 부족합니다! (보유: ${profile?.gc ?? 1000} GC, 필요: ${requiredMyGc} GC)`);
     }
-    if (betAmount > 0 && (!profile || (profile.gc ?? 1000) < betAmount)) { playSFX('error'); return alert(`GC가 부족합니다! (보유: ${profile?.gc ?? 1000} GC)`); }
     if (isRegularMode(entryMode) && !canChallengeTargetByRegularRule(entryOpponent.trim())) {
       playSFX('error');
       return alert('정규 랭크전은 동일 티어 또는 1단계 상위 티어에게만 도전할 수 있습니다. (루키는 예외)');
@@ -2886,11 +2939,6 @@ function App() {
         return alert('현재 정규 랭크 규칙상 해당 신청은 수락할 수 없습니다.');
       }
 
-      const stake = Math.max(0, Math.floor(Number(existing.bet_gc || 0)));
-      if (!alreadyAccepted && isRegularMode(entryMode) && stake < REGULAR_TICKET_COST) {
-        playSFX('error');
-        return alert(`정규 랭크전 최소 티켓 금액은 ${REGULAR_TICKET_COST}GC입니다.`);
-      }
       const acceptance = await ensureChallengeAccepted(
         existing,
         entryMode,
@@ -3120,8 +3168,8 @@ function App() {
           const seasonLoserReward = calcSeasonLoseReward(loserScore);
 
           if (isRegular) {
-            // 정규전: 티켓(200)은 소멸, 초과 배팅만 승자가 획득
-            const transferable = Math.max(0, bet - REGULAR_TICKET_COST) * 2;
+            // 정규전: 티켓(200)은 성사 시 소멸, 배팅 포트(양측 동일 금액)는 승자가 획득
+            const transferable = bet * 2;
             if (challengerWon) {
               cUpdates.gc = cGc + transferable + challengerBountyFromOpponent;
               tUpdates.gc = tGc;
@@ -3690,10 +3738,6 @@ function App() {
     if (!normalized) return null;
     const found: any = regularRankMap.get(normalized);
     if (!found) return null;
-    const played = (found.season_matches || 0) > 0;
-    if (!played) {
-      return { index: null as number | null, ...getRPTierInfo(null, 0) };
-    }
     const idx = typeof found.season_display_index === 'number' ? found.season_display_index : null;
     if (idx === null) return { index: null as number | null, ...getRPTierInfo(null, found.season_tier_level || 0) };
     return { index: idx, ...getRPTierInfo(idx, found.season_tier_level || undefined) };
@@ -4243,17 +4287,6 @@ function App() {
               <item.icon size={20}/>
             </div>
           ))}
-          <a
-            href="https://discord.com/channels/146930111478890496/1469829921630064721"
-            target="_blank"
-            rel="noreferrer"
-            title="디스코드 서버 바로가기"
-            onMouseEnter={() => playSFX('hover')}
-            onClick={() => playSFX('click')}
-            className="cursor-pointer transition-all hover:scale-105"
-          >
-            <img src={discordCustomIcon} alt="discord" className="w-6 h-6 sm:w-7 sm:h-7 object-contain drop-shadow-[0_0_8px_rgba(129,140,248,0.55)]" />
-          </a>
         </div>
         <div onMouseEnter={() => playSFX('hover')} className="mt-auto mb-4 sm:mb-6 hover:text-pink-500 cursor-pointer transition-colors" onClick={handleLogout}>
           <LogOut size={20}/>
@@ -4263,7 +4296,24 @@ function App() {
       <div ref={mainScrollRef} className="flex-1 flex flex-col z-10 relative ml-14 sm:ml-16 lg:ml-20 h-screen overflow-y-auto custom-scrollbar">
         <header className="px-3 sm:px-4 lg:px-10 py-3 sm:py-4 lg:py-6 flex flex-col xl:flex-row xl:justify-between items-stretch xl:items-center gap-3 sm:gap-4 shrink-0 border-b border-cyan-500/30 bg-black/20 backdrop-blur-md">
           <div onMouseEnter={() => playSFX('hover')} className="min-w-0 flex-1 cursor-pointer flex items-center gap-3 sm:gap-4 lg:gap-6" onClick={() => setActiveMenu('home')}>
-            <h1 className="text-2xl sm:text-4xl lg:text-6xl font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple] leading-none shrink-0">은하단</h1>
+            <div className="flex flex-col items-start gap-1 sm:gap-2 shrink-0">
+              <h1 className="text-2xl sm:text-4xl lg:text-6xl font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple] leading-none">은하단</h1>
+              <a
+                href="https://discord.com/channels/146930111478890496/1469829921630064721"
+                target="_blank"
+                rel="noreferrer"
+                title="디스코드 서버 바로가기"
+                onMouseEnter={() => playSFX('hover')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  playSFX('click');
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-400/40 bg-black/35 px-2 py-1 text-[11px] sm:text-xs font-black text-indigo-200 hover:border-indigo-300/60 hover:text-indigo-100 transition-all"
+              >
+                <img src={discordCustomIcon} alt="discord" className="w-4 h-4 sm:w-[18px] sm:h-[18px] object-contain drop-shadow-[0_0_8px_rgba(129,140,248,0.55)]" />
+                입장하기
+              </a>
+            </div>
             <div className="hidden sm:block w-px h-14 lg:h-16 bg-gradient-to-b from-cyan-300 to-fuchsia-400 opacity-80 shrink-0"></div>
             <div className="hidden sm:flex flex-col min-w-0 overflow-hidden">
               <h2 className="text-lg sm:text-[1.35rem] lg:text-[2.35rem] leading-tight font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-300 tracking-tight truncate">
@@ -4476,24 +4526,23 @@ function App() {
                                  <span className="text-emerald-300">{Number(profile?.gc ?? 1000).toLocaleString()} GC</span>
                                </div>
                                <div className="flex justify-between items-center">
-                                  <p className="text-base text-pink-400 font-bold">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">{isRegularMode(entryMode) ? `최소 ${REGULAR_TICKET_COST}` : '0 가능'}</span></p>
+                                  <p className="text-base text-pink-400 font-bold">배팅 금액 (GC) <span className="text-slate-500 ml-2 text-xs">0 가능</span></p>
                                   <input 
                                    type="number" 
-                                   min={isRegularMode(entryMode) ? REGULAR_TICKET_COST : 0} 
+                                   min={0} 
                                    value={betAmount} 
                                   onChange={(e) => setBetAmount(Number(e.target.value) || 0)} 
                                   onBlur={() => {
-                                    if (isRegularMode(entryMode) && betAmount < REGULAR_TICKET_COST) setBetAmount(REGULAR_TICKET_COST);
-                                    if (!isRegularMode(entryMode) && betAmount < 0) setBetAmount(0);
+                                    if (betAmount < 0) setBetAmount(0);
                                   }}
                                    className="w-28 bg-white/5 border border-white/10 p-2.5 rounded-xl outline-none text-white font-bold text-right text-lg select-text cursor-pointer" 
                                  />
                               </div>
                               <div className="grid grid-cols-2 gap-2">
                                  <div className="grid grid-cols-3 gap-1 min-w-0">
-                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(isRegularMode(entryMode) ? REGULAR_TICKET_COST : 0, p - 50)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-50</button>
-                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(isRegularMode(entryMode) ? REGULAR_TICKET_COST : 0, p - 100)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-100</button>
-                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(isRegularMode(entryMode) ? REGULAR_TICKET_COST : 0, p - 500)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-500</button>
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(0, p - 50)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-50</button>
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(0, p - 100)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-100</button>
+                                    <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => Math.max(0, p - 500)); }} className="w-full px-0 py-2 bg-pink-500/20 text-pink-400 border border-pink-500/50 rounded-lg text-sm font-bold hover:bg-pink-500 hover:text-white transition-colors">-500</button>
                                  </div>
                                  <div className="grid grid-cols-3 gap-1 min-w-0">
                                     <button onMouseEnter={() => playSFX('hover')} onClick={() => { playSFX('click'); setBetAmount(p => p + 50); }} className="w-full px-0 py-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 rounded-lg text-sm font-bold hover:bg-cyan-500 hover:text-black transition-colors">+50</button>
@@ -4504,7 +4553,7 @@ function App() {
                            </div>
 
                            <button onMouseEnter={() => playSFX('hover')} onClick={handleStartMatch} className="hvr-grow hvr-glow w-full py-5 mt-6 rounded-[2rem] font-bold text-2xl text-white bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.6)] hover:bg-blue-500 transition-all border border-blue-400 cursor-pointer">
-                              매칭 신청 및 수락
+                              {isRegularMode(entryMode) ? '매칭 신청 (200GP)' : '매칭 신청 및 수락'}
                            </button>
                         </div>
                       )}
@@ -4813,7 +4862,7 @@ function App() {
                               );
                             }) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400 mt-10 text-lg">랭커가 없습니다</div>)
                           ) : (
-                            rpRankers.length > 0 ? rpRankers.filter(r => matchesSearch(r.display_name, miniSearchQuery)).slice(0, 10).map((r, i) => {
+                            rpRankers.length > 0 ? rpRankers.filter(r => matchesSearch(r.display_name, miniSearchQuery)).map((r, i) => {
                               const seasonIdx = typeof (r as any).season_display_index === 'number' ? (r as any).season_display_index : null;
                               const tier = getRPTierInfo(seasonIdx, (r as any).season_tier_level);
                               return (
@@ -5023,7 +5072,7 @@ function App() {
 		                        const throneBounty = getDefenseBonusGC(throneDefenseStack);
 
                             const cardClass = isRank1
-                              ? 'w-full max-w-5xl p-5 sm:p-12 pt-10 sm:pt-16 pb-6 sm:pb-12 rounded-[1.6rem] sm:rounded-[3.5rem] shadow-[0_0_30px_rgba(239,68,68,0.5)] hover:shadow-[0_0_50px_rgba(239,68,68,0.7)] hover:scale-[1.01] sm:hover:scale-[1.03]'
+                              ? 'w-full max-w-5xl p-5 sm:p-12 pt-14 sm:pt-16 pb-6 sm:pb-12 rounded-[1.6rem] sm:rounded-[3.5rem] shadow-[0_0_30px_rgba(239,68,68,0.5)] hover:shadow-[0_0_50px_rgba(239,68,68,0.7)] hover:scale-[1.01] sm:hover:scale-[1.03]'
                               : isRank4_6
                                 ? 'p-4 sm:p-6 pt-7 sm:pt-10 pb-4 sm:pb-6 rounded-[1.2rem] sm:rounded-[1.5rem]'
                                 : isRank2_3
@@ -5064,11 +5113,21 @@ function App() {
                            </div>
 
                             {isTopRegular && (throneDefenseStack > 0 || throneBounty > 0) && (
-                              <div className="absolute right-3 sm:right-4 top-1 sm:top-2 flex flex-col items-end gap-2 z-20">
+                              <div className="hidden sm:flex absolute right-3 sm:right-4 top-1 sm:top-2 flex-col items-end gap-2 z-20">
                                 <span className="font-black text-base sm:text-lg px-4 py-2 rounded-full bg-red-500/20 text-red-100 border border-red-400/55 shadow-[0_0_14px_rgba(248,113,113,0.38)]">
                                   👑 왕좌 방어전 {throneDefenseStack}스택
                                 </span>
                                 <span className="font-black text-base sm:text-lg px-4 py-2 rounded-full bg-amber-400/18 text-amber-100 border border-amber-300/55 shadow-[0_0_14px_rgba(251,191,36,0.35)]">
+                                  💰 현상금 {throneBounty}GC
+                                </span>
+                              </div>
+                            )}
+                            {isTopRegular && (throneDefenseStack > 0 || throneBounty > 0) && (
+                              <div className="sm:hidden w-full flex flex-col items-end gap-1.5 mt-2 mb-1 pr-1 relative z-20">
+                                <span className="font-black text-xs px-3 py-1.5 rounded-full bg-red-500/20 text-red-100 border border-red-400/55 shadow-[0_0_12px_rgba(248,113,113,0.32)]">
+                                  👑 왕좌 방어전 {throneDefenseStack}스택
+                                </span>
+                                <span className="font-black text-xs px-3 py-1.5 rounded-full bg-amber-400/18 text-amber-100 border border-amber-300/55 shadow-[0_0_12px_rgba(251,191,36,0.3)]">
                                   💰 현상금 {throneBounty}GC
                                 </span>
                               </div>
@@ -5150,7 +5209,7 @@ function App() {
                             let nameSize = i === 0 ? 'text-3xl sm:text-4xl' : 'text-xl sm:text-2xl';
                             let statSize = "text-2xl sm:text-3xl";
 
-                            if (isRank1) { spanClass = "col-span-12 flex justify-center"; cardClass = "w-full max-w-5xl p-5 sm:p-12 pt-10 sm:pt-16 pb-6 sm:pb-12 rounded-[1.6rem] sm:rounded-[3.5rem] shadow-[0_0_30px_rgba(239,68,68,0.5)] hover:shadow-[0_0_50px_rgba(239,68,68,0.7)] hover:scale-[1.01] sm:hover:scale-[1.03]"; badgeClass = "px-8 sm:px-14 py-2.5 sm:py-5 text-[20px] sm:text-[34px] -top-6 sm:-top-12"; avatarClass = "w-20 h-20 sm:w-32 sm:h-32"; statSize = "text-4xl sm:text-5xl"; nameSize = 'text-3xl sm:text-5xl'; }
+                            if (isRank1) { spanClass = "col-span-12 flex justify-center"; cardClass = "w-full max-w-5xl p-5 sm:p-12 pt-14 sm:pt-16 pb-6 sm:pb-12 rounded-[1.6rem] sm:rounded-[3.5rem] shadow-[0_0_30px_rgba(239,68,68,0.5)] hover:shadow-[0_0_50px_rgba(239,68,68,0.7)] hover:scale-[1.01] sm:hover:scale-[1.03]"; badgeClass = "px-8 sm:px-14 py-2.5 sm:py-5 text-[20px] sm:text-[34px] -top-6 sm:-top-12"; avatarClass = "w-20 h-20 sm:w-32 sm:h-32"; statSize = "text-4xl sm:text-5xl"; nameSize = 'text-3xl sm:text-5xl'; }
                             else if (isRank2_3) { spanClass = "col-span-12 sm:col-span-6"; }
                             else if (isRank4_6) { spanClass = "col-span-12 sm:col-span-6 lg:col-span-4"; cardClass = "p-4 sm:p-6 pt-7 sm:pt-10 pb-4 sm:pb-6 rounded-[1.2rem] sm:rounded-[1.5rem]"; badgeClass = "px-6 sm:px-10 py-2 sm:py-3 text-[14px] sm:text-[20px] -top-5 sm:-top-7"; avatarClass = "w-14 h-14 sm:w-16 sm:h-16"; statSize = "text-xl sm:text-2xl"; nameSize = 'text-lg sm:text-xl'; }
                             else { spanClass = "col-span-12 sm:col-span-6 xl:col-span-3"; cardClass = "p-4 sm:p-5 pt-6 sm:pt-8 pb-4 sm:pb-5 rounded-xl"; badgeClass = "px-5 sm:px-8 py-1.5 sm:py-2.5 text-[13px] sm:text-[18px] -top-4 sm:-top-6"; avatarClass = "w-12 h-12 sm:w-14 sm:h-14"; statSize = "text-lg sm:text-xl"; nameSize = 'text-base sm:text-lg'; }
@@ -5180,11 +5239,21 @@ function App() {
                                        </div>
                                     </div>
                                     {isTopSeason && (throneDefenseStack > 0 || throneBounty > 0) && (
-                                      <div className="absolute right-3 sm:right-4 top-1 sm:top-2 flex flex-col items-end gap-2 z-20">
+                                      <div className="hidden sm:flex absolute right-3 sm:right-4 top-1 sm:top-2 flex-col items-end gap-2 z-20">
                                         <span className="font-black text-base sm:text-lg px-4 py-2 rounded-full bg-red-500/20 text-red-100 border border-red-400/55 shadow-[0_0_14px_rgba(248,113,113,0.38)]">
                                           👑 왕좌 방어전 {throneDefenseStack}스택
                                         </span>
                                         <span className="font-black text-base sm:text-lg px-4 py-2 rounded-full bg-amber-400/18 text-amber-100 border border-amber-300/55 shadow-[0_0_14px_rgba(251,191,36,0.35)]">
+                                          💰 현상금 {throneBounty}GC
+                                        </span>
+                                      </div>
+                                    )}
+                                    {isTopSeason && (throneDefenseStack > 0 || throneBounty > 0) && (
+                                      <div className="sm:hidden w-full flex flex-col items-end gap-1.5 mt-2 mb-1 pr-1 relative z-20">
+                                        <span className="font-black text-xs px-3 py-1.5 rounded-full bg-red-500/20 text-red-100 border border-red-400/55 shadow-[0_0_12px_rgba(248,113,113,0.32)]">
+                                          👑 왕좌 방어전 {throneDefenseStack}스택
+                                        </span>
+                                        <span className="font-black text-xs px-3 py-1.5 rounded-full bg-amber-400/18 text-amber-100 border border-amber-300/55 shadow-[0_0_12px_rgba(251,191,36,0.3)]">
                                           💰 현상금 {throneBounty}GC
                                         </span>
                                       </div>
