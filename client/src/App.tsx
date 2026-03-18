@@ -22,6 +22,7 @@ const BASE_MENU_ITEMS = [
 const MASTER_MENU_ITEM = { id: 'master', icon: Shield, label: '마스터' };
 // fallback only: real authority should be controlled by profiles.is_master
 const MASTER_ACCOUNT_EMAILS = ['hdtop410@naver.com'];
+const DEFAULT_DISCORD_INVITE_URL = 'https://discord.com/channels/146930111478890496/1469829921630064721';
 
 type CosmeticCategory = 'nameColor' | 'nameStyle' | 'borderFx';
 type ShopItem = {
@@ -153,6 +154,7 @@ type MasterUiPrefs = {
   seasonTitle: string;
   titleScalePercent: number;
   showDiscordEntry: boolean;
+  discordInviteUrl: string;
   discordButtonTopPx: number;
   discordButtonLeftPx: number;
   showSeasonTitle: boolean;
@@ -170,6 +172,7 @@ const DEFAULT_MASTER_UI_PREFS: MasterUiPrefs = {
   seasonTitle: '별들의 전쟁 : 시즌 1',
   titleScalePercent: 100,
   showDiscordEntry: true,
+  discordInviteUrl: DEFAULT_DISCORD_INVITE_URL,
   discordButtonTopPx: -4,
   discordButtonLeftPx: 12,
   showSeasonTitle: true,
@@ -233,16 +236,16 @@ function App() {
   const [seasonRankMoves, setSeasonRankMoves] = useState<Record<string, number>>({});
   const [resultFx, setResultFx] = useState<{ type: 'win' | 'lose'; message: string } | null>(null);
   const [resultVictoryStars, setResultVictoryStars] = useState<
-    { id: number; left: number; delay: number; duration: number; size: number; drift: number; hue: number }[]
+    { id: number; left: number; delay: number; duration: number; size: number; drift: number; hue: number; glyph: string }[]
   >([]);
   const [resultLoseTaunts, setResultLoseTaunts] = useState<
-    { id: number; left: number; delay: number; duration: number; size: number; drift: number; rotate: number }[]
+    { id: number; left: number; delay: number; duration: number; size: number; drift: number; rotate: number; label: string }[]
   >([]);
   const [resultBursts, setResultBursts] = useState<
     { id: number; left: string; top: string; size: number; delay: string }[]
   >([]);
   const [statusPopup, setStatusPopup] = useState<
-    { type: 'success' | 'error' | 'info'; title: string; message: string; autoCloseMs?: number; hideConfirm?: boolean } | null
+    { type: 'success' | 'error' | 'info' | 'victory'; title: string; message: string; autoCloseMs?: number; hideConfirm?: boolean } | null
   >(null);
   const [statusPopupFading, setStatusPopupFading] = useState(false);
   const [selectedProfileNameFontSize, setSelectedProfileNameFontSize] = useState(56);
@@ -264,8 +267,10 @@ function App() {
   const [bgmVolume, setBgmVolume] = useState(parseFloat(localStorage.getItem('bgmVolume') || '0.10'));
   const [sfxVolume, setSfxVolume] = useState(parseFloat(localStorage.getItem('sfxVolume') || '0.60'));
   const [eventItemCounts, setEventItemCounts] = useState<Record<string, number>>({});
+  const [ownedMetaEntries, setOwnedMetaEntries] = useState<string[]>([]);
   const [masterUiEditorOpen, setMasterUiEditorOpen] = useState(true);
   const [masterNewBadgeText, setMasterNewBadgeText] = useState('');
+  const [masterDiscordUrlDraft, setMasterDiscordUrlDraft] = useState(DEFAULT_MASTER_UI_PREFS.discordInviteUrl);
   const [masterUiPrefs, setMasterUiPrefs] = useState<MasterUiPrefs>(() => {
     try {
       const raw = localStorage.getItem(MASTER_UI_PREFS_KEY);
@@ -280,6 +285,10 @@ function App() {
         titleScalePercent: Math.max(70, Math.min(140, Number(parsed?.titleScalePercent ?? DEFAULT_MASTER_UI_PREFS.titleScalePercent))),
         homeGapPx: Math.max(8, Math.min(48, Number(parsed?.homeGapPx ?? DEFAULT_MASTER_UI_PREFS.homeGapPx))),
         homeTopOffsetPx: Math.max(-80, Math.min(120, Number(parsed?.homeTopOffsetPx ?? DEFAULT_MASTER_UI_PREFS.homeTopOffsetPx))),
+        discordInviteUrl:
+          typeof parsed?.discordInviteUrl === 'string' && parsed.discordInviteUrl.trim()
+            ? parsed.discordInviteUrl.trim()
+            : DEFAULT_MASTER_UI_PREFS.discordInviteUrl,
         discordButtonTopPx: Math.max(-18, Math.min(28, Number(parsed?.discordButtonTopPx ?? DEFAULT_MASTER_UI_PREFS.discordButtonTopPx))),
         discordButtonLeftPx: Math.max(0, Math.min(40, Number(parsed?.discordButtonLeftPx ?? DEFAULT_MASTER_UI_PREFS.discordButtonLeftPx))),
         headerBadges: parsedBadges,
@@ -376,6 +385,8 @@ function App() {
   const purchaseRecoveryStorageKey = user?.id ? `gt_purchase_recovery_v1_${user.id}` : null;
   const defaultOwnedIds = ['name_default', 'style_default', 'border_default'];
   const eventOwnedPrefix = 'event_owned:';
+  const legacyCompensationMarker = 'meta:legacy_shop_compensation_v1';
+  const LEGACY_SHOP_COMPENSATION_GC = 12000;
   const parseEventCountsFromOwnedCosmetics = (ownedRaw: unknown): Record<string, number> => {
     const owned = Array.isArray(ownedRaw) ? (ownedRaw as string[]) : [];
     const next: Record<string, number> = {};
@@ -389,9 +400,20 @@ function App() {
     });
     return next;
   };
-  const encodeEventCountsIntoOwnedCosmetics = (cosmeticOwnedRaw: string[], eventCountsRaw: Record<string, number>) => {
+  const encodeEventCountsIntoOwnedCosmetics = (
+    cosmeticOwnedRaw: string[],
+    eventCountsRaw: Record<string, number>,
+    metaEntriesRaw: string[] = []
+  ) => {
     const shopIdSet = new Set(SHOP_ITEMS.map((item) => item.id));
     const cosmeticOwned = Array.from(new Set((cosmeticOwnedRaw || []).filter((id) => shopIdSet.has(id))));
+    const metaEntries = Array.from(
+      new Set(
+        (metaEntriesRaw || [])
+          .map((entry) => String(entry || '').trim())
+          .filter((entry) => entry.startsWith('meta:'))
+      )
+    );
     const cleanedEventCounts = Object.entries(eventCountsRaw || {}).reduce<Record<string, number>>((acc, [eventId, countRaw]) => {
       const count = Math.max(0, Math.floor(Number(countRaw || 0)));
       if (!eventId || !count) return acc;
@@ -399,36 +421,65 @@ function App() {
       return acc;
     }, {});
     const encodedEventEntries = Object.entries(cleanedEventCounts).map(([eventId, count]) => `${eventOwnedPrefix}${eventId}:${count}`);
-    return Array.from(new Set([...cosmeticOwned, ...defaultOwnedIds, ...encodedEventEntries]));
+    return Array.from(new Set([...cosmeticOwned, ...defaultOwnedIds, ...encodedEventEntries, ...metaEntries]));
   };
   const readLocalCosmeticSnapshot = () => {
     try {
-      if (!cosmeticsStorageKey) return { owned: [...defaultOwnedIds] };
-      const raw = localStorage.getItem(cosmeticsStorageKey);
-      if (!raw) return { owned: [...defaultOwnedIds] };
-      const parsed = JSON.parse(raw) as { owned?: string[] };
+      if (!user?.id) return { owned: [...defaultOwnedIds], hasAnyHint: false };
+      const keyCandidates = [
+        `gt_cosmetics_v1_${user.id}`,
+        `gt_cosmetics_v0_${user.id}`,
+        `gt_cosmetics_${user.id}`,
+      ];
+      let mergedOwnedRaw: string[] = [];
+      let hasAnyHint = false;
+      keyCandidates.forEach((key) => {
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        hasAnyHint = true;
+        try {
+          const parsed = JSON.parse(raw) as { owned?: string[] };
+          if (Array.isArray(parsed?.owned)) mergedOwnedRaw = [...mergedOwnedRaw, ...parsed.owned];
+        } catch {
+          // ignore parse failure
+        }
+      });
       const shopIdSet = new Set(SHOP_ITEMS.map((item) => item.id));
-      const owned = Array.from(new Set([...(parsed?.owned || []), ...defaultOwnedIds])).filter((id) => shopIdSet.has(id));
-      return { owned };
+      const owned = Array.from(new Set([...(mergedOwnedRaw || []), ...defaultOwnedIds])).filter((id) => shopIdSet.has(id));
+      return { owned, hasAnyHint };
     } catch {
-      return { owned: [...defaultOwnedIds] };
+      return { owned: [...defaultOwnedIds], hasAnyHint: false };
     }
   };
   const readLocalEventSnapshot = () => {
     try {
-      if (!eventShopStorageKey) return {};
-      const raw = localStorage.getItem(eventShopStorageKey);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw) as Record<string, number>;
-      if (!parsed || typeof parsed !== 'object') return {};
-      return Object.entries(parsed).reduce<Record<string, number>>((acc, [eventId, countRaw]) => {
-        const count = Math.max(0, Math.floor(Number(countRaw || 0)));
-        if (!eventId || !count) return acc;
-        acc[eventId] = count;
-        return acc;
-      }, {});
+      if (!user?.id) return { counts: {}, hasAnyHint: false };
+      const keyCandidates = [
+        `gt_event_shop_v1_${user.id}`,
+        `gt_event_shop_v0_${user.id}`,
+        `gt_event_shop_${user.id}`,
+      ];
+      const merged: Record<string, number> = {};
+      let hasAnyHint = false;
+      keyCandidates.forEach((key) => {
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        hasAnyHint = true;
+        try {
+          const parsed = JSON.parse(raw) as Record<string, number>;
+          if (!parsed || typeof parsed !== 'object') return;
+          Object.entries(parsed).forEach(([eventId, countRaw]) => {
+            const count = Math.max(0, Math.floor(Number(countRaw || 0)));
+            if (!eventId || !count) return;
+            merged[eventId] = Math.max(merged[eventId] || 0, count);
+          });
+        } catch {
+          // ignore parse failure
+        }
+      });
+      return { counts: merged, hasAnyHint };
     } catch {
-      return {};
+      return { counts: {}, hasAnyHint: false };
     }
   };
   const isCurrentUserDisplayName = (name?: string | null) => (name || '').trim() === (currentUserName || '').trim();
@@ -1302,17 +1353,44 @@ function App() {
   }, [masterUiPrefs]);
 
   useEffect(() => {
+    setMasterDiscordUrlDraft(masterUiPrefs.discordInviteUrl || DEFAULT_DISCORD_INVITE_URL);
+  }, [masterUiPrefs.discordInviteUrl]);
+
+  useEffect(() => {
     setMatchPhaseAudio(matchPhase);
   }, [matchPhase]);
 
   const showStatusPopup = (
-    type: 'success' | 'error' | 'info',
+    type: 'success' | 'error' | 'info' | 'victory',
     title: string,
     message: string,
     options?: { autoCloseMs?: number; hideConfirm?: boolean }
   ) => {
     setStatusPopupFading(false);
     setStatusPopup({ type, title, message, autoCloseMs: options?.autoCloseMs, hideConfirm: options?.hideConfirm });
+  };
+
+  const handleSaveMasterDiscordUrl = () => {
+    const nextUrl = String(masterDiscordUrlDraft || '').trim();
+    if (!nextUrl) {
+      showStatusPopup('error', 'URL 입력 필요', '디스코드 URL을 입력해주세요.');
+      return;
+    }
+    const isHttp = /^https?:\/\//i.test(nextUrl);
+    if (!isHttp) {
+      showStatusPopup('error', 'URL 형식 오류', 'http:// 또는 https:// 로 시작하는 URL을 입력해주세요.');
+      return;
+    }
+    try {
+      // validate URL format
+      // eslint-disable-next-line no-new
+      new URL(nextUrl);
+    } catch {
+      showStatusPopup('error', 'URL 형식 오류', '유효한 URL 형식으로 입력해주세요.');
+      return;
+    }
+    updateMasterUiPrefs('discordInviteUrl', nextUrl);
+    showStatusPopup('success', '저장 완료', '디스코드 버튼 URL이 바로 반영되었습니다.', { autoCloseMs: 1200, hideConfirm: true });
   };
 
   const triggerStarRain = () => {
@@ -1355,43 +1433,47 @@ function App() {
   const triggerResultFx = (didWin: boolean, message: string) => {
     setResultFx({ type: didWin ? 'win' : 'lose', message });
     if (didWin) {
-      const bursts = Array.from({ length: 26 }).map((_, i) => ({
+      const bursts = Array.from({ length: 44 }).map((_, i) => ({
         id: Date.now() + i,
-        left: `${4 + Math.random() * 92}%`,
-        top: `${8 + Math.random() * 70}%`,
-        size: 8 + Math.floor(Math.random() * 14),
-        delay: `${Math.random() * 0.32}s`,
+        left: `${2 + Math.random() * 96}%`,
+        top: `${4 + Math.random() * 84}%`,
+        size: 10 + Math.floor(Math.random() * 18),
+        delay: `${Math.random() * 0.46}s`,
       }));
       setResultBursts(bursts);
-      const stars = Array.from({ length: 140 }).map((_, i) => ({
+      const starGlyphs = ['✦', '★', '✶', '✷', '✹', '✺'];
+      const stars = Array.from({ length: 280 }).map((_, i) => ({
         id: Date.now() + 1000 + i,
         left: Math.random() * 100,
-        delay: Math.random() * 0.8,
-        duration: 1.3 + Math.random() * 1.8,
-        size: 8 + Math.random() * 14,
-        drift: -120 + Math.random() * 240,
+        delay: Math.random() * 1.05,
+        duration: 1.9 + Math.random() * 2.3,
+        size: 9 + Math.random() * 17,
+        drift: -220 + Math.random() * 440,
         hue: Math.floor(Math.random() * 360),
+        glyph: starGlyphs[Math.floor(Math.random() * starGlyphs.length)],
       }));
       setResultVictoryStars(stars);
       setResultLoseTaunts([]);
-      setTimeout(() => setResultBursts([]), 1800);
-      setTimeout(() => setResultVictoryStars([]), 2400);
+      setTimeout(() => setResultBursts([]), 2500);
+      setTimeout(() => setResultVictoryStars([]), 3400);
     } else {
       setResultBursts([]);
-      const taunts = Array.from({ length: 22 }).map((_, i) => ({
+      const tauntLabels = ['😝 메롱', '🤪 메롱', '😛 메롱', '😜 메롱'];
+      const taunts = Array.from({ length: 56 }).map((_, i) => ({
         id: Date.now() + 2000 + i,
         left: Math.random() * 100,
-        delay: Math.random() * 0.8,
-        duration: 1.4 + Math.random() * 1.6,
-        size: 20 + Math.random() * 24,
-        drift: -90 + Math.random() * 180,
-        rotate: -30 + Math.random() * 60,
+        delay: Math.random() * 1.2,
+        duration: 1.9 + Math.random() * 2.6,
+        size: 24 + Math.random() * 30,
+        drift: -210 + Math.random() * 420,
+        rotate: -56 + Math.random() * 112,
+        label: tauntLabels[Math.floor(Math.random() * tauntLabels.length)],
       }));
       setResultLoseTaunts(taunts);
       setResultVictoryStars([]);
-      setTimeout(() => setResultLoseTaunts([]), 2400);
+      setTimeout(() => setResultLoseTaunts([]), 3400);
     }
-    setTimeout(() => setResultFx(null), 2600);
+    setTimeout(() => setResultFx(null), 3600);
   };
 
   const checkActiveChallenge = async (username: string) => {
@@ -1673,9 +1755,12 @@ function App() {
     const shopIdSet = new Set(SHOP_ITEMS.map((item) => item.id));
     const dbOwnedRaw = Array.isArray((profile as any).owned_cosmetics) ? ((profile as any).owned_cosmetics as string[]) : [];
     const dbCosmeticOwned = dbOwnedRaw.filter((id) => shopIdSet.has(id));
+    const dbMetaOwned = dbOwnedRaw
+      .map((entry) => String(entry || '').trim())
+      .filter((entry) => entry.startsWith('meta:'));
     const dbEventCounts = parseEventCountsFromOwnedCosmetics(dbOwnedRaw);
     const localCosmetics = readLocalCosmeticSnapshot().owned;
-    const localEventCounts = readLocalEventSnapshot();
+    const localEventCounts = readLocalEventSnapshot().counts;
 
     const mergedCosmeticOwned = Array.from(new Set([...dbCosmeticOwned, ...localCosmetics, ...defaultOwnedIds]));
     const mergedEventCounts = Object.keys({ ...dbEventCounts, ...localEventCounts }).reduce<Record<string, number>>((acc, key) => {
@@ -1685,6 +1770,7 @@ function App() {
 
     setOwnedItemIds(mergedCosmeticOwned);
     setEventItemCounts(mergedEventCounts);
+    setOwnedMetaEntries(Array.from(new Set(dbMetaOwned)));
     setEquippedItems({
       nameColor: (profile as any).equipped_name_color || 'name_default',
       nameStyle: (profile as any).equipped_name_style || 'style_default',
@@ -1698,9 +1784,11 @@ function App() {
     const dbEventCounts = parseEventCountsFromOwnedCosmetics(dbOwnedRaw);
     const shopIdSet = new Set(SHOP_ITEMS.map((item) => item.id));
     const dbCosmeticOwned = dbOwnedRaw.filter((id) => shopIdSet.has(id));
-
-    const localCosmeticOwned = readLocalCosmeticSnapshot().owned;
-    const localEventCounts = readLocalEventSnapshot();
+    const hasLegacyCompensationApplied = dbOwnedRaw.includes(legacyCompensationMarker);
+    const localCosmeticSnapshot = readLocalCosmeticSnapshot();
+    const localEventSnapshot = readLocalEventSnapshot();
+    const localCosmeticOwned = localCosmeticSnapshot.owned;
+    const localEventCounts = localEventSnapshot.counts;
 
     const missingCosmetics = localCosmeticOwned.filter((id) => !dbCosmeticOwned.includes(id) && !defaultOwnedIds.includes(id));
     const missingEventCounts = Object.entries(localEventCounts).reduce<Record<string, number>>((acc, [eventId, localCount]) => {
@@ -1743,10 +1831,23 @@ function App() {
       const item = EVENT_SHOP_ITEMS.find((v) => v.id === eventId);
       return sum + (item?.cost || 0) * Math.max(0, Math.floor(Number(gap || 0)));
     }, 0);
-    const totalRefund = missingCosmeticRefund + missingEventRefund;
+    const hasPaidOwnedOnDb =
+      dbCosmeticOwned.some((id) => (SHOP_ITEMS.find((item) => item.id === id)?.cost || 0) > 0) ||
+      Object.values(dbEventCounts).some((count) => Number(count || 0) > 0);
+    const localHasAnyPurchaseHint =
+      localCosmeticSnapshot.hasAnyHint ||
+      localEventSnapshot.hasAnyHint ||
+      Object.keys(purchaseHistory).length > 0;
+    const shouldApplyLegacyCompensation =
+      !hasPaidOwnedOnDb &&
+      localHasAnyPurchaseHint &&
+      !hasLegacyCompensationApplied &&
+      missingCosmeticRefund + missingEventRefund <= 0;
+    const fallbackCompensation = shouldApplyLegacyCompensation ? LEGACY_SHOP_COMPENSATION_GC : 0;
+    const totalRefund = missingCosmeticRefund + missingEventRefund + fallbackCompensation;
 
-    const recoverySignature = `c:${missingCosmetics.slice().sort().join(',')}|e:${Object.entries(missingEventCounts).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}:${v}`).join(',')}|r:${totalRefund}`;
-    if (recoverySignature === 'c:|e:|r:0') return;
+    const recoverySignature = `c:${missingCosmetics.slice().sort().join(',')}|e:${Object.entries(missingEventCounts).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}:${v}`).join(',')}|r:${totalRefund}|legacy:${shouldApplyLegacyCompensation ? 1 : 0}`;
+    if (missingCosmetics.length === 0 && Object.keys(missingEventCounts).length === 0 && totalRefund <= 0 && !shouldApplyLegacyCompensation) return;
     if (purchaseRecoveryStorageKey) {
       try {
         const prevSig = localStorage.getItem(purchaseRecoveryStorageKey) || '';
@@ -1770,7 +1871,17 @@ function App() {
           );
           return acc;
         }, {});
-        const mergedOwnedPayload = encodeEventCountsIntoOwnedCosmetics(mergedCosmetics, mergedEventCounts);
+        const nextMetaEntries = Array.from(
+          new Set([
+            ...ownedMetaEntries,
+            ...(shouldApplyLegacyCompensation ? [legacyCompensationMarker] : []),
+          ])
+        );
+        const mergedOwnedPayload = encodeEventCountsIntoOwnedCosmetics(
+          mergedCosmetics,
+          mergedEventCounts,
+          nextMetaEntries
+        );
 
         const { error } = await supabase
           .from('profiles')
@@ -1786,6 +1897,7 @@ function App() {
 
         setOwnedItemIds(mergedCosmetics);
         setEventItemCounts(mergedEventCounts);
+        setOwnedMetaEntries(nextMetaEntries);
         setProfile((prev: any) => (prev ? { ...prev, gc: nextGc, owned_cosmetics: mergedOwnedPayload } : prev));
         setRankers((prev) => prev.map((r) => (r.id === user.id ? { ...r, gc: nextGc, owned_cosmetics: mergedOwnedPayload } : r)));
         if (purchaseRecoveryStorageKey) {
@@ -1799,7 +1911,9 @@ function App() {
           showStatusPopup(
             'success',
             '구매 복구 완료',
-            `누락된 아이템 소유권을 복구했고, 차감되었던 ${totalRefund.toLocaleString()} GP를 환급했습니다.`,
+            shouldApplyLegacyCompensation
+              ? `정밀 복구 기록이 부족해 보상 환불 ${totalRefund.toLocaleString()} GP를 지급했습니다.`
+              : `누락된 아이템 소유권을 복구했고, 차감되었던 ${totalRefund.toLocaleString()} GP를 환급했습니다.`,
             { autoCloseMs: 2200, hideConfirm: true }
           );
         }
@@ -1807,7 +1921,7 @@ function App() {
         purchaseRecoveryRunningRef.current = false;
       }
     })();
-  }, [user?.id, profile?.id, profile?.gc, purchaseHistoryStorageKey, purchaseRecoveryStorageKey]);
+  }, [user?.id, profile?.id, profile?.gc, purchaseHistoryStorageKey, purchaseRecoveryStorageKey, ownedMetaEntries]);
 
   useEffect(() => {
     if (!user?.id || !profile) {
@@ -1855,7 +1969,8 @@ function App() {
     const timer = window.setTimeout(async () => {
       const ownedCosmeticsPayload = encodeEventCountsIntoOwnedCosmetics(
         Array.from(new Set([...ownedItemIds, ...defaultOwnedIds])),
-        eventItemCounts
+        eventItemCounts,
+        ownedMetaEntries
       );
       const payload = {
         owned_cosmetics: ownedCosmeticsPayload,
@@ -1870,7 +1985,7 @@ function App() {
       }
     }, 200);
     return () => window.clearTimeout(timer);
-  }, [user?.id, profile?.id, ownedItemIds, eventItemCounts, equippedItems]);
+  }, [user?.id, profile?.id, ownedItemIds, eventItemCounts, ownedMetaEntries, equippedItems]);
 
   useEffect(() => { if (currentUserName) { checkActiveChallenge(currentUserName); } }, [currentUserName]);
 
@@ -2059,7 +2174,7 @@ function App() {
 
         triggerResultFx(didWin, didWin ? '전투 승리! 순위가 갱신되었습니다.' : '전투 종료! 결과가 반영되었습니다.');
         showStatusPopup(
-          didWin ? 'success' : 'info',
+          didWin ? 'victory' : 'info',
           didWin ? '전투 승리! 결과 반영 완료' : '전투 종료! 결과 반영 완료',
           `스코어 ${myScore} : ${oppScore}\n${formatDeltaLine(pointLabel, pointDelta)}\n${formatDeltaLine('GC (갤럭시 코인)', gcDelta)}`
         );
@@ -2858,7 +2973,7 @@ function App() {
         item.id,
       ])
     );
-    const nextOwnedPayload = encodeEventCountsIntoOwnedCosmetics(nextOwnedCosmetics, dbEventCounts);
+    const nextOwnedPayload = encodeEventCountsIntoOwnedCosmetics(nextOwnedCosmetics, dbEventCounts, ownedMetaEntries);
     const updatePayload: any = {
       gc: nextGc,
       owned_cosmetics: nextOwnedPayload,
@@ -2931,7 +3046,7 @@ function App() {
     const dbEventCounts = parseEventCountsFromOwnedCosmetics(dbOwnedRaw);
     const nextEventCounts = { ...dbEventCounts, [item.id]: Math.max(0, Number(dbEventCounts[item.id] || 0)) + 1 };
     const cosmeticOwned = Array.from(new Set([...(ownedItemIds || []), ...defaultOwnedIds]));
-    const nextOwnedPayload = encodeEventCountsIntoOwnedCosmetics(cosmeticOwned, nextEventCounts);
+    const nextOwnedPayload = encodeEventCountsIntoOwnedCosmetics(cosmeticOwned, nextEventCounts, ownedMetaEntries);
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -3805,7 +3920,7 @@ function App() {
           const popupId = getMatchStableId(insertedMatchRow || matchPayload);
           lastResultPopupMatchIdRef.current = `result:${popupId}`;
           showStatusPopup(
-            didWin ? 'success' : 'info',
+            didWin ? 'victory' : 'info',
             didWin ? '전투 승리! 결과 반영 완료' : '전투 종료! 결과 반영 완료',
             `스코어 ${updatedData.c_win} : ${updatedData.t_win}\n${pointDeltaLine}\n${gcDeltaLine}`
           );
@@ -4869,7 +4984,7 @@ function App() {
         <header className="relative px-3 sm:px-4 lg:px-10 py-3 sm:py-4 lg:py-6 flex flex-col xl:flex-row xl:justify-between items-stretch xl:items-center gap-3 sm:gap-4 shrink-0 border-b border-cyan-500/30 bg-black/20 backdrop-blur-md">
           {masterUiPrefs.showDiscordEntry && (
             <a
-              href="https://discord.com/channels/146930111478890496/1469829921630064721"
+              href={masterUiPrefs.discordInviteUrl || DEFAULT_DISCORD_INVITE_URL}
               target="_blank"
               rel="noreferrer"
               title="디스코드 서버 바로가기"
@@ -6318,6 +6433,26 @@ function App() {
                       />
                     </label>
                   </div>
+                  <div className="mt-4 rounded-xl border border-indigo-400/30 bg-indigo-500/5 p-3 sm:p-4">
+                    <h4 className="text-indigo-200 font-black text-sm sm:text-base mb-2">디스코드 버튼 URL 수정</h4>
+                    <p className="text-[11px] sm:text-xs text-slate-400 font-bold mb-3">
+                      URL 입력 후 저장을 누르면 즉시 반영됩니다.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        value={masterDiscordUrlDraft}
+                        onChange={(e) => setMasterDiscordUrlDraft(e.target.value)}
+                        placeholder="https://discord.com/channels/..."
+                        className="flex-1 rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-sm text-white outline-none focus:border-indigo-400"
+                      />
+                      <button
+                        onClick={handleSaveMasterDiscordUrl}
+                        className="rounded-lg border border-indigo-400/55 bg-indigo-500/20 px-4 py-2 text-xs sm:text-sm font-black text-indigo-200 hover:bg-indigo-500/30 transition-all cursor-pointer"
+                      >
+                        URL 저장
+                      </button>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 mt-4">
                     <button
                       onClick={() => updateMasterUiPrefs('showDiscordEntry', !masterUiPrefs.showDiscordEntry)}
@@ -6640,7 +6775,14 @@ function App() {
 
       {resultFx && (
         <div className="fixed inset-0 z-[260] pointer-events-none flex items-center justify-center">
-          <div className={`absolute inset-0 ${resultFx.type === 'win' ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`} style={{ animation: `${resultFx.type === 'win' ? 'fx-win-pulse' : 'fx-lose-pulse'} 1.2s ease-out` }}></div>
+          <div
+            className={`absolute inset-0 ${
+              resultFx.type === 'win'
+                ? 'bg-[radial-gradient(circle_at_18%_20%,rgba(250,204,21,0.22),transparent_36%),radial-gradient(circle_at_78%_28%,rgba(244,114,182,0.18),transparent_38%),radial-gradient(circle_at_54%_84%,rgba(34,211,238,0.2),transparent_42%)]'
+                : 'bg-[radial-gradient(circle_at_20%_20%,rgba(244,114,182,0.18),transparent_40%),radial-gradient(circle_at_78%_26%,rgba(251,191,36,0.13),transparent_42%),radial-gradient(circle_at_50%_86%,rgba(239,68,68,0.2),transparent_44%)]'
+            }`}
+            style={{ animation: `${resultFx.type === 'win' ? 'fx-win-pulse' : 'fx-lose-pulse'} 1.5s ease-out` }}
+          ></div>
           {resultFx.type === 'win' &&
             resultVictoryStars.map((s) => (
               <span
@@ -6655,7 +6797,7 @@ function App() {
                   ['--drift' as any]: `${s.drift}px`,
                 }}
               >
-                ✦
+                {s.glyph}
               </span>
             ))}
           {resultFx.type === 'lose' &&
@@ -6672,7 +6814,7 @@ function App() {
                   ['--rot' as any]: `${t.rotate}deg`,
                 }}
               >
-                😝 메롱
+                {t.label}
               </span>
             ))}
           {resultFx.type === 'win' &&
@@ -6847,13 +6989,31 @@ function App() {
         <div className="fixed inset-0 z-[360] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setStatusPopup(null)}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className={`w-full max-w-lg rounded-[2rem] border p-6 sm:p-7 bg-[#0a0f1d] shadow-2xl ${statusPopup.type === 'success' ? 'border-emerald-400/70' : statusPopup.type === 'error' ? 'border-rose-400/70' : 'border-cyan-400/70'} ${statusPopupFading ? 'animate-[popup-fade_340ms_ease-out_forwards]' : ''}`}
+            className={`w-full max-w-lg rounded-[2rem] border p-6 sm:p-7 shadow-2xl ${
+              statusPopup.type === 'victory'
+                ? 'border-fuchsia-300/75 bg-[linear-gradient(145deg,rgba(5,10,24,0.97),rgba(31,13,50,0.93),rgba(8,40,56,0.92))] shadow-[0_0_34px_rgba(232,121,249,0.32)]'
+                : statusPopup.type === 'success'
+                  ? 'border-emerald-400/70 bg-[#0a0f1d]'
+                  : statusPopup.type === 'error'
+                    ? 'border-rose-400/70 bg-[#0a0f1d]'
+                    : 'border-cyan-400/70 bg-[#0a0f1d]'
+            } ${statusPopupFading ? 'animate-[popup-fade_340ms_ease-out_forwards]' : ''}`}
             style={statusPopupFading ? undefined : { animation: 'popup-in 260ms ease-out' }}
           >
-            <h4 className={`text-3xl sm:text-4xl font-black mb-3 ${statusPopup.type === 'success' ? 'text-emerald-300' : statusPopup.type === 'error' ? 'text-rose-300' : 'text-cyan-300'}`}>
+            <h4 className={`text-3xl sm:text-4xl font-black mb-3 ${
+              statusPopup.type === 'victory'
+                ? 'text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-cyan-200 to-fuchsia-300 drop-shadow-[0_0_16px_rgba(34,211,238,0.45)]'
+                : statusPopup.type === 'success'
+                  ? 'text-emerald-300'
+                  : statusPopup.type === 'error'
+                    ? 'text-rose-300'
+                    : 'text-cyan-300'
+            }`}>
               {statusPopup.title}
             </h4>
-            <p className="text-slate-200 text-xl sm:text-2xl leading-relaxed whitespace-pre-line font-black">{statusPopup.message}</p>
+            <p className={`text-xl sm:text-2xl leading-relaxed whitespace-pre-line font-black ${
+              statusPopup.type === 'victory' ? 'text-slate-100' : 'text-slate-200'
+            }`}>{statusPopup.message}</p>
             {!statusPopup.hideConfirm && (
               <div className="mt-6 flex justify-end">
                 <button
