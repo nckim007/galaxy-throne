@@ -45,6 +45,11 @@ type RegularChallengeMode = 'free';
 type SeasonChallengeMode = 'random' | 'season_free' | 'season_watson_melee' | 'season_vantage_sniper' | 'season_wraith_knife';
 type ChallengeMode = RegularChallengeMode | SeasonChallengeMode;
 type IngamePlatform = 'steam' | 'ea';
+type IngameProfileInfo = {
+  nickname: string;
+  platform: IngamePlatform;
+  playWindow: string;
+};
 type WinTarget = 3 | 5 | 11 | 21;
 
 type IncomingChallengeRequest = {
@@ -300,6 +305,7 @@ function App() {
   const [copyStatus, setCopyStatus] = useState(false);
   const [ingameNicknameDraft, setIngameNicknameDraft] = useState('');
   const [ingamePlatformDraft, setIngamePlatformDraft] = useState<IngamePlatform>('steam');
+  const [playWindowDraft, setPlayWindowDraft] = useState('');
   const [savingIngameProfile, setSavingIngameProfile] = useState(false);
   const [showIngameSetupModal, setShowIngameSetupModal] = useState(false);
   const [ownedItemIds, setOwnedItemIds] = useState<string[]>(['name_default', 'style_default', 'border_default']);
@@ -983,25 +989,26 @@ function App() {
     return 'steam';
   };
   const ingameProfileStorageKey = 'gt_ingame_profile_v1';
-  const readIngameProfileMap = (): Record<string, { nickname: string; platform: IngamePlatform }> => {
+  const readIngameProfileMap = (): Record<string, IngameProfileInfo> => {
     try {
       const raw = localStorage.getItem(ingameProfileStorageKey);
       if (!raw) return {};
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object') return {};
-      const next: Record<string, { nickname: string; platform: IngamePlatform }> = {};
+      const next: Record<string, IngameProfileInfo> = {};
       Object.entries(parsed).forEach(([k, v]) => {
         const nickname = String((v as any)?.nickname || '').trim();
         const platform = normalizeIngamePlatform((v as any)?.platform);
+        const playWindow = String((v as any)?.playWindow || '').trim();
         if (!k || !nickname) return;
-        next[k] = { nickname, platform };
+        next[k] = { nickname, platform, playWindow };
       });
       return next;
     } catch {
       return {};
     }
   };
-  const writeIngameProfileMap = (map: Record<string, { nickname: string; platform: IngamePlatform }>) => {
+  const writeIngameProfileMap = (map: Record<string, IngameProfileInfo>) => {
     try {
       localStorage.setItem(ingameProfileStorageKey, JSON.stringify(map));
     } catch {
@@ -1013,25 +1020,32 @@ function App() {
     displayName?: string | null;
     nickname: string;
     platform: IngamePlatform;
+    playWindow: string;
   }) => {
     const nickname = String(opts.nickname || '').trim();
+    const playWindow = String(opts.playWindow || '').trim();
     if (!nickname) return;
     const map = readIngameProfileMap();
     const userId = String(opts.userId || '').trim();
     const displayName = String(opts.displayName || '').trim();
-    if (userId) map[`id:${userId}`] = { nickname, platform: opts.platform };
-    if (displayName) map[`name:${displayName.toLowerCase()}`] = { nickname, platform: opts.platform };
+    if (userId) map[`id:${userId}`] = { nickname, platform: opts.platform, playWindow };
+    if (displayName) map[`name:${displayName.toLowerCase()}`] = { nickname, platform: opts.platform, playWindow };
     writeIngameProfileMap(map);
   };
-  const resolveIngameProfile = (row?: any): { nickname: string; platform: IngamePlatform } => {
+  const resolveIngameProfile = (row?: any): IngameProfileInfo => {
     const encodedPlatformRaw = String(row?.favorite_legend || '').trim();
     const encodedNicknameRaw = String(row?.favorite_weapon || '').trim();
-    const encodedPlatformMatch = encodedPlatformRaw.match(/^INGAME_PLATFORM:(steam|ea)$/i);
+    const encodedPlatformMatch = encodedPlatformRaw.match(/INGAME_PLATFORM:(steam|ea)/i);
+    const encodedPlayWindowMatch = encodedPlatformRaw.match(/PLAY_WINDOW:([^;]+)/i);
     const encodedNicknameMatch = encodedNicknameRaw.match(/^INGAME_CODE:(.+)$/i);
+    const decodedPlayWindow = encodedPlayWindowMatch?.[1]
+      ? decodeURIComponent(encodedPlayWindowMatch[1]).trim()
+      : '';
     if (encodedNicknameMatch?.[1]) {
       return {
         nickname: encodedNicknameMatch[1].trim(),
         platform: normalizeIngamePlatform(encodedPlatformMatch?.[1] || 'steam'),
+        playWindow: decodedPlayWindow,
       };
     }
     const nicknameCandidates = [
@@ -1048,8 +1062,20 @@ function App() {
       row?.ea_id,
       row?.origin_id,
     ];
+    const playWindowCandidates = [
+      row?.ingame_play_window,
+      row?.in_game_play_window,
+      row?.play_window,
+      row?.play_time,
+      row?.available_time,
+      row?.available_window,
+      row?.availability,
+      row?.play_schedule,
+    ];
     const dbNickname =
       nicknameCandidates.map((v) => String(v || '').trim()).find((v) => v.length > 0) || '';
+    const dbPlayWindow =
+      playWindowCandidates.map((v) => String(v || '').trim()).find((v) => v.length > 0) || '';
     const dbPlatform = normalizeIngamePlatform(
       row?.ingame_platform ||
       row?.in_game_platform ||
@@ -1057,13 +1083,13 @@ function App() {
       row?.battle_platform ||
       (row?.ea_nickname || row?.ea_name || row?.ea_id || row?.origin_id ? 'ea' : 'steam')
     );
-    if (dbNickname) return { nickname: dbNickname, platform: dbPlatform };
+    if (dbNickname) return { nickname: dbNickname, platform: dbPlatform, playWindow: dbPlayWindow };
     const map = readIngameProfileMap();
     const byId = row?.id ? map[`id:${String(row.id).trim()}`] : null;
     if (byId?.nickname) return byId;
     const byName = row?.display_name ? map[`name:${String(row.display_name).trim().toLowerCase()}`] : null;
     if (byName?.nickname) return byName;
-    return { nickname: '', platform: 'steam' };
+    return { nickname: '', platform: 'steam', playWindow: '' };
   };
   const getPlatformLabel = (platform?: unknown) => normalizeIngamePlatform(platform) === 'ea' ? 'EA' : 'STEAM CODE';
   const getIngameIdentityLabel = (platform?: unknown) =>
@@ -1075,6 +1101,7 @@ function App() {
   const currentUserIngameProfile = resolveIngameProfile(profile);
   const currentUserIngameNickname = currentUserIngameProfile.nickname;
   const currentUserIngamePlatform = currentUserIngameProfile.platform;
+  const currentUserPlayWindow = currentUserIngameProfile.playWindow;
   const getCosmeticStateForUser = (name?: string | null) => {
     if (isCurrentUserDisplayName(name)) {
       return equippedItems;
@@ -1749,8 +1776,7 @@ function App() {
     }
 
     const fieldCandidatesMap: Record<'rp' | 'sp' | 'gp', string[]> = {
-      // DB 스키마가 프로젝트별로 조금씩 달라서 후보 컬럼을 넉넉하게 둡니다.
-      // rp/sp는 가능하면 offset 컬럼(rp/sp)을 우선 사용하고, 없으면 총점 컬럼(regular_rp/season_sp)을 사용합니다.
+      // 운영 중 구/신 스키마 혼용을 대비해 컬럼 후보를 순차적으로 안전 시도합니다.
       rp: ['rp', 'regular_rp', 'regular_points'],
       sp: ['sp', 'season_sp', 'season_points'],
       gp: ['gc', 'gp', 'galaxy_credits'],
@@ -1826,6 +1852,7 @@ function App() {
     const canonicalPatch: Record<string, number> = { [appliedField]: appliedWriteValue };
     if (resource === 'rp') canonicalPatch.regular_rp = nextVal;
     if (resource === 'sp') canonicalPatch.season_sp = nextVal;
+    if (resource === 'sp') canonicalPatch.season_points = nextVal;
     if (resource === 'gp') canonicalPatch.gc = nextVal;
     if (resource === 'sp') canonicalPatch.sp = writeValue;
     if (resource === 'rp') canonicalPatch.rp = writeValue;
@@ -2421,20 +2448,23 @@ function App() {
     }
     setIngameNicknameDraft(currentUserIngameNickname || '');
     setIngamePlatformDraft(currentUserIngamePlatform);
-    setShowIngameSetupModal(!currentUserIngameNickname);
-  }, [user?.id, profile?.id, currentUserIngameNickname, currentUserIngamePlatform]);
+    setPlayWindowDraft(currentUserPlayWindow || '');
+    setShowIngameSetupModal(!currentUserIngameNickname || !currentUserPlayWindow);
+  }, [user?.id, profile?.id, currentUserIngameNickname, currentUserIngamePlatform, currentUserPlayWindow]);
   useEffect(() => {
     if (!user?.id || !profile) return;
     const nickname = String(currentUserIngameNickname || '').trim();
-    if (!nickname) return;
+    const playWindow = String(currentUserPlayWindow || '').trim();
+    if (!nickname || !playWindow) return;
     const encodedPlatformRaw = String((profile as any).favorite_legend || '').trim();
     const encodedNicknameRaw = String((profile as any).favorite_weapon || '').trim();
     const hasEncodedProfile =
-      /^INGAME_PLATFORM:(steam|ea)$/i.test(encodedPlatformRaw) &&
+      /INGAME_PLATFORM:(steam|ea)/i.test(encodedPlatformRaw) &&
+      /PLAY_WINDOW:/i.test(encodedPlatformRaw) &&
       /^INGAME_CODE:/i.test(encodedNicknameRaw);
     if (hasEncodedProfile) return;
 
-    const syncKey = `${user.id}:${currentUserIngamePlatform}:${nickname}`;
+    const syncKey = `${user.id}:${currentUserIngamePlatform}:${nickname}:${playWindow}`;
     if (ingameProfileBackfillRef.current === syncKey) return;
     ingameProfileBackfillRef.current = syncKey;
 
@@ -2443,7 +2473,7 @@ function App() {
         await supabase
           .from('profiles')
           .update({
-            favorite_legend: `INGAME_PLATFORM:${currentUserIngamePlatform}`,
+            favorite_legend: `INGAME_PLATFORM:${currentUserIngamePlatform};PLAY_WINDOW:${encodeURIComponent(playWindow)}`,
             favorite_weapon: `INGAME_CODE:${nickname}`,
           })
           .eq('id', user.id);
@@ -2453,7 +2483,7 @@ function App() {
         // ignore backfill failure
       }
     })();
-  }, [user?.id, profile?.id, (profile as any)?.favorite_legend, (profile as any)?.favorite_weapon, currentUserIngameNickname, currentUserIngamePlatform]);
+  }, [user?.id, profile?.id, (profile as any)?.favorite_legend, (profile as any)?.favorite_weapon, currentUserIngameNickname, currentUserIngamePlatform, currentUserPlayWindow]);
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -2700,18 +2730,36 @@ function App() {
         setRankers((prev) =>
           prev.map((row) =>
             row.id === nextRow.id
-              ? { ...row, ...nextRow, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform }
+              ? {
+                  ...row,
+                  ...nextRow,
+                  ingame_nickname: resolved.nickname,
+                  ingame_platform: resolved.platform,
+                  ingame_play_window: resolved.playWindow,
+                }
               : row
           )
         );
         setSelectedPlayer((prev) =>
           prev && prev.id === nextRow.id
-            ? { ...prev, ...nextRow, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform }
+            ? {
+                ...prev,
+                ...nextRow,
+                ingame_nickname: resolved.nickname,
+                ingame_platform: resolved.platform,
+                ingame_play_window: resolved.playWindow,
+              }
             : prev
         );
         setProfile((prev) =>
           prev && prev.id === nextRow.id
-            ? { ...prev, ...nextRow, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform }
+            ? {
+                ...prev,
+                ...nextRow,
+                ingame_nickname: resolved.nickname,
+                ingame_platform: resolved.platform,
+                ingame_play_window: resolved.playWindow,
+              }
             : prev
         );
       })
@@ -3089,6 +3137,7 @@ function App() {
         avatar_url: r.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.id}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
         ingame_nickname: ingame.nickname,
         ingame_platform: ingame.platform,
+        ingame_play_window: ingame.playWindow,
         gc: typeof r.gc === 'number' ? r.gc : 1000,
         regular_rp: regularTotal,
         season_sp: seasonTotal,
@@ -3142,11 +3191,17 @@ function App() {
       if ((a.season_matches || 0) !== (b.season_matches || 0)) return (a.season_matches || 0) - (b.season_matches || 0);
       return normalize(a.display_name).localeCompare(normalize(b.display_name));
     });
-    const seasonRankedCount = seasonSorted.length;
+    const seasonRankedCount = seasonSorted.filter((r: any) => (r.season_matches || 0) > 0).length;
+    let seasonDisplayIdx = 0;
     seasonSorted.forEach((r: any, i) => {
-      r.seasonRankIndex = i;
-      r.season_display_index = i;
-      r.season_tier_level = tierLevelByRank(i + 1, seasonRankedCount);
+      const played = (r.season_matches || 0) > 0;
+      r.season_display_index = played ? seasonDisplayIdx++ : null;
+      r.seasonRankIndex = played
+        ? (r.season_display_index as number)
+        : Number.MAX_SAFE_INTEGER + i;
+      r.season_tier_level = played
+        ? tierLevelByRank((r.season_display_index ?? 0) + 1, seasonRankedCount)
+        : 0;
     });
 
     const seasonMetaMap = new Map<string, { seasonRankIndex: number; season_display_index: number | null; season_tier_level: number }>();
@@ -3201,17 +3256,23 @@ function App() {
         ...data,
         ingame_nickname: resolvedIngame.nickname,
         ingame_platform: resolvedIngame.platform,
+        ingame_play_window: resolvedIngame.playWindow,
       });
     }
   };
 
   const handleLogin = async () => { playSFX('click'); await supabase.auth.signInWithOAuth({ provider: 'discord' }); };
   const handleLogout = async () => { playSFX('click'); await supabase.auth.signOut(); setProfile(null); };
-  const persistIngameProfile = async (nicknameRaw: string, platformRaw: IngamePlatform) => {
+  const persistIngameProfile = async (nicknameRaw: string, platformRaw: IngamePlatform, playWindowRaw: string) => {
     if (!user?.id) return false;
     const nickname = String(nicknameRaw || '').trim();
+    const playWindow = String(playWindowRaw || '').trim();
     if (!nickname) {
       showStatusPopup('error', '입력 필요', '인게임 닉네임을 입력해주세요.');
+      return false;
+    }
+    if (!playWindow) {
+      showStatusPopup('error', '입력 필요', '플레이 가능 시간대를 입력해주세요.');
       return false;
     }
     const platform = normalizeIngamePlatform(platformRaw);
@@ -3222,27 +3283,33 @@ function App() {
         displayName: currentUserName || profile?.display_name || '',
         nickname,
         platform,
+        playWindow,
       });
 
       const payloadCandidates: any[] = [
-        { favorite_legend: `INGAME_PLATFORM:${platform}`, favorite_weapon: `INGAME_CODE:${nickname}` },
+        { favorite_legend: `INGAME_PLATFORM:${platform};PLAY_WINDOW:${encodeURIComponent(playWindow)}`, favorite_weapon: `INGAME_CODE:${nickname}` },
+        { favorite_legend: `INGAME_PLATFORM:${platform};PLAY_WINDOW:${encodeURIComponent(playWindow)}`, favorite_weapon: `INGAME_CODE:${nickname}`, play_window: playWindow },
         { ingame_nickname: nickname, ingame_platform: platform },
+        { ingame_nickname: nickname, ingame_platform: platform, play_window: playWindow },
         { in_game_nickname: nickname, in_game_platform: platform },
+        { in_game_nickname: nickname, in_game_platform: platform, play_time: playWindow },
         { game_nickname: nickname, game_platform: platform },
+        { game_nickname: nickname, game_platform: platform, available_time: playWindow },
         { battle_nickname: nickname, battle_platform: platform },
+        { battle_nickname: nickname, battle_platform: platform, available_window: playWindow },
         platform === 'steam'
-          ? { steam_friend_code: nickname, ingame_platform: platform }
-          : { ea_nickname: nickname, ingame_platform: platform },
+          ? { steam_friend_code: nickname, ingame_platform: platform, play_window: playWindow }
+          : { ea_nickname: nickname, ingame_platform: platform, play_window: playWindow },
         platform === 'steam'
-          ? { steam_friendcode: nickname, ingame_platform: platform }
-          : { ea_name: nickname, ingame_platform: platform },
+          ? { steam_friendcode: nickname, ingame_platform: platform, play_time: playWindow }
+          : { ea_name: nickname, ingame_platform: platform, play_time: playWindow },
         platform === 'steam'
-          ? { steam_code: nickname, game_platform: platform }
-          : { ea_id: nickname, game_platform: platform },
+          ? { steam_code: nickname, game_platform: platform, available_time: playWindow }
+          : { ea_id: nickname, game_platform: platform, available_time: playWindow },
         platform === 'steam'
-          ? { steam_id: nickname, battle_platform: platform }
-          : { origin_id: nickname, battle_platform: platform },
-        { ingame_nickname: nickname, ingame_platform: platform },
+          ? { steam_id: nickname, battle_platform: platform, available_window: playWindow }
+          : { origin_id: nickname, battle_platform: platform, available_window: playWindow },
+        { ingame_nickname: nickname, ingame_platform: platform, availability: playWindow },
       ].filter(Boolean);
 
       let syncedToDb = false;
@@ -3266,19 +3333,22 @@ function App() {
         return false;
       }
 
-      setProfile((prev: any) => (prev ? { ...prev, ingame_nickname: nickname, ingame_platform: platform } : prev));
+      setProfile((prev: any) =>
+        prev ? { ...prev, ingame_nickname: nickname, ingame_platform: platform, ingame_play_window: playWindow } : prev
+      );
       setRankers((prev) =>
         prev.map((r) =>
-          r.id === user.id ? { ...r, ingame_nickname: nickname, ingame_platform: platform } : r
+          r.id === user.id ? { ...r, ingame_nickname: nickname, ingame_platform: platform, ingame_play_window: playWindow } : r
         )
       );
       setIngameNicknameDraft(nickname);
       setIngamePlatformDraft(platform);
+      setPlayWindowDraft(playWindow);
       setShowIngameSetupModal(false);
       fetchRankers();
       if (user?.id) fetchProfile(user.id);
 
-      showStatusPopup('success', '저장 완료', '인게임 닉네임 정보가 저장되었습니다.', {
+      showStatusPopup('success', '저장 완료', '인게임 정보가 저장되었습니다.', {
         autoCloseMs: 2200,
         hideConfirm: true,
       });
@@ -4535,7 +4605,12 @@ function App() {
       if (!fresh) return;
       const merged = { ...fresh, ...found };
       const resolved = resolveIngameProfile({ ...found, ...fresh });
-      const hydrated = { ...merged, ingame_nickname: resolved.nickname, ingame_platform: resolved.platform };
+      const hydrated = {
+        ...merged,
+        ingame_nickname: resolved.nickname,
+        ingame_platform: resolved.platform,
+        ingame_play_window: resolved.playWindow,
+      };
       setSelectedPlayer((prev) => (prev && prev.id === found.id ? hydrated : prev));
       setRankers((prev) => prev.map((row) => (row.id === found.id ? { ...row, ...hydrated } : row)));
     } catch {
@@ -5085,9 +5160,12 @@ function App() {
 
   const selectedPlayerRegularInfo = selectedPlayer ? getRegularRankInfoByName(selectedPlayer.display_name) : null;
   const selectedPlayerSeasonInfo = selectedPlayer ? getSeasonRankInfoByName(selectedPlayer.display_name) : null;
-  const selectedPlayerIngameProfile = selectedPlayer ? resolveIngameProfile(selectedPlayer) : { nickname: '', platform: 'steam' as IngamePlatform };
+  const selectedPlayerIngameProfile = selectedPlayer
+    ? resolveIngameProfile(selectedPlayer)
+    : { nickname: '', platform: 'steam' as IngamePlatform, playWindow: '' };
   const selectedPlayerIngameLabel = getIngameIdentityLabel(selectedPlayerIngameProfile.platform);
   const selectedPlayerIngameValue = String(selectedPlayerIngameProfile.nickname || '').trim();
+  const selectedPlayerPlayWindow = String(selectedPlayerIngameProfile.playWindow || '').trim();
   const selectedPlayerDiscordId = selectedPlayer ? getDiscordCopyCandidate(selectedPlayer) : '';
   const selectedProfileNameStyle = getSingleLineProfileNameStyle(selectedProfileNameFontSize);
   const selectedRankRow = selectedPlayer ? regularRankMap.get(normalizeName(selectedPlayer.display_name)) : null;
@@ -5099,6 +5177,11 @@ function App() {
     0,
     Number((selectedRankRow as any)?.season_sp ?? (selectedPlayer as any)?.season_sp ?? 0) || 0
   );
+  const selectedSeasonPlayed = Math.max(
+    0,
+    Number((selectedRankRow as any)?.season_matches ?? (selectedPlayer as any)?.season_matches ?? 0) || 0
+  ) > 0;
+  const selectedSeasonSpText = selectedSeasonPlayed ? String(selectedSeasonSp) : '-';
   const recentOpponents = (() => {
     if (!currentUserName) return [] as string[];
     const me = normalizeName(currentUserName);
@@ -6679,7 +6762,9 @@ function App() {
                                       <img src={r.avatar_url} className={`w-12 h-12 rounded-full border-2 ${getCardAvatarBorderFxForUser(r.display_name)} shrink-0`} alt="p"/>
                                     <span className={`font-bold text-base sm:text-[1.2rem] leading-tight truncate ${getNameClassForUser(r.display_name)}`}>{r.display_name}</span>
                                     </div>
-                                    <span className="font-black text-fuchsia-400 text-[1.15rem] sm:text-[1.5rem] shrink-0">{r.season_sp ?? 0}</span>
+                                    <span className="font-black text-fuchsia-400 text-[1.15rem] sm:text-[1.5rem] shrink-0">
+                                      {(r.season_matches || 0) > 0 ? (r.season_sp ?? 0) : '-'}
+                                    </span>
                                   </div>
                                 </div>
                               );
@@ -7080,7 +7165,9 @@ function App() {
                         <span className={`group-hover:text-cyan-400 font-bold text-white truncate leading-tight ${nameSize}`}>{r.display_name}</span>
                                       </div>
                                      <div className="flex flex-col items-end shrink-0 ml-2">
-                                       <span className={`font-black text-fuchsia-400 tracking-tight ${statSize}`}>{r.season_sp ?? 0}</span>
+                                      <span className={`font-black text-fuchsia-400 tracking-tight ${statSize}`}>
+                                        {(r.season_matches || 0) > 0 ? (r.season_sp ?? 0) : '-'}
+                                      </span>
                                        <span className="text-[10px] font-black text-slate-400 tracking-wider">SP (시즌)</span>
                                      </div>
                                    </div>
@@ -7171,25 +7258,39 @@ function App() {
                             </button>
                           </div>
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-2">
+                        <div className="flex flex-col gap-2">
                           <input
                             value={ingameNicknameDraft}
                             onChange={(e) => setIngameNicknameDraft(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && !(e.nativeEvent as any).isComposing) {
                                 e.preventDefault();
-                                void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft);
+                                void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft, playWindowDraft);
                               }
                             }}
                             placeholder="인게임 닉네임을 입력하세요"
-                            className="flex-1 rounded-xl border border-white/15 bg-black/45 px-3 py-2.5 text-white font-bold text-sm sm:text-base outline-none focus:border-cyan-400/70"
+                            className="w-full rounded-xl border border-white/15 bg-black/45 px-3 py-2.5 text-white font-bold text-sm sm:text-base outline-none focus:border-cyan-400/70"
                           />
+                          <input
+                            value={playWindowDraft}
+                            onChange={(e) => setPlayWindowDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !(e.nativeEvent as any).isComposing) {
+                                e.preventDefault();
+                                void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft, playWindowDraft);
+                              }
+                            }}
+                            placeholder="플레이 가능 시간대 (예: 평일 20:00~24:00 / 주말 자유)"
+                            className="w-full rounded-xl border border-white/15 bg-black/45 px-3 py-2.5 text-white font-bold text-sm sm:text-base outline-none focus:border-cyan-400/70"
+                          />
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2">
                           <div className="flex gap-2">
                             <button
                               onMouseEnter={() => playSFX('hover')}
-                              onClick={() => void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft)}
-                              disabled={savingIngameProfile || !ingameNicknameDraft.trim()}
-                              className={`px-4 py-2.5 rounded-xl border font-black text-sm sm:text-base transition-all ${savingIngameProfile || !ingameNicknameDraft.trim() ? 'border-slate-700 text-slate-500 bg-slate-800/50 cursor-not-allowed' : 'border-emerald-400/55 text-emerald-300 bg-emerald-500/15 hover:bg-emerald-500/25 cursor-pointer'}`}
+                              onClick={() => void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft, playWindowDraft)}
+                              disabled={savingIngameProfile || !ingameNicknameDraft.trim() || !playWindowDraft.trim()}
+                              className={`px-4 py-2.5 rounded-xl border font-black text-sm sm:text-base transition-all ${savingIngameProfile || !ingameNicknameDraft.trim() || !playWindowDraft.trim() ? 'border-slate-700 text-slate-500 bg-slate-800/50 cursor-not-allowed' : 'border-emerald-400/55 text-emerald-300 bg-emerald-500/15 hover:bg-emerald-500/25 cursor-pointer'}`}
                             >
                               {savingIngameProfile ? '저장중...' : '저장'}
                             </button>
@@ -7209,6 +7310,11 @@ function App() {
                             >
                               {currentUserIngameNickname}
                             </button>
+                            {currentUserPlayWindow ? (
+                              <>
+                                {' '}· 플레이 가능 시간대 <span className="text-cyan-200">{currentUserPlayWindow}</span>
+                              </>
+                            ) : null}
                           </p>
                         )}
                       </div>
@@ -7684,6 +7790,14 @@ function App() {
                         <h2
                           ref={selectedProfileNameTextRef}
                           onMouseEnter={() => playSFX('hover')}
+                          style={selectedProfileNameStyle}
+                          className={`italic font-black whitespace-nowrap inline-block align-middle ${getNameClassForUser(selectedPlayer.display_name)}`}
+                        >
+                          {selectedPlayer.display_name}
+                        </h2>
+                        <p className="mt-1.5 text-slate-400 text-[11px] sm:text-xs font-black tracking-wider">디스코드 아이디</p>
+                        <button
+                          onMouseEnter={() => playSFX('hover')}
                           onClick={(e) => {
                             e.stopPropagation();
                             playSFX('click');
@@ -7694,12 +7808,10 @@ function App() {
                             navigator.clipboard.writeText(selectedPlayerDiscordId);
                             showStatusPopup('success', '복사 완료', '복사가 완료되었습니다.', { autoCloseMs: 1000, hideConfirm: true });
                           }}
-                          title={selectedPlayerDiscordId ? '클릭해서 디스코드 아이디 복사' : '복사 가능한 아이디 없음'}
-                          style={selectedProfileNameStyle}
-                          className={`italic font-black cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap inline-block align-middle ${getNameClassForUser(selectedPlayer.display_name)}`}
+                          className="mt-1 text-cyan-300 text-sm sm:text-base font-bold whitespace-normal break-all text-left hover:text-cyan-200 transition-colors cursor-pointer"
                         >
-                          {selectedPlayer.display_name}
-                        </h2>
+                          {selectedPlayerDiscordId || '미설정'}
+                        </button>
                         <p className="mt-1.5 text-slate-400 text-[11px] sm:text-xs font-black tracking-wider">{selectedPlayerIngameLabel}</p>
                         <button
                           onMouseEnter={() => playSFX('hover')}
@@ -7717,6 +7829,10 @@ function App() {
                         >
                           {selectedPlayerIngameValue || '미설정'}
                         </button>
+                        <p className="mt-2 text-slate-400 text-[11px] sm:text-xs font-black tracking-wider">플레이 가능 시간대</p>
+                        <p className="mt-1 text-cyan-100 text-sm sm:text-base font-bold whitespace-normal break-all">
+                          {selectedPlayerPlayWindow || '미설정'}
+                        </p>
                       </div>
                       <div className="flex flex-col gap-2 items-start md:items-end shrink-0 w-full md:w-[340px]">
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerRegularInfo?.color || 'text-slate-300'} bg-white/10 w-fit whitespace-nowrap`}>
@@ -7728,8 +7844,8 @@ function App() {
                         <span className={`inline-flex items-center gap-2 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 ${selectedPlayerSeasonInfo?.color || 'text-slate-300'} bg-white/10 w-fit whitespace-nowrap`}>
                            <span>{selectedPlayerSeasonInfo?.icon || '🪐'}</span>
                            {selectedPlayerSeasonInfo
-                             ? `${selectedPlayerSeasonInfo.name} ${typeof selectedPlayerSeasonInfo.index === 'number' ? `${selectedPlayerSeasonInfo.index + 1}위` : '-위'} · ${selectedSeasonSp} SP (시즌)`
-                             : `보이드 -위 · ${selectedSeasonSp} SP (시즌)`}
+                            ? `${selectedPlayerSeasonInfo.name} ${typeof selectedPlayerSeasonInfo.index === 'number' ? `${selectedPlayerSeasonInfo.index + 1}위` : '-위'} · ${selectedSeasonSpText} SP (시즌)`
+                            : `보이드 -위 · ${selectedSeasonSpText} SP (시즌)`}
                         </span>
                       </div>
                     </div>
@@ -8074,9 +8190,9 @@ function App() {
             className="w-full max-w-xl rounded-[2rem] border border-cyan-400/70 p-6 sm:p-7 bg-[#0a0f1d] shadow-2xl"
             style={{ animation: 'popup-in 260ms ease-out' }}
           >
-            <h4 className="text-3xl sm:text-4xl font-black mb-3 text-cyan-300">인게임 닉네임 설정</h4>
+            <h4 className="text-3xl sm:text-4xl font-black mb-3 text-cyan-300">필수 정보 설정</h4>
             <p className="text-slate-200 text-lg sm:text-xl leading-relaxed mb-5">
-              첫 이용을 위해 인게임 닉네임과 플랫폼을 입력해주세요.
+              첫 이용을 위해 인게임 닉네임, 플랫폼, 플레이 가능 시간대를 입력해주세요.
             </p>
             <div className="flex items-center gap-2 mb-3">
               <button
@@ -8100,18 +8216,30 @@ function App() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !(e.nativeEvent as any).isComposing) {
                   e.preventDefault();
-                  void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft);
+                  void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft, playWindowDraft);
                 }
               }}
               placeholder="인게임 닉네임 입력"
               className="w-full rounded-xl border border-white/15 bg-black/45 px-4 py-3 text-white font-bold text-lg outline-none focus:border-cyan-400/70"
             />
+            <input
+              value={playWindowDraft}
+              onChange={(e) => setPlayWindowDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !(e.nativeEvent as any).isComposing) {
+                  e.preventDefault();
+                  void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft, playWindowDraft);
+                }
+              }}
+              placeholder="플레이 가능 시간대 입력 (예: 평일 20:00~24:00)"
+              className="mt-3 w-full rounded-xl border border-white/15 bg-black/45 px-4 py-3 text-white font-bold text-lg outline-none focus:border-cyan-400/70"
+            />
             <div className="mt-5 flex justify-end">
               <button
                 onMouseEnter={() => playSFX('hover')}
-                onClick={() => void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft)}
-                disabled={savingIngameProfile || !ingameNicknameDraft.trim()}
-                className={`hvr-grow hvr-glow px-6 py-3 rounded-xl border font-black text-lg sm:text-xl transition-all ${savingIngameProfile || !ingameNicknameDraft.trim() ? 'border-slate-700 text-slate-500 bg-slate-800/50 cursor-not-allowed' : 'border-cyan-400/60 text-cyan-300 bg-black/50 hover:bg-cyan-500/20 cursor-pointer'}`}
+                onClick={() => void persistIngameProfile(ingameNicknameDraft, ingamePlatformDraft, playWindowDraft)}
+                disabled={savingIngameProfile || !ingameNicknameDraft.trim() || !playWindowDraft.trim()}
+                className={`hvr-grow hvr-glow px-6 py-3 rounded-xl border font-black text-lg sm:text-xl transition-all ${savingIngameProfile || !ingameNicknameDraft.trim() || !playWindowDraft.trim() ? 'border-slate-700 text-slate-500 bg-slate-800/50 cursor-not-allowed' : 'border-cyan-400/60 text-cyan-300 bg-black/50 hover:bg-cyan-500/20 cursor-pointer'}`}
               >
                 {savingIngameProfile ? '저장중...' : '확인'}
               </button>
