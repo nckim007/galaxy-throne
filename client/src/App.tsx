@@ -104,6 +104,33 @@ const SEASON_MODE_MENU: { mode: SeasonChallengeMode; label: string; description:
 
 const KNOWN_CHALLENGE_MODES: ChallengeMode[] = ['free', 'random', 'season_free', 'season_watson_melee', 'season_vantage_sniper', 'season_wraith_knife'];
 const WIN_TARGET_OPTIONS: WinTarget[] = [3, 5, 11, 21];
+type MasterUiPrefs = {
+  headerTitle: string;
+  seasonTitle: string;
+  titleScalePercent: number;
+  showDiscordEntry: boolean;
+  showSeasonTitle: boolean;
+  homeGapPx: number;
+  homeTopOffsetPx: number;
+  showOnlineBoard: boolean;
+  showMatchBoard: boolean;
+  showRecentBoard: boolean;
+  showRankingBoard: boolean;
+};
+const MASTER_UI_PREFS_KEY = 'gt_master_ui_prefs_v1';
+const DEFAULT_MASTER_UI_PREFS: MasterUiPrefs = {
+  headerTitle: '은하단',
+  seasonTitle: '별들의 전쟁 : 시즌 1',
+  titleScalePercent: 100,
+  showDiscordEntry: true,
+  showSeasonTitle: true,
+  homeGapPx: 24,
+  homeTopOffsetPx: 0,
+  showOnlineBoard: true,
+  showMatchBoard: true,
+  showRecentBoard: true,
+  showRankingBoard: true,
+};
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -180,6 +207,25 @@ function App() {
   const [sfxEnabled, setSfxEnabled] = useState(localStorage.getItem('sfxEnabled') !== 'false');
   const [bgmVolume, setBgmVolume] = useState(parseFloat(localStorage.getItem('bgmVolume') || '0.10'));
   const [sfxVolume, setSfxVolume] = useState(parseFloat(localStorage.getItem('sfxVolume') || '0.60'));
+  const [masterUiPrefs, setMasterUiPrefs] = useState<MasterUiPrefs>(() => {
+    try {
+      const raw = localStorage.getItem(MASTER_UI_PREFS_KEY);
+      if (!raw) return DEFAULT_MASTER_UI_PREFS;
+      const parsed = JSON.parse(raw);
+      return {
+        ...DEFAULT_MASTER_UI_PREFS,
+        ...parsed,
+        titleScalePercent: Math.max(70, Math.min(140, Number(parsed?.titleScalePercent ?? DEFAULT_MASTER_UI_PREFS.titleScalePercent))),
+        homeGapPx: Math.max(8, Math.min(48, Number(parsed?.homeGapPx ?? DEFAULT_MASTER_UI_PREFS.homeGapPx))),
+        homeTopOffsetPx: Math.max(-80, Math.min(120, Number(parsed?.homeTopOffsetPx ?? DEFAULT_MASTER_UI_PREFS.homeTopOffsetPx))),
+      };
+    } catch {
+      return DEFAULT_MASTER_UI_PREFS;
+    }
+  });
+  const updateMasterUiPrefs = <K extends keyof MasterUiPrefs>(key: K, value: MasterUiPrefs[K]) => {
+    setMasterUiPrefs((prev) => ({ ...prev, [key]: value }));
+  };
 
   const currentUserName = profile?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name;
   const currentUserAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || profile?.avatar_url || null;
@@ -194,37 +240,42 @@ function App() {
   const REGULAR_TICKET_COST = 200;
   const SEASON_TICKET_COST = 0;
   const REGULAR_INACTIVE_GRACE_DAYS = 3;
-  const REGULAR_INACTIVE_DECAY_PER_DAY = 100;
+  const REGULAR_INACTIVE_DECAY_PER_DAY = 30;
   const calcSeasonWinReward = (opts: {
     winnerScore: number;
-    isHigherTierWin: boolean;
+    isHigherRankWin: boolean;
   }) => {
     const winnerScore = Math.max(0, Math.floor(Number(opts.winnerScore || 0)));
     const extraWins = Math.max(0, winnerScore - 3);
-    const higherTierBonusWins = opts.isHigherTierWin ? winnerScore : 0;
-    const baseSp = 30 + extraWins * 10 + higherTierBonusWins * 15;
-    const baseGc = 60 + extraWins * 20 + higherTierBonusWins * 30;
+    const higherRankBonusWins = opts.isHigherRankWin ? winnerScore : 0;
+    const baseSp = 30 + extraWins * 10 + higherRankBonusWins * 10;
+    const baseGc = 60 + extraWins * 20 + higherRankBonusWins * 20;
     return {
       sp: Math.round(baseSp),
       gc: Math.round(baseGc),
     };
   };
-  const calcSeasonLoseReward = (loserScore: number) => {
-    const safeLoserScore = Math.max(0, Math.floor(Number(loserScore || 0)));
+  const calcSeasonLoseReward = (opts: { loserScore: number; isHigherRankLoss: boolean }) => {
+    const safeLoserScore = Math.max(0, Math.floor(Number(opts.loserScore || 0)));
+    const higherRankBonusWins = opts.isHigherRankLoss ? safeLoserScore : 0;
     return {
-      sp: 10 + (safeLoserScore > 0 ? safeLoserScore * 5 : 0),
-      gc: 20 + (safeLoserScore > 0 ? safeLoserScore * 10 : 0),
+      sp: 10 + (safeLoserScore > 0 ? safeLoserScore * 5 : 0) + higherRankBonusWins * 5,
+      gc: 20 + (safeLoserScore > 0 ? safeLoserScore * 10 : 0) + higherRankBonusWins * 10,
     };
   };
-  const calcRegularWinGain = (opts: { winnerScore: number; isHigherTierWin: boolean }) => {
+  const calcRegularWinGain = (opts: { winnerScore: number; isHigherRankWin: boolean }) => {
     const winnerScore = Math.max(0, Math.floor(Number(opts.winnerScore || 0)));
     const extraWins = Math.max(0, winnerScore - 3);
-    return 30 + extraWins * 10 + (opts.isHigherTierWin ? winnerScore * 15 : 0);
+    return 30 + extraWins * 10 + (opts.isHigherRankWin ? winnerScore * 10 : 0);
   };
-  const calcRegularLoseDelta = (opts: { loserScore: number; winnerScore: number }) => {
+  const calcRegularLoseDelta = (opts: { loserScore: number; winnerScore: number; isHigherRankLoss: boolean }) => {
     const loserScore = Math.max(0, Math.floor(Number(opts.loserScore || 0)));
     const winnerScore = Math.max(0, Math.floor(Number(opts.winnerScore || 0)));
-    const basePenalty = 20 + Math.max(0, winnerScore - 3) * 5 - loserScore * 5;
+    const basePenalty =
+      20 +
+      Math.max(0, winnerScore - 3) * 5 -
+      loserScore * 5 -
+      (opts.isHigherRankLoss ? 10 : 0);
     return -Math.max(0, basePenalty);
   };
   const cosmeticsStorageKey = user?.id ? `gt_cosmetics_v1_${user.id}` : null;
@@ -1095,6 +1146,10 @@ function App() {
   }, [bgmEnabled, sfxEnabled, bgmVolume, sfxVolume]);
 
   useEffect(() => {
+    localStorage.setItem(MASTER_UI_PREFS_KEY, JSON.stringify(masterUiPrefs));
+  }, [masterUiPrefs]);
+
+  useEffect(() => {
     setMatchPhaseAudio(matchPhase);
   }, [matchPhase]);
 
@@ -1942,15 +1997,15 @@ function App() {
           return a.localeCompare(b);
         });
 
-    const getRegularTierLevelBefore = (name: string) => {
+    const getRegularRankIndexBefore = (name: string) => {
       const sorted = getRegularSortedNames();
       const idx = sorted.indexOf(name);
-      return tierLevelByRank(idx >= 0 ? idx + 1 : null, sorted.length);
+      return idx >= 0 ? idx : null;
     };
-    const getSeasonTierLevelBefore = (name: string) => {
+    const getSeasonRankIndexBefore = (name: string) => {
       const sorted = getSeasonSortedNames();
       const idx = sorted.indexOf(name);
-      return tierLevelByRank(idx >= 0 ? idx + 1 : null, sorted.length);
+      return idx >= 0 ? idx : null;
     };
     const getRegularTopBefore = () => getRegularSortedNames()[0] || null;
     const getSeasonTopBefore = () => getSeasonSortedNames()[0] || null;
@@ -1985,9 +2040,14 @@ function App() {
 
 	      if (isRegularMode(mode)) {
         const topBefore = getRegularTopBefore();
-        const winnerTierBefore = getRegularTierLevelBefore(winner);
-        const loserTierBefore = getRegularTierLevelBefore(loser);
-        const isHigherTierWin = loserTierBefore > winnerTierBefore;
+        const winnerRankBefore = getRegularRankIndexBefore(winner);
+        const loserRankBefore = getRegularRankIndexBefore(loser);
+        const isHigherRankWin =
+          loserRankBefore !== null &&
+          (winnerRankBefore === null || loserRankBefore < winnerRankBefore);
+        const isHigherRankLoss =
+          winnerRankBefore !== null &&
+          (loserRankBefore === null || winnerRankBefore < loserRankBefore);
 
         winnerState.regularMatches += 1;
         winnerState.regularWins += 1;
@@ -1996,11 +2056,11 @@ function App() {
         loserState.regularLosses += 1;
         loserState.lastRegularMatchTs = safeTs;
 
-        const winGain = calcRegularWinGain({ winnerScore, isHigherTierWin });
+        const winGain = calcRegularWinGain({ winnerScore, isHigherRankWin });
         winnerState.regularRp = Math.max(0, winnerState.regularRp + winGain);
         winnerState.regularWinStreak += 1;
 
-        const loseDelta = calcRegularLoseDelta({ loserScore, winnerScore });
+        const loseDelta = calcRegularLoseDelta({ loserScore, winnerScore, isHigherRankLoss });
         loserState.regularRp = Math.max(0, loserState.regularRp + loseDelta);
         loserState.regularWinStreak = 0;
         loserState.regularDefenseStack = 0;
@@ -2013,9 +2073,14 @@ function App() {
         }
       } else {
         const topBefore = getSeasonTopBefore();
-        const winnerTierBefore = getSeasonTierLevelBefore(winner);
-        const loserTierBefore = getSeasonTierLevelBefore(loser);
-        const isHigherTierWin = loserTierBefore > winnerTierBefore;
+        const winnerRankBefore = getSeasonRankIndexBefore(winner);
+        const loserRankBefore = getSeasonRankIndexBefore(loser);
+        const isHigherRankWin =
+          loserRankBefore !== null &&
+          (winnerRankBefore === null || loserRankBefore < winnerRankBefore);
+        const isHigherRankLoss =
+          winnerRankBefore !== null &&
+          (loserRankBefore === null || winnerRankBefore < loserRankBefore);
 
         winnerState.seasonMatches += 1;
         winnerState.seasonWins += 1;
@@ -2025,9 +2090,9 @@ function App() {
         const nextSeasonStreak = winnerState.seasonWinStreak + 1;
         const winnerReward = calcSeasonWinReward({
           winnerScore,
-          isHigherTierWin,
+          isHigherRankWin,
         });
-        const loserReward = calcSeasonLoseReward(loserScore);
+        const loserReward = calcSeasonLoseReward({ loserScore, isHigherRankLoss });
         winnerState.seasonSp += winnerReward.sp;
         loserState.seasonSp += loserReward.sp;
 
@@ -3154,18 +3219,34 @@ function App() {
           const targetRowBefore: any = regularRankMap.get(normalizeName(targetName));
           const challengerBountyFromOpponent = getModeBountyGCFromRow(targetRowBefore, baseMode);
           const targetBountyFromOpponent = getModeBountyGCFromRow(challengerRowBefore, baseMode);
-          const challengerSeasonTierBefore = typeof challengerRowBefore?.season_tier_level === 'number' ? challengerRowBefore.season_tier_level : 0;
-          const targetSeasonTierBefore = typeof targetRowBefore?.season_tier_level === 'number' ? targetRowBefore.season_tier_level : 0;
-          const winnerSeasonTierBefore = challengerWon ? challengerSeasonTierBefore : targetSeasonTierBefore;
-          const loserSeasonTierBefore = challengerWon ? targetSeasonTierBefore : challengerSeasonTierBefore;
-          const winnerSeasonStreakBefore = challengerWon
-            ? Number(challengerRowBefore?.season_win_streak || 0)
-            : Number(targetRowBefore?.season_win_streak || 0);
+          const getRowRegularRankIndex = (row: any) => {
+            if (typeof row?.regular_display_index === 'number') return row.regular_display_index as number;
+            if (typeof row?.rankIndex === 'number') return row.rankIndex as number;
+            return null;
+          };
+          const getRowSeasonRankIndex = (row: any) => {
+            if (typeof row?.season_display_index === 'number') return row.season_display_index as number;
+            if (typeof row?.seasonRankIndex === 'number') return row.seasonRankIndex as number;
+            return null;
+          };
+          const challengerRegularRankBefore = getRowRegularRankIndex(challengerRowBefore);
+          const targetRegularRankBefore = getRowRegularRankIndex(targetRowBefore);
+          const challengerSeasonRankBefore = getRowSeasonRankIndex(challengerRowBefore);
+          const targetSeasonRankBefore = getRowSeasonRankIndex(targetRowBefore);
+          const winnerSeasonRankBefore = challengerWon ? challengerSeasonRankBefore : targetSeasonRankBefore;
+          const loserSeasonRankBefore = challengerWon ? targetSeasonRankBefore : challengerSeasonRankBefore;
           const seasonWinnerReward = calcSeasonWinReward({
             winnerScore,
-            isHigherTierWin: loserSeasonTierBefore > winnerSeasonTierBefore,
+            isHigherRankWin:
+              loserSeasonRankBefore !== null &&
+              (winnerSeasonRankBefore === null || loserSeasonRankBefore < winnerSeasonRankBefore),
           });
-          const seasonLoserReward = calcSeasonLoseReward(loserScore);
+          const seasonLoserReward = calcSeasonLoseReward({
+            loserScore,
+            isHigherRankLoss:
+              winnerSeasonRankBefore !== null &&
+              (loserSeasonRankBefore === null || winnerSeasonRankBefore < loserSeasonRankBefore),
+          });
 
           if (isRegular) {
             // 정규전: 티켓(200)은 성사 시 소멸, 배팅 포트(양측 동일 금액)는 승자가 획득
@@ -3198,26 +3279,48 @@ function App() {
           let targetPointDelta = 0;
 
           if (isRegularMode(baseMode)) {
-            const challengerTierBefore = getRegularTierLevelByName(challengerName);
-            const targetTierBefore = getRegularTierLevelByName(targetName);
             if (challengerWon) {
-              const isHigherTierWin = targetTierBefore > challengerTierBefore;
-              challengerPointDelta = calcRegularWinGain({ winnerScore: challengerScore, isHigherTierWin });
-              targetPointDelta = calcRegularLoseDelta({ loserScore: targetScore, winnerScore: challengerScore });
+              const isHigherRankWin =
+                targetRegularRankBefore !== null &&
+                (challengerRegularRankBefore === null || targetRegularRankBefore < challengerRegularRankBefore);
+              challengerPointDelta = calcRegularWinGain({ winnerScore: challengerScore, isHigherRankWin });
+              targetPointDelta = calcRegularLoseDelta({
+                loserScore: targetScore,
+                winnerScore: challengerScore,
+                isHigherRankLoss:
+                  challengerRegularRankBefore !== null &&
+                  (targetRegularRankBefore === null || challengerRegularRankBefore < targetRegularRankBefore),
+              });
             } else {
-              const isHigherTierWin = challengerTierBefore > targetTierBefore;
-              targetPointDelta = calcRegularWinGain({ winnerScore: targetScore, isHigherTierWin });
-              challengerPointDelta = calcRegularLoseDelta({ loserScore: challengerScore, winnerScore: targetScore });
+              const isHigherRankWin =
+                challengerRegularRankBefore !== null &&
+                (targetRegularRankBefore === null || challengerRegularRankBefore < targetRegularRankBefore);
+              targetPointDelta = calcRegularWinGain({ winnerScore: targetScore, isHigherRankWin });
+              challengerPointDelta = calcRegularLoseDelta({
+                loserScore: challengerScore,
+                winnerScore: targetScore,
+                isHigherRankLoss:
+                  targetRegularRankBefore !== null &&
+                  (challengerRegularRankBefore === null || targetRegularRankBefore < challengerRegularRankBefore),
+              });
             }
 
-            const myTierBefore = getRegularTierLevelByName(currentUserName);
-            const oppTierBefore = getRegularTierLevelByName(isCurrentChallenger ? targetName : challengerName);
+            const myRankBefore = isCurrentChallenger ? challengerRegularRankBefore : targetRegularRankBefore;
+            const oppRankBefore = isCurrentChallenger ? targetRegularRankBefore : challengerRegularRankBefore;
             if (didCurrentWin) {
-              const isHigherTierWin = oppTierBefore > myTierBefore;
-              currentPointDelta = calcRegularWinGain({ winnerScore: myScore, isHigherTierWin });
+              const isHigherRankWin =
+                oppRankBefore !== null &&
+                (myRankBefore === null || oppRankBefore < myRankBefore);
+              currentPointDelta = calcRegularWinGain({ winnerScore: myScore, isHigherRankWin });
             } else {
               const oppScore = isCurrentChallenger ? targetScore : challengerScore;
-              currentPointDelta = calcRegularLoseDelta({ loserScore: myScore, winnerScore: oppScore });
+              currentPointDelta = calcRegularLoseDelta({
+                loserScore: myScore,
+                winnerScore: oppScore,
+                isHigherRankLoss:
+                  oppRankBefore !== null &&
+                  (myRankBefore === null || oppRankBefore < myRankBefore),
+              });
             }
           } else {
             if (challengerWon) {
@@ -4297,32 +4400,45 @@ function App() {
         <header className="px-3 sm:px-4 lg:px-10 py-3 sm:py-4 lg:py-6 flex flex-col xl:flex-row xl:justify-between items-stretch xl:items-center gap-3 sm:gap-4 shrink-0 border-b border-cyan-500/30 bg-black/20 backdrop-blur-md">
           <div onMouseEnter={() => playSFX('hover')} className="min-w-0 flex-1 cursor-pointer flex items-center gap-3 sm:gap-4 lg:gap-6" onClick={() => setActiveMenu('home')}>
             <div className="flex flex-col items-start gap-1 sm:gap-2 shrink-0">
-              <h1 className="text-2xl sm:text-4xl lg:text-6xl font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple] leading-none">은하단</h1>
-              <a
-                href="https://discord.com/channels/146930111478890496/1469829921630064721"
-                target="_blank"
-                rel="noreferrer"
-                title="디스코드 서버 바로가기"
-                onMouseEnter={() => playSFX('hover')}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  playSFX('click');
+              {masterUiPrefs.showDiscordEntry && (
+                <a
+                  href="https://discord.com/channels/146930111478890496/1469829921630064721"
+                  target="_blank"
+                  rel="noreferrer"
+                  title="디스코드 서버 바로가기"
+                  onMouseEnter={() => playSFX('hover')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    playSFX('click');
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-400/40 bg-black/35 px-2 py-1 text-[11px] sm:text-xs font-black text-indigo-200 hover:border-indigo-300/60 hover:text-indigo-100 transition-all"
+                >
+                  <img src={discordCustomIcon} alt="discord" className="w-4 h-4 sm:w-[18px] sm:h-[18px] object-contain drop-shadow-[0_0_8px_rgba(129,140,248,0.55)]" />
+                  입장하기
+                </a>
+              )}
+              <h1
+                className="font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple] leading-none whitespace-nowrap"
+                style={{
+                  fontSize: `clamp(${Math.round((24 * masterUiPrefs.titleScalePercent) / 100)}px, ${Math.round((8 * masterUiPrefs.titleScalePercent) / 100)}vw, ${Math.round((64 * masterUiPrefs.titleScalePercent) / 100)}px)`,
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-400/40 bg-black/35 px-2 py-1 text-[11px] sm:text-xs font-black text-indigo-200 hover:border-indigo-300/60 hover:text-indigo-100 transition-all"
               >
-                <img src={discordCustomIcon} alt="discord" className="w-4 h-4 sm:w-[18px] sm:h-[18px] object-contain drop-shadow-[0_0_8px_rgba(129,140,248,0.55)]" />
-                입장하기
-              </a>
+                {masterUiPrefs.headerTitle || '은하단'}
+              </h1>
             </div>
-            <div className="hidden sm:block w-px h-14 lg:h-16 bg-gradient-to-b from-cyan-300 to-fuchsia-400 opacity-80 shrink-0"></div>
-            <div className="hidden sm:flex flex-col min-w-0 overflow-hidden">
-              <h2 className="text-lg sm:text-[1.35rem] lg:text-[2.35rem] leading-tight font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-300 tracking-tight truncate">
-                별들의 전쟁 : 시즌 1
-              </h2>
-              <p className="hidden lg:block text-[12px] lg:text-[15px] font-bold text-cyan-300/90 italic tracking-wide">
-                SEASON 01 BATTLE FOR THE STAR THRONE
-              </p>
-            </div>
+            {masterUiPrefs.showSeasonTitle && (
+              <>
+                <div className="hidden sm:block w-px h-14 lg:h-16 bg-gradient-to-b from-cyan-300 to-fuchsia-400 opacity-80 shrink-0"></div>
+                <div className="hidden sm:flex flex-col min-w-0 overflow-hidden">
+                  <h2 className="text-lg sm:text-[1.35rem] lg:text-[2.35rem] leading-tight font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-300 tracking-tight truncate">
+                    {masterUiPrefs.seasonTitle || '별들의 전쟁 : 시즌 1'}
+                  </h2>
+                  <p className="hidden lg:block text-[12px] lg:text-[15px] font-bold text-cyan-300/90 italic tracking-wide">
+                    SEASON 01 BATTLE FOR THE STAR THRONE
+                  </p>
+                </div>
+              </>
+            )}
           </div>
           {user ? (
             <div className="flex items-center gap-3 sm:gap-4 w-full xl:w-auto justify-between xl:justify-end flex-wrap">
@@ -4370,9 +4486,17 @@ function App() {
         </header>
 
         {activeMenu === 'home' && (
-          <main className="flex-1 p-3 sm:p-4 lg:p-10 grid grid-cols-12 gap-4 lg:gap-8 items-start xl:items-stretch pb-20 animate-in fade-in duration-500 h-full">
-            <div className="col-span-12 xl:col-span-8 flex flex-col gap-4 lg:gap-8 h-auto xl:h-full relative order-1 xl:order-1">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4 lg:gap-8 items-start">
+          <main
+            className="flex-1 p-3 sm:p-4 lg:p-10 grid grid-cols-12 items-start xl:items-stretch pb-20 animate-in fade-in duration-500 h-full"
+            style={{ gap: `${masterUiPrefs.homeGapPx}px`, marginTop: `${masterUiPrefs.homeTopOffsetPx}px` }}
+          >
+            <div className="col-span-12 xl:col-span-8 flex flex-col h-auto xl:h-full relative order-1 xl:order-1" style={{ gap: `${masterUiPrefs.homeGapPx}px` }}>
+              <div
+                className={`grid ${
+                  masterUiPrefs.showOnlineBoard && masterUiPrefs.showMatchBoard ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'
+                } gap-2 sm:gap-4 lg:gap-8 items-start`}
+              >
+                {masterUiPrefs.showOnlineBoard && (
                 <div className="flex flex-col h-auto relative">
                <section className="board-soft-glow bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2rem] lg:rounded-[2.5rem] p-4 sm:p-5 lg:p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-base sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 lg:mb-6 border-b border-white/5 pb-3 lg:pb-4 leading-tight">
@@ -4429,7 +4553,9 @@ function App() {
                     </div>
                </section>
                 </div>
+                )}
 
+                {masterUiPrefs.showMatchBoard && (
                 <div className="flex flex-col h-auto relative">
                <section className="board-soft-glow bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[2rem] lg:rounded-[3rem] p-4 sm:p-5 flex flex-col h-auto shrink-0 relative z-10 overflow-visible">
                   <div className="flex flex-col relative z-10">
@@ -4772,8 +4898,10 @@ function App() {
                   </div>
                </section>
                 </div>
+                )}
               </div>
 
+            {masterUiPrefs.showRecentBoard && (
             <div ref={recentLogsBoardRef} className="flex flex-col h-[72vh] sm:h-[80vh] xl:h-[90vh] relative">
                <section className="board-soft-glow bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2rem] lg:rounded-[2.5rem] p-3 sm:p-4 lg:p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
                   <h3 onMouseEnter={() => playSFX('hover')} className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 lg:mb-6 border-b border-white/5 pb-3 lg:pb-4">
@@ -4784,8 +4912,10 @@ function App() {
                   </div>
                </section>
             </div>
+            )}
             </div>
 
+            {masterUiPrefs.showRankingBoard && (
             <div
               ref={rankingBoardRef}
               className="col-span-12 xl:col-span-4 flex flex-col h-[78vh] sm:h-[84vh] xl:h-auto relative order-2 xl:order-2"
@@ -4910,6 +5040,7 @@ function App() {
                   </div>
                </section>
             </div>
+            )}
           </main>
         )}
 
@@ -5578,11 +5709,120 @@ function App() {
                   로컬 캐시 정리
                 </button>
               </div>
+              <div className="mt-6 rounded-2xl border border-cyan-400/35 bg-black/45 p-4 sm:p-5">
+                <h3 className="text-cyan-200 font-black text-base sm:text-lg mb-3">실시간 UI 편집 (마스터)</h3>
+                <p className="text-slate-400 text-xs sm:text-sm font-bold mb-4">
+                  위치·폰트·표시/숨김을 바로 바꿔보고 저장할 수 있습니다. 이 설정은 현재 브라우저에 저장됩니다.
+                </p>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                  <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                    헤더 타이틀
+                    <input
+                      value={masterUiPrefs.headerTitle}
+                      onChange={(e) => updateMasterUiPrefs('headerTitle', e.target.value)}
+                      className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                    시즌 문구
+                    <input
+                      value={masterUiPrefs.seasonTitle}
+                      onChange={(e) => updateMasterUiPrefs('seasonTitle', e.target.value)}
+                      className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                    타이틀 폰트 크기 {masterUiPrefs.titleScalePercent}%
+                    <input
+                      type="range"
+                      min={70}
+                      max={140}
+                      step={1}
+                      value={masterUiPrefs.titleScalePercent}
+                      onChange={(e) => updateMasterUiPrefs('titleScalePercent', Math.max(70, Math.min(140, Number(e.target.value) || 100)))}
+                      className="w-full"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                    홈 보드 간격 {masterUiPrefs.homeGapPx}px
+                    <input
+                      type="range"
+                      min={8}
+                      max={48}
+                      step={1}
+                      value={masterUiPrefs.homeGapPx}
+                      onChange={(e) => updateMasterUiPrefs('homeGapPx', Math.max(8, Math.min(48, Number(e.target.value) || 24)))}
+                      className="w-full"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-bold text-slate-300 lg:col-span-2">
+                    홈 보드 세로 위치 (오프셋) {masterUiPrefs.homeTopOffsetPx}px
+                    <input
+                      type="range"
+                      min={-80}
+                      max={120}
+                      step={1}
+                      value={masterUiPrefs.homeTopOffsetPx}
+                      onChange={(e) => updateMasterUiPrefs('homeTopOffsetPx', Math.max(-80, Math.min(120, Number(e.target.value) || 0)))}
+                      className="w-full"
+                    />
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 mt-4">
+                  <button
+                    onClick={() => updateMasterUiPrefs('showDiscordEntry', !masterUiPrefs.showDiscordEntry)}
+                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showDiscordEntry ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
+                  >
+                    디스코드 버튼 {masterUiPrefs.showDiscordEntry ? 'ON' : 'OFF'}
+                  </button>
+                  <button
+                    onClick={() => updateMasterUiPrefs('showSeasonTitle', !masterUiPrefs.showSeasonTitle)}
+                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showSeasonTitle ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
+                  >
+                    시즌 문구 {masterUiPrefs.showSeasonTitle ? 'ON' : 'OFF'}
+                  </button>
+                  <button
+                    onClick={() => updateMasterUiPrefs('showOnlineBoard', !masterUiPrefs.showOnlineBoard)}
+                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showOnlineBoard ? 'border-cyan-400/55 bg-cyan-500/15 text-cyan-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
+                  >
+                    접속현황 {masterUiPrefs.showOnlineBoard ? '표시' : '숨김'}
+                  </button>
+                  <button
+                    onClick={() => updateMasterUiPrefs('showMatchBoard', !masterUiPrefs.showMatchBoard)}
+                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showMatchBoard ? 'border-cyan-400/55 bg-cyan-500/15 text-cyan-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
+                  >
+                    대전신청 {masterUiPrefs.showMatchBoard ? '표시' : '숨김'}
+                  </button>
+                  <button
+                    onClick={() => updateMasterUiPrefs('showRecentBoard', !masterUiPrefs.showRecentBoard)}
+                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showRecentBoard ? 'border-cyan-400/55 bg-cyan-500/15 text-cyan-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
+                  >
+                    최근기록 {masterUiPrefs.showRecentBoard ? '표시' : '숨김'}
+                  </button>
+                  <button
+                    onClick={() => updateMasterUiPrefs('showRankingBoard', !masterUiPrefs.showRankingBoard)}
+                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${masterUiPrefs.showRankingBoard ? 'border-cyan-400/55 bg-cyan-500/15 text-cyan-200' : 'border-slate-600 bg-slate-700/30 text-slate-300'}`}
+                  >
+                    랭킹보드 {masterUiPrefs.showRankingBoard ? '표시' : '숨김'}
+                  </button>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      setMasterUiPrefs(DEFAULT_MASTER_UI_PREFS);
+                      showStatusPopup('info', '초기화 완료', 'UI 편집 설정을 기본값으로 되돌렸습니다.', { autoCloseMs: 1200, hideConfirm: true });
+                    }}
+                    className="rounded-lg border border-amber-400/55 bg-amber-500/15 text-amber-200 text-sm font-black px-4 py-2 hover:bg-amber-500/25 transition-all cursor-pointer"
+                  >
+                    UI 설정 초기화
+                  </button>
+                </div>
+              </div>
               <div className="mt-6 rounded-2xl border border-white/10 bg-black/45 p-4 sm:p-5">
                 <h3 className="text-white font-black text-base sm:text-lg mb-2">마스터 계정 안내</h3>
                 <ul className="text-slate-300 text-sm sm:text-base font-bold leading-7 list-disc pl-5 space-y-1">
                   <li>이 계정은 마스터 메뉴 접근 권한이 활성화됩니다.</li>
-                  <li>추가 편집 기능(보드 이동/크기/텍스트 변경 등)은 이 메뉴에 확장 가능합니다.</li>
+                  <li>UI 편집 섹션에서 텍스트/폰트/보드 표시 상태를 즉시 수정할 수 있습니다.</li>
                   <li>운영 중 이상 징후가 있으면 먼저 동기화 버튼으로 상태를 맞춘 뒤 점검하세요.</li>
                 </ul>
               </div>
