@@ -168,6 +168,26 @@ type MasterUiPrefs = {
   showLeftSidebar: boolean;
   leftMenuScalePercent: number;
   leftMenuGapPx: number;
+  onlineBoardTitle: string;
+  matchBoardTitle: string;
+  recentBoardTitle: string;
+  rankingBoardTitle: string;
+  onlineBoardTitleScalePercent: number;
+  matchBoardTitleScalePercent: number;
+  recentBoardTitleScalePercent: number;
+  rankingBoardTitleScalePercent: number;
+  onlineBoardPaddingPx: number;
+  matchBoardPaddingPx: number;
+  recentBoardPaddingPx: number;
+  rankingBoardPaddingPx: number;
+  onlineBoardMinHeightPx: number;
+  matchBoardMinHeightPx: number;
+  recentBoardHeightVh: number;
+  rankingBoardHeightScalePercent: number;
+  onlineBoardBorderColor: string;
+  matchBoardBorderColor: string;
+  recentBoardBorderColor: string;
+  rankingBoardBorderColor: string;
 };
 const MASTER_UI_PREFS_KEY = 'gt_master_ui_prefs_v1';
 const DEFAULT_MASTER_UI_PREFS: MasterUiPrefs = {
@@ -189,7 +209,28 @@ const DEFAULT_MASTER_UI_PREFS: MasterUiPrefs = {
   showLeftSidebar: true,
   leftMenuScalePercent: 100,
   leftMenuGapPx: 32,
+  onlineBoardTitle: '접속 현황 (Online Board)',
+  matchBoardTitle: '대전 신청 (Match Entry)',
+  recentBoardTitle: '최근 기록 (Battle Logs)',
+  rankingBoardTitle: '은하단 랭킹',
+  onlineBoardTitleScalePercent: 100,
+  matchBoardTitleScalePercent: 100,
+  recentBoardTitleScalePercent: 100,
+  rankingBoardTitleScalePercent: 100,
+  onlineBoardPaddingPx: 20,
+  matchBoardPaddingPx: 20,
+  recentBoardPaddingPx: 18,
+  rankingBoardPaddingPx: 20,
+  onlineBoardMinHeightPx: 420,
+  matchBoardMinHeightPx: 560,
+  recentBoardHeightVh: 80,
+  rankingBoardHeightScalePercent: 100,
+  onlineBoardBorderColor: '#22d3ee',
+  matchBoardBorderColor: '#22d3ee',
+  recentBoardBorderColor: '#22d3ee',
+  rankingBoardBorderColor: '#22d3ee',
 };
+type BoardEditorTarget = 'online' | 'match' | 'recent' | 'ranking';
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -289,6 +330,7 @@ function App() {
   const [ownedMetaEntries, setOwnedMetaEntries] = useState<string[]>([]);
   const [masterUiEditorOpen, setMasterUiEditorOpen] = useState(true);
   const [masterQuickEditorOpen, setMasterQuickEditorOpen] = useState(false);
+  const [activeBoardEditor, setActiveBoardEditor] = useState<BoardEditorTarget | null>(null);
   const [masterNewBadgeText, setMasterNewBadgeText] = useState('');
   const [masterDiscordUrlDraft, setMasterDiscordUrlDraft] = useState(DEFAULT_MASTER_UI_PREFS.discordInviteUrl);
   const [masterPointDrafts, setMasterPointDrafts] = useState<{ rp: string; sp: string; gp: string }>({
@@ -312,12 +354,40 @@ function App() {
         homeTopOffsetPx: Math.max(-80, Math.min(120, Number(parsed?.homeTopOffsetPx ?? DEFAULT_MASTER_UI_PREFS.homeTopOffsetPx))),
         leftMenuScalePercent: Math.max(80, Math.min(160, Number(parsed?.leftMenuScalePercent ?? DEFAULT_MASTER_UI_PREFS.leftMenuScalePercent))),
         leftMenuGapPx: Math.max(16, Math.min(58, Number(parsed?.leftMenuGapPx ?? DEFAULT_MASTER_UI_PREFS.leftMenuGapPx))),
+        onlineBoardTitleScalePercent: Math.max(70, Math.min(150, Number(parsed?.onlineBoardTitleScalePercent ?? DEFAULT_MASTER_UI_PREFS.onlineBoardTitleScalePercent))),
+        matchBoardTitleScalePercent: Math.max(70, Math.min(150, Number(parsed?.matchBoardTitleScalePercent ?? DEFAULT_MASTER_UI_PREFS.matchBoardTitleScalePercent))),
+        recentBoardTitleScalePercent: Math.max(70, Math.min(150, Number(parsed?.recentBoardTitleScalePercent ?? DEFAULT_MASTER_UI_PREFS.recentBoardTitleScalePercent))),
+        rankingBoardTitleScalePercent: Math.max(70, Math.min(150, Number(parsed?.rankingBoardTitleScalePercent ?? DEFAULT_MASTER_UI_PREFS.rankingBoardTitleScalePercent))),
+        onlineBoardPaddingPx: Math.max(12, Math.min(40, Number(parsed?.onlineBoardPaddingPx ?? DEFAULT_MASTER_UI_PREFS.onlineBoardPaddingPx))),
+        matchBoardPaddingPx: Math.max(12, Math.min(40, Number(parsed?.matchBoardPaddingPx ?? DEFAULT_MASTER_UI_PREFS.matchBoardPaddingPx))),
+        recentBoardPaddingPx: Math.max(12, Math.min(40, Number(parsed?.recentBoardPaddingPx ?? DEFAULT_MASTER_UI_PREFS.recentBoardPaddingPx))),
+        rankingBoardPaddingPx: Math.max(12, Math.min(40, Number(parsed?.rankingBoardPaddingPx ?? DEFAULT_MASTER_UI_PREFS.rankingBoardPaddingPx))),
+        onlineBoardMinHeightPx: Math.max(300, Math.min(1100, Number(parsed?.onlineBoardMinHeightPx ?? DEFAULT_MASTER_UI_PREFS.onlineBoardMinHeightPx))),
+        matchBoardMinHeightPx: Math.max(360, Math.min(1300, Number(parsed?.matchBoardMinHeightPx ?? DEFAULT_MASTER_UI_PREFS.matchBoardMinHeightPx))),
+        recentBoardHeightVh: Math.max(45, Math.min(95, Number(parsed?.recentBoardHeightVh ?? DEFAULT_MASTER_UI_PREFS.recentBoardHeightVh))),
+        rankingBoardHeightScalePercent: Math.max(70, Math.min(140, Number(parsed?.rankingBoardHeightScalePercent ?? DEFAULT_MASTER_UI_PREFS.rankingBoardHeightScalePercent))),
         discordInviteUrl:
           typeof parsed?.discordInviteUrl === 'string' && parsed.discordInviteUrl.trim()
             ? parsed.discordInviteUrl.trim()
             : DEFAULT_MASTER_UI_PREFS.discordInviteUrl,
         discordButtonTopPx: Math.max(-18, Math.min(28, Number(parsed?.discordButtonTopPx ?? DEFAULT_MASTER_UI_PREFS.discordButtonTopPx))),
         discordButtonLeftPx: Math.max(0, Math.min(40, Number(parsed?.discordButtonLeftPx ?? DEFAULT_MASTER_UI_PREFS.discordButtonLeftPx))),
+        onlineBoardBorderColor:
+          typeof parsed?.onlineBoardBorderColor === 'string' && parsed.onlineBoardBorderColor.trim()
+            ? parsed.onlineBoardBorderColor.trim()
+            : DEFAULT_MASTER_UI_PREFS.onlineBoardBorderColor,
+        matchBoardBorderColor:
+          typeof parsed?.matchBoardBorderColor === 'string' && parsed.matchBoardBorderColor.trim()
+            ? parsed.matchBoardBorderColor.trim()
+            : DEFAULT_MASTER_UI_PREFS.matchBoardBorderColor,
+        recentBoardBorderColor:
+          typeof parsed?.recentBoardBorderColor === 'string' && parsed.recentBoardBorderColor.trim()
+            ? parsed.recentBoardBorderColor.trim()
+            : DEFAULT_MASTER_UI_PREFS.recentBoardBorderColor,
+        rankingBoardBorderColor:
+          typeof parsed?.rankingBoardBorderColor === 'string' && parsed.rankingBoardBorderColor.trim()
+            ? parsed.rankingBoardBorderColor.trim()
+            : DEFAULT_MASTER_UI_PREFS.rankingBoardBorderColor,
         headerBadges: parsedBadges,
       };
     } catch {
@@ -327,6 +397,86 @@ function App() {
   const updateMasterUiPrefs = <K extends keyof MasterUiPrefs>(key: K, value: MasterUiPrefs[K]) => {
     setMasterUiPrefs((prev) => ({ ...prev, [key]: value }));
   };
+  const boardEditorConfig: Record<
+    BoardEditorTarget,
+    {
+      label: string;
+      showKey: keyof MasterUiPrefs;
+      titleKey: keyof MasterUiPrefs;
+      titleScaleKey: keyof MasterUiPrefs;
+      paddingKey: keyof MasterUiPrefs;
+      borderColorKey: keyof MasterUiPrefs;
+      sizeKey: keyof MasterUiPrefs;
+      sizeLabel: string;
+      sizeMin: number;
+      sizeMax: number;
+      sizeStep: number;
+    }
+  > = {
+    online: {
+      label: '접속 현황 보드',
+      showKey: 'showOnlineBoard',
+      titleKey: 'onlineBoardTitle',
+      titleScaleKey: 'onlineBoardTitleScalePercent',
+      paddingKey: 'onlineBoardPaddingPx',
+      borderColorKey: 'onlineBoardBorderColor',
+      sizeKey: 'onlineBoardMinHeightPx',
+      sizeLabel: '보드 최소 높이',
+      sizeMin: 300,
+      sizeMax: 1100,
+      sizeStep: 10,
+    },
+    match: {
+      label: '대전 신청 보드',
+      showKey: 'showMatchBoard',
+      titleKey: 'matchBoardTitle',
+      titleScaleKey: 'matchBoardTitleScalePercent',
+      paddingKey: 'matchBoardPaddingPx',
+      borderColorKey: 'matchBoardBorderColor',
+      sizeKey: 'matchBoardMinHeightPx',
+      sizeLabel: '보드 최소 높이',
+      sizeMin: 360,
+      sizeMax: 1300,
+      sizeStep: 10,
+    },
+    recent: {
+      label: '최근 기록 보드',
+      showKey: 'showRecentBoard',
+      titleKey: 'recentBoardTitle',
+      titleScaleKey: 'recentBoardTitleScalePercent',
+      paddingKey: 'recentBoardPaddingPx',
+      borderColorKey: 'recentBoardBorderColor',
+      sizeKey: 'recentBoardHeightVh',
+      sizeLabel: '보드 높이 (vh)',
+      sizeMin: 45,
+      sizeMax: 95,
+      sizeStep: 1,
+    },
+    ranking: {
+      label: '은하단 랭킹 보드',
+      showKey: 'showRankingBoard',
+      titleKey: 'rankingBoardTitle',
+      titleScaleKey: 'rankingBoardTitleScalePercent',
+      paddingKey: 'rankingBoardPaddingPx',
+      borderColorKey: 'rankingBoardBorderColor',
+      sizeKey: 'rankingBoardHeightScalePercent',
+      sizeLabel: '높이 배율 (%)',
+      sizeMin: 70,
+      sizeMax: 140,
+      sizeStep: 1,
+    },
+  };
+  const openBoardEditor = (target: BoardEditorTarget) => {
+    setMasterQuickEditorOpen(false);
+    setActiveBoardEditor(target);
+  };
+  const boardTitleStyle = (scalePercent: number) => ({
+    fontSize: `clamp(${Math.round((16 * scalePercent) / 100)}px, ${Math.max(
+      1.2,
+      Number(((2.2 * scalePercent) / 100).toFixed(2))
+    )}vw, ${Math.round((34 * scalePercent) / 100)}px)`,
+    lineHeight: 1.15,
+  });
   const addMasterHeaderBadge = () => {
     const next = masterNewBadgeText.trim();
     if (!next) return;
@@ -1224,6 +1374,7 @@ function App() {
   useEffect(() => {
     if (!isMasterAccount) {
       setMasterQuickEditorOpen(false);
+      setActiveBoardEditor(null);
     }
   }, [isMasterAccount]);
 
@@ -5449,6 +5600,143 @@ function App() {
           </div>
         )}
 
+        {isMasterAccount && activeBoardEditor && (() => {
+          const cfg = boardEditorConfig[activeBoardEditor];
+          const visible = Boolean(masterUiPrefs[cfg.showKey] as boolean);
+          const title = String(masterUiPrefs[cfg.titleKey] as string);
+          const titleScale = Number(masterUiPrefs[cfg.titleScaleKey] as number) || 100;
+          const padding = Number(masterUiPrefs[cfg.paddingKey] as number) || 18;
+          const borderColor = String(masterUiPrefs[cfg.borderColorKey] as string) || '#22d3ee';
+          const sizeVal = Number(masterUiPrefs[cfg.sizeKey] as number) || cfg.sizeMin;
+          const resetBoardPrefs = () => {
+            setMasterUiPrefs((prev) => ({
+              ...prev,
+              [cfg.showKey]: DEFAULT_MASTER_UI_PREFS[cfg.showKey],
+              [cfg.titleKey]: DEFAULT_MASTER_UI_PREFS[cfg.titleKey],
+              [cfg.titleScaleKey]: DEFAULT_MASTER_UI_PREFS[cfg.titleScaleKey],
+              [cfg.paddingKey]: DEFAULT_MASTER_UI_PREFS[cfg.paddingKey],
+              [cfg.borderColorKey]: DEFAULT_MASTER_UI_PREFS[cfg.borderColorKey],
+              [cfg.sizeKey]: DEFAULT_MASTER_UI_PREFS[cfg.sizeKey],
+            } as MasterUiPrefs));
+            showStatusPopup('info', '초기화 완료', `${cfg.label} 설정을 기본값으로 복원했습니다.`, { autoCloseMs: 1200, hideConfirm: true });
+          };
+          return (
+            <div className="fixed inset-0 z-[275] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-[min(94vw,560px)] max-h-[86vh] overflow-y-auto custom-scrollbar rounded-2xl border border-cyan-400/45 bg-[#070d1a]/95 p-5 sm:p-6 shadow-[0_0_36px_rgba(34,211,238,0.28)]">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h3 className="text-cyan-100 text-lg sm:text-xl font-black">{cfg.label} 상세 편집</h3>
+                  <button
+                    onMouseEnter={() => playSFX('hover')}
+                    onClick={() => {
+                      playSFX('click');
+                      setActiveBoardEditor(null);
+                    }}
+                    className="rounded-lg border border-white/20 px-3 py-1.5 text-xs font-black text-slate-300 hover:text-white hover:border-cyan-300/60 cursor-pointer"
+                  >
+                    닫기
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 mb-4">
+                  <button
+                    onMouseEnter={() => playSFX('hover')}
+                    onClick={() => {
+                      playSFX('click');
+                      setMasterUiPrefs((prev) => ({ ...prev, [cfg.showKey]: !visible } as MasterUiPrefs));
+                    }}
+                    className={`rounded-lg border px-3 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer ${visible ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100' : 'border-slate-600 bg-slate-800/50 text-slate-300'}`}
+                  >
+                    보드 {visible ? '표시' : '숨김'}
+                  </button>
+                  <button
+                    onMouseEnter={() => playSFX('hover')}
+                    onClick={resetBoardPrefs}
+                    className="rounded-lg border border-amber-400/55 bg-amber-500/20 px-3 py-2 text-xs sm:text-sm font-black text-amber-200 hover:bg-amber-500/30 transition-all cursor-pointer"
+                  >
+                    기본값 복원
+                  </button>
+                </div>
+
+                <div className="space-y-4 text-xs sm:text-sm text-slate-200">
+                  <label className="flex flex-col gap-1.5">
+                    제목
+                    <input
+                      value={title}
+                      onChange={(e) =>
+                        setMasterUiPrefs((prev) => ({ ...prev, [cfg.titleKey]: e.target.value } as MasterUiPrefs))
+                      }
+                      className="rounded-xl border border-white/15 bg-black/50 px-3 py-2 text-sm sm:text-base font-black text-cyan-100 outline-none focus:border-cyan-300/70"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    제목 크기 {Math.round(titleScale)}%
+                    <input
+                      type="range"
+                      min={70}
+                      max={150}
+                      step={1}
+                      value={titleScale}
+                      onChange={(e) => {
+                        const next = Math.max(70, Math.min(150, Number(e.target.value) || 100));
+                        setMasterUiPrefs((prev) => ({ ...prev, [cfg.titleScaleKey]: next } as MasterUiPrefs));
+                      }}
+                      className="w-full"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    보드 내부 여백 {Math.round(padding)}px
+                    <input
+                      type="range"
+                      min={12}
+                      max={40}
+                      step={1}
+                      value={padding}
+                      onChange={(e) => {
+                        const next = Math.max(12, Math.min(40, Number(e.target.value) || 18));
+                        setMasterUiPrefs((prev) => ({ ...prev, [cfg.paddingKey]: next } as MasterUiPrefs));
+                      }}
+                      className="w-full"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    {cfg.sizeLabel} {Math.round(sizeVal)}
+                    <input
+                      type="range"
+                      min={cfg.sizeMin}
+                      max={cfg.sizeMax}
+                      step={cfg.sizeStep}
+                      value={sizeVal}
+                      onChange={(e) => {
+                        const next = Math.max(cfg.sizeMin, Math.min(cfg.sizeMax, Number(e.target.value) || cfg.sizeMin));
+                        setMasterUiPrefs((prev) => ({ ...prev, [cfg.sizeKey]: next } as MasterUiPrefs));
+                      }}
+                      className="w-full"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/40 px-3 py-2">
+                    <span className="font-black text-slate-200">보드 테두리 색상</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={borderColor}
+                        onChange={(e) =>
+                          setMasterUiPrefs((prev) => ({ ...prev, [cfg.borderColorKey]: e.target.value } as MasterUiPrefs))
+                        }
+                        className="h-8 w-10 rounded border border-white/20 bg-transparent cursor-pointer"
+                      />
+                      <span className="text-[11px] font-mono text-slate-300">{borderColor}</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {activeMenu === 'home' && (
           <main
             className="flex-1 p-3 sm:p-4 lg:p-10 grid grid-cols-12 items-start xl:items-stretch pb-20 animate-in fade-in duration-500 h-full"
@@ -5461,10 +5749,31 @@ function App() {
                 } gap-2 sm:gap-4 lg:gap-8 items-start`}
               >
                 {masterUiPrefs.showOnlineBoard && (
-                <div className="flex flex-col h-auto relative">
-               <section className="board-soft-glow bg-black/50 backdrop-blur-2xl border-2 border-cyan-400 rounded-[2rem] lg:rounded-[2.5rem] p-4 sm:p-5 lg:p-6 flex flex-col h-full overflow-hidden shadow-lg relative z-10">
-                  <h3 onMouseEnter={() => playSFX('hover')} className="text-base sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 lg:mb-6 border-b border-white/5 pb-3 lg:pb-4 leading-tight">
-                    접속 현황 (Online Board)
+                <div className="flex flex-col h-auto relative" style={{ minHeight: `${masterUiPrefs.onlineBoardMinHeightPx}px` }}>
+               <section
+                 className="board-soft-glow bg-black/50 backdrop-blur-2xl border-2 rounded-[2rem] lg:rounded-[2.5rem] flex flex-col h-full overflow-hidden shadow-lg relative z-10"
+                 style={{ borderColor: masterUiPrefs.onlineBoardBorderColor, padding: `${masterUiPrefs.onlineBoardPaddingPx}px` }}
+               >
+                  {isMasterAccount && (
+                    <button
+                      onMouseEnter={() => playSFX('hover')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playSFX('click');
+                        openBoardEditor('online');
+                      }}
+                      className="absolute top-3 right-3 z-20 rounded-lg border border-cyan-300/50 bg-black/55 px-2 py-2 text-cyan-200 hover:bg-cyan-500/20 transition-all cursor-pointer"
+                      title="접속 현황 보드 편집"
+                    >
+                      <Settings size={16} />
+                    </button>
+                  )}
+                  <h3
+                    onMouseEnter={() => playSFX('hover')}
+                    className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 lg:mb-6 border-b border-white/5 pb-3 lg:pb-4 leading-tight"
+                    style={boardTitleStyle(masterUiPrefs.onlineBoardTitleScalePercent)}
+                  >
+                    {masterUiPrefs.onlineBoardTitle || '접속 현황 (Online Board)'}
                   </h3>
 
                     <div className="flex-1 overflow-y-auto space-y-3 sm:space-y-4 custom-scrollbar pr-1 sm:pr-2 pt-2 animate-in fade-in">
@@ -5520,11 +5829,32 @@ function App() {
                 )}
 
                 {masterUiPrefs.showMatchBoard && (
-                <div className="flex flex-col h-auto relative">
-               <section className="board-soft-glow bg-black/50 backdrop-blur-3xl border-2 border-cyan-400 shadow-2xl rounded-[2rem] lg:rounded-[3rem] p-4 sm:p-5 flex flex-col h-auto shrink-0 relative z-10 overflow-visible">
+                <div className="flex flex-col h-auto relative" style={{ minHeight: `${masterUiPrefs.matchBoardMinHeightPx}px` }}>
+               <section
+                 className="board-soft-glow bg-black/50 backdrop-blur-3xl border-2 shadow-2xl rounded-[2rem] lg:rounded-[3rem] flex flex-col h-auto shrink-0 relative z-10 overflow-visible"
+                 style={{ borderColor: masterUiPrefs.matchBoardBorderColor, padding: `${masterUiPrefs.matchBoardPaddingPx}px` }}
+               >
+                  {isMasterAccount && (
+                    <button
+                      onMouseEnter={() => playSFX('hover')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playSFX('click');
+                        openBoardEditor('match');
+                      }}
+                      className="absolute top-3 right-3 z-20 rounded-lg border border-cyan-300/50 bg-black/55 px-2 py-2 text-cyan-200 hover:bg-cyan-500/20 transition-all cursor-pointer"
+                      title="대전 신청 보드 편집"
+                    >
+                      <Settings size={16} />
+                    </button>
+                  )}
                   <div className="flex flex-col relative z-10">
-                      <h3 onMouseEnter={() => playSFX('hover')} className="text-base sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3 leading-tight">
-                         {matchPhase === 'idle' && '대전 신청 (Match Entry)'}
+                      <h3
+                        onMouseEnter={() => playSFX('hover')}
+                        className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 border-b border-white/5 pb-3 leading-tight"
+                        style={boardTitleStyle(masterUiPrefs.matchBoardTitleScalePercent)}
+                      >
+                         {matchPhase === 'idle' && (masterUiPrefs.matchBoardTitle || '대전 신청 (Match Entry)')}
                          {matchPhase === 'waiting_sync' && '대전 준비 (Match Prep)'}
                          {matchPhase === 'scoring' && '결과 제출 (Submit Score)'}
                       </h3>
@@ -5890,10 +6220,35 @@ function App() {
               </div>
 
             {masterUiPrefs.showRecentBoard && (
-            <div ref={recentLogsBoardRef} className="flex flex-col h-[72vh] sm:h-[80vh] xl:h-[90vh] relative">
-               <section className="board-soft-glow bg-black/45 backdrop-blur-2xl border-2 border-cyan-400/80 rounded-[2rem] lg:rounded-[2.5rem] p-3 sm:p-4 lg:p-5 flex flex-col h-full overflow-hidden shadow-xl relative z-10">
-                  <h3 onMouseEnter={() => playSFX('hover')} className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 lg:mb-6 border-b border-white/5 pb-3 lg:pb-4">
-                    최근 기록 (Battle Logs)
+            <div
+              ref={recentLogsBoardRef}
+              className="flex flex-col relative"
+              style={{ height: `clamp(480px, ${masterUiPrefs.recentBoardHeightVh}vh, 1400px)` }}
+            >
+               <section
+                 className="board-soft-glow bg-black/45 backdrop-blur-2xl border-2 rounded-[2rem] lg:rounded-[2.5rem] flex flex-col h-full overflow-hidden shadow-xl relative z-10"
+                 style={{ borderColor: masterUiPrefs.recentBoardBorderColor, padding: `${masterUiPrefs.recentBoardPaddingPx}px` }}
+               >
+                  {isMasterAccount && (
+                    <button
+                      onMouseEnter={() => playSFX('hover')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playSFX('click');
+                        openBoardEditor('recent');
+                      }}
+                      className="absolute top-3 right-3 z-20 rounded-lg border border-cyan-300/50 bg-black/55 px-2 py-2 text-cyan-200 hover:bg-cyan-500/20 transition-all cursor-pointer"
+                      title="최근 기록 보드 편집"
+                    >
+                      <Settings size={16} />
+                    </button>
+                  )}
+                  <h3
+                    onMouseEnter={() => playSFX('hover')}
+                    className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-center mb-4 lg:mb-6 border-b border-white/5 pb-3 lg:pb-4"
+                    style={boardTitleStyle(masterUiPrefs.recentBoardTitleScalePercent)}
+                  >
+                    {masterUiPrefs.recentBoardTitle || '최근 기록 (Battle Logs)'}
                   </h3>
                   <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar pr-1 sm:pr-2 space-y-1">
                     {logs.length > 0 ? logs.slice(0, 20).map((log, i) => renderCombatLogItem(log, i)) : (<div className="flex items-center justify-center h-full opacity-50 text-cyan-400">전투 기록이 없습니다</div>)}
@@ -5906,16 +6261,42 @@ function App() {
             {masterUiPrefs.showRankingBoard && (
             <div
               ref={rankingBoardRef}
-              className="col-span-12 xl:col-span-4 flex flex-col h-[78vh] sm:h-[84vh] xl:h-auto relative order-2 xl:order-2"
-              style={homeRankingHeight ? { height: `${homeRankingHeight}px` } : undefined}
+              className="col-span-12 xl:col-span-4 flex flex-col relative order-2 xl:order-2"
+              style={
+                homeRankingHeight
+                  ? { height: `${Math.round(homeRankingHeight * ((masterUiPrefs.rankingBoardHeightScalePercent || 100) / 100))}px` }
+                  : { height: `clamp(520px, ${masterUiPrefs.recentBoardHeightVh}vh, 1400px)` }
+              }
             >
-               <section className="board-soft-glow bg-[#060b18]/95 border-2 border-cyan-400 shadow-xl rounded-[2.4rem] sm:rounded-[3rem] lg:rounded-[3.5rem] p-4 sm:p-5 lg:p-6 flex flex-col h-full shrink-0 relative z-10 overflow-hidden">
+               <section
+                 className="board-soft-glow bg-[#060b18]/95 border-2 shadow-xl rounded-[2.4rem] sm:rounded-[3rem] lg:rounded-[3.5rem] flex flex-col h-full shrink-0 relative z-10 overflow-hidden"
+                 style={{ borderColor: masterUiPrefs.rankingBoardBorderColor, padding: `${masterUiPrefs.rankingBoardPaddingPx}px` }}
+               >
+                  {isMasterAccount && (
+                    <button
+                      onMouseEnter={() => playSFX('hover')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playSFX('click');
+                        openBoardEditor('ranking');
+                      }}
+                      className="absolute top-3 right-3 z-20 rounded-lg border border-cyan-300/50 bg-black/55 px-2 py-2 text-cyan-200 hover:bg-cyan-500/20 transition-all cursor-pointer"
+                      title="은하단 랭킹 보드 편집"
+                    >
+                      <Settings size={16} />
+                    </button>
+                  )}
                   <div className="pt-2 flex flex-col relative z-10 h-full">
                       
                       <div onMouseEnter={() => playSFX('hover')} className="flex items-center justify-center gap-3 sm:gap-4 lg:gap-5 mb-4 lg:mb-6 mt-1">
                         <Trophy className="text-yellow-400 drop-shadow-[0_0_18px_rgba(250,204,21,0.65)]" size={44}/>
                         <div className="flex flex-col text-center">
-                          <h3 className="text-[1.8rem] sm:text-[2.15rem] lg:text-[2.55rem] leading-none font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500 uppercase tracking-tighter pt-1">은하단 랭킹</h3>
+                          <h3
+                            className="leading-none font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500 uppercase tracking-tighter pt-1"
+                            style={boardTitleStyle(masterUiPrefs.rankingBoardTitleScalePercent)}
+                          >
+                            {masterUiPrefs.rankingBoardTitle || '은하단 랭킹'}
+                          </h3>
                         </div>
                       </div>
                       
