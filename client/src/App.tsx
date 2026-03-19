@@ -5173,12 +5173,15 @@ function App() {
     if (!challengerNorm || !targetNorm || challengerNorm === targetNorm) return false;
     const challengerRow: any = regularRankMap.get(challengerNorm);
     const targetRow: any = regularRankMap.get(targetNorm);
-    if (!challengerRow || !targetRow) return false;
+    // 가입 직후/동기화 지연 상태의 challenger는 루키 취급으로 열어줌
+    if (!targetRow) return false;
+    if (!challengerRow) return true;
 
     const challengerTierLevel = getRegularTierLevelByName(challengerName);
     const targetTierLevel = getRegularTierLevelByName(targetName);
     const challengerIsRookie = (challengerRow.regular_wins || 0) <= 0 || challengerTierLevel <= 0;
-    if (challengerIsRookie) return true;
+    const challengerIsVoid = (challengerRow.season_matches || 0) <= 0 || (Number(challengerRow.season_tier_level || 0) <= 0);
+    if (challengerIsRookie || challengerIsVoid) return true;
     if (targetTierLevel <= 0) return false;
     if (targetTierLevel < challengerTierLevel) return false;
     if (targetTierLevel > challengerTierLevel + 1) return false;
@@ -5213,7 +5216,11 @@ function App() {
   };
 
   const onlineRankers = rankers.filter((r) => {
+    const isSelf = normalizeName(r.display_name) === normalizeName(currentUserName || '');
+    const isWebOnline = onlineUsers.has((r.display_name || '').trim());
+    if (isSelf || isWebOnline) return true;
     if (DISCORD_GUILD_ID) {
+      if (discordOnlineUsers.size <= 0) return false;
       const candidates = [
         r.display_name,
         r.discord_name,
@@ -5227,7 +5234,7 @@ function App() {
         return normalized && discordOnlineUsers.has(normalized);
       });
     }
-    return onlineUsers.has((r.display_name || '').trim());
+    return false;
   });
   const onlineBoardEmptyText = DISCORD_GUILD_ID
     ? '디스코드 접속 중인 클랜원이 없습니다.'
