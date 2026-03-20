@@ -7662,26 +7662,92 @@ function App() {
                   </p>
                   {/* --- 헤더 텍스트 상세 편집 영역 --- */}
                   <h4 className="mt-2 mb-2 text-emerald-300 font-black text-sm sm:text-base border-b border-emerald-500/30 pb-2">1. 좌측 메인 타이틀 (은하단)</h4>
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6 bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/20">
-                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                      텍스트 내용
-                      <input value={masterUiPrefs.headerTitle} onChange={(e) => updateMasterUiPrefs('headerTitle', e.target.value)} className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-emerald-400" />
-                    </label>
-                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                      폰트 크기 배율 {masterUiPrefs.titleScalePercent}%
-                      <input type="range" min={70} max={140} step={1} value={masterUiPrefs.titleScalePercent} onChange={(e) => updateMasterUiPrefs('titleScalePercent', Math.max(70, Math.min(140, Number(e.target.value) || 100)))} className="w-full mt-2" />
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                        X 위치 {masterUiPrefs.headerTitleOffsetXpx}px
-                        <input type="number" value={masterUiPrefs.headerTitleOffsetXpx} onChange={(e) => updateMasterUiPrefs('headerTitleOffsetXpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
-                      </label>
-                      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                        Y 위치 {masterUiPrefs.headerTitleOffsetYpx}px
-                        <input type="number" value={masterUiPrefs.headerTitleOffsetYpx} onChange={(e) => updateMasterUiPrefs('headerTitleOffsetYpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
-                      </label>
-                    </div>
-                  </div>
+                  <div>
+    {/* 1. 좌측 메인 타이틀 (은하단) */}
+    <h4 className="mt-2 mb-2 text-emerald-300 font-black text-sm sm:text-base border-b border-emerald-500/30 pb-2">1. 좌측 메인 타이틀</h4>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6 bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/20">
+      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+        텍스트 내용
+        <input value={masterUiPrefs.headerTitle} onChange={(e) => updateMasterUiPrefs('headerTitle', e.target.value)} className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-emerald-400" />
+      </label>
+      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+        폰트 크기 배율 {masterUiPrefs.titleScalePercent}%
+        <input type="range" min={70} max={140} step={1} value={masterUiPrefs.titleScalePercent} onChange={(e) => updateMasterUiPrefs('titleScalePercent', Math.max(70, Math.min(140, Number(e.target.value) || 100)))} className="w-full mt-2" />
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+          X 위치 {masterUiPrefs.headerTitleOffsetXpx || 0}px
+          <input type="number" value={masterUiPrefs.headerTitleOffsetXpx || 0} onChange={(e) => updateMasterUiPrefs('headerTitleOffsetXpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+          Y 위치 {masterUiPrefs.headerTitleOffsetYpx || 0}px
+          <input type="number" value={masterUiPrefs.headerTitleOffsetYpx || 0} onChange={(e) => updateMasterUiPrefs('headerTitleOffsetYpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+        </label>
+      </div>
+    </div>
+
+    {/* 2. 우측 시즌 제목 (별들의 전쟁) */}
+    <h4 className="mb-2 text-cyan-300 font-black text-sm sm:text-base border-b border-cyan-500/30 pb-2">2. 우측 시즌 제목</h4>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6 bg-cyan-500/5 p-3 rounded-xl border border-cyan-500/20">
+      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+        텍스트 내용
+        <input value={masterUiPrefs.seasonTitle} onChange={(e) => updateMasterUiPrefs('seasonTitle', e.target.value)} className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-cyan-400" />
+      </label>
+      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+        크기 배율 {masterUiPrefs.seasonTitleScalePercent || 100}%
+        <input type="range" min={50} max={200} step={1} value={masterUiPrefs.seasonTitleScalePercent || 100} onChange={(e) => updateMasterUiPrefs('seasonTitleScalePercent', Math.max(50, Math.min(200, Number(e.target.value) || 100)))} className="w-full mt-2" />
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+          X 위치 {masterUiPrefs.seasonTitleOffsetXpx || 0}px
+          <input type="number" value={masterUiPrefs.seasonTitleOffsetXpx || 0} onChange={(e) => updateMasterUiPrefs('seasonTitleOffsetXpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+          Y 위치 {masterUiPrefs.seasonTitleOffsetYpx || 0}px
+          <input type="number" value={masterUiPrefs.seasonTitleOffsetYpx || 0} onChange={(e) => updateMasterUiPrefs('seasonTitleOffsetYpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+        </label>
+      </div>
+    </div>
+
+    {/* 3. 우측 시즌 부제목 (영문) */}
+    <h4 className="mb-2 text-fuchsia-300 font-black text-sm sm:text-base border-b border-fuchsia-500/30 pb-2">3. 우측 시즌 부제목 (영문)</h4>
+    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-6 bg-fuchsia-500/5 p-3 rounded-xl border border-fuchsia-500/20">
+      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300 xl:col-span-2">
+        텍스트 내용
+        <input value={masterUiPrefs.seasonSubtitle || ''} onChange={(e) => updateMasterUiPrefs('seasonSubtitle', e.target.value)} className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-fuchsia-400" />
+      </label>
+      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+        색상 설정
+        <div className="flex items-center gap-2 mt-1">
+          <input type="color" value={masterUiPrefs.seasonSubtitleColor || '#67e8f9'} onChange={(e) => updateMasterUiPrefs('seasonSubtitleColor', e.target.value)} className="h-8 w-10 rounded border border-white/20 bg-transparent cursor-pointer" />
+          <span className="text-[11px] font-mono text-slate-300">{masterUiPrefs.seasonSubtitleColor || '#67e8f9'}</span>
+        </div>
+      </label>
+      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+        크기 배율 {masterUiPrefs.seasonSubtitleScalePercent || 100}%
+        <input type="range" min={50} max={200} step={1} value={masterUiPrefs.seasonSubtitleScalePercent || 100} onChange={(e) => updateMasterUiPrefs('seasonSubtitleScalePercent', Math.max(50, Math.min(200, Number(e.target.value) || 100)))} className="w-full mt-2" />
+      </label>
+      <div className="grid grid-cols-2 gap-2 xl:col-span-4">
+        <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+          X 위치 {masterUiPrefs.seasonSubtitleOffsetXpx || 0}px
+          <input type="number" value={masterUiPrefs.seasonSubtitleOffsetXpx || 0} onChange={(e) => updateMasterUiPrefs('seasonSubtitleOffsetXpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+          Y 위치 {masterUiPrefs.seasonSubtitleOffsetYpx || 0}px
+          <input type="number" value={masterUiPrefs.seasonSubtitleOffsetYpx || 0} onChange={(e) => updateMasterUiPrefs('seasonSubtitleOffsetYpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+        </label>
+      </div>
+    </div>
+
+    {/* 기타 위치 및 여백 조절 */}
+    <h4 className="mt-6 mb-2 text-slate-300 font-black text-sm sm:text-base border-b border-white/20 pb-2">기타 위치 및 여백 조절</h4>
+    <div className="grid grid-cols-1 gap-3 sm:gap-4 mb-4">
+      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300 w-full sm:w-1/2">
+        홈 보드 간격 {masterUiPrefs.homeGapPx}px
+        <input type="range" min={8} max={48} step={1} value={masterUiPrefs.homeGapPx} onChange={(e) => updateMasterUiPrefs('homeGapPx', Math.max(8, Math.min(48, Number(e.target.value) || 16)))} className="w-full" />
+      </label>
+    </div>
+  </div>
 
                   <h4 className="mb-2 text-cyan-300 font-black text-sm sm:text-base border-b border-cyan-500/30 pb-2">2. 우측 시즌 제목 (별들의 전쟁)</h4>
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6 bg-cyan-500/5 p-3 rounded-xl border border-cyan-500/20">
