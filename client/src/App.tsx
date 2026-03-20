@@ -156,8 +156,18 @@ const KNOWN_CHALLENGE_MODES: ChallengeMode[] = ['free', 'random', 'season_free',
 const WIN_TARGET_OPTIONS: WinTarget[] = [3, 5, 11, 21];
 type MasterUiPrefs = {
   headerTitle: string;
+  headerTitleOffsetXpx: number;
+  headerTitleOffsetYpx: number;
   seasonTitle: string;
   titleScalePercent: number;
+  seasonTitleScalePercent: number;
+  seasonTitleOffsetXpx: number;
+  seasonTitleOffsetYpx: number;
+  seasonSubtitle: string;
+  seasonSubtitleScalePercent: number;
+  seasonSubtitleOffsetXpx: number;
+  seasonSubtitleOffsetYpx: number;
+  seasonSubtitleColor: string;
   showDiscordEntry: boolean;
   discordInviteUrl: string;
   discordButtonTopPx: number;
@@ -213,8 +223,18 @@ type MasterUiPrefs = {
 const MASTER_UI_PREFS_KEY = 'gt_master_ui_prefs_v1';
 const DEFAULT_MASTER_UI_PREFS: MasterUiPrefs = {
   headerTitle: '은하단',
+  headerTitleOffsetXpx: 0,
+  headerTitleOffsetYpx: 0,
   seasonTitle: '별들의 전쟁 : 시즌 1',
   titleScalePercent: 100,
+  seasonTitleScalePercent: 100,
+  seasonTitleOffsetXpx: 0,
+  seasonTitleOffsetYpx: 0,
+  seasonSubtitle: 'SEASON 01 BATTLE FOR THE STAR THRONE',
+  seasonSubtitleScalePercent: 100,
+  seasonSubtitleOffsetXpx: 0,
+  seasonSubtitleOffsetYpx: 0,
+  seasonSubtitleColor: '#67e8f9',
   showDiscordEntry: true,
   discordInviteUrl: DEFAULT_DISCORD_INVITE_URL,
   discordButtonTopPx: -4,
@@ -389,6 +409,16 @@ function App() {
       return {
         ...DEFAULT_MASTER_UI_PREFS,
         ...parsed,
+        headerTitleOffsetXpx: Math.max(-200, Math.min(200, Number(parsed?.headerTitleOffsetXpx ?? 0))),
+        headerTitleOffsetYpx: Math.max(-200, Math.min(200, Number(parsed?.headerTitleOffsetYpx ?? 0))),
+        seasonTitleScalePercent: Math.max(50, Math.min(200, Number(parsed?.seasonTitleScalePercent ?? 100))),
+        seasonTitleOffsetXpx: Math.max(-200, Math.min(200, Number(parsed?.seasonTitleOffsetXpx ?? 0))),
+        seasonTitleOffsetYpx: Math.max(-200, Math.min(200, Number(parsed?.seasonTitleOffsetYpx ?? 0))),
+        seasonSubtitle: typeof parsed?.seasonSubtitle === 'string' ? parsed.seasonSubtitle : DEFAULT_MASTER_UI_PREFS.seasonSubtitle,
+        seasonSubtitleScalePercent: Math.max(50, Math.min(200, Number(parsed?.seasonSubtitleScalePercent ?? 100))),
+        seasonSubtitleOffsetXpx: Math.max(-200, Math.min(200, Number(parsed?.seasonSubtitleOffsetXpx ?? 0))),
+        seasonSubtitleOffsetYpx: Math.max(-200, Math.min(200, Number(parsed?.seasonSubtitleOffsetYpx ?? 0))),
+        seasonSubtitleColor: typeof parsed?.seasonSubtitleColor === 'string' ? parsed.seasonSubtitleColor : DEFAULT_MASTER_UI_PREFS.seasonSubtitleColor,
         titleScalePercent: Math.max(70, Math.min(140, Number(parsed?.titleScalePercent ?? DEFAULT_MASTER_UI_PREFS.titleScalePercent))),
         homeGapPx: Math.max(8, Math.min(48, Number(parsed?.homeGapPx ?? DEFAULT_MASTER_UI_PREFS.homeGapPx))),
         homeTopOffsetPx: Math.max(-80, Math.min(120, Number(parsed?.homeTopOffsetPx ?? DEFAULT_MASTER_UI_PREFS.homeTopOffsetPx))),
@@ -2086,20 +2116,24 @@ function App() {
           writeRandomDraftState(data.id, isC, username, { rerollCount: savedRandomDraft?.rerollCount || 0, legend: localLegend, weapons: localWeapons });
       } else {
           const fixedLoadout = getFixedSeasonLoadout(baseMode);
-          if (fixedLoadout) {
-            localLegend = fixedLoadout.legend;
-            localWeapons = [...fixedLoadout.weapons];
-          }
-          // 픽 단계에서 아직 Ready를 누르지 않았다면, 상대 업데이트로 내 로컬 선택값이 지워지지 않게 보존합니다.
-          if (matchPhaseRef.current === 'scoring' && !amIReady) {
-            const draftLegend = entryLegendRef.current || '';
-            const draftWeapons = entryWeaponsRef.current || ['', ''];
-            const dbLegendEmpty = !localLegend || localLegend === '';
-            const dbWeaponsEmpty = !Array.isArray(localWeapons) || !localWeapons[0] || !localWeapons[1];
-            if (dbLegendEmpty && draftLegend) localLegend = draftLegend;
-            if (dbWeaponsEmpty && (draftWeapons[0] || draftWeapons[1])) localWeapons = draftWeapons;
-          }
-          setEntryLegend(localLegend); setEntryWeapons(localWeapons);
+                  if (fixedLoadout) {
+                    localLegend = fixedLoadout.legend;
+                    localWeapons = [...fixedLoadout.weapons];
+                  } else {
+                    // 💡 DB 값이 비어있다면 로컬에 보존된 이전 세팅값을 강력하게 유지합니다 (자유대전 포함)
+                    const dbLegendEmpty = !localLegend || localLegend === '';
+                    const dbWeaponsEmpty = !Array.isArray(localWeapons) || !localWeapons[0] || !localWeapons[1];
+                    const saved = getManualLoadout(baseMode);
+                    
+                    if (dbLegendEmpty) {
+                      localLegend = entryLegendRef.current || saved?.legend || '';
+                    }
+                    if (dbWeaponsEmpty) {
+                      const draftWeapons = entryWeaponsRef.current || ['', ''];
+                      localWeapons = draftWeapons[0] || draftWeapons[1] ? draftWeapons : (saved?.weapons || ['', '']);
+                    }
+                  }
+                  setEntryLegend(localLegend); setEntryWeapons(localWeapons);
       }
       setRerollCount(isRandomAccepted ? (savedRandomDraft?.rerollCount || 0) : 0);
 
@@ -3180,7 +3214,7 @@ function App() {
       seasonTotal = Math.max(0, Number(seasonTotal) || 0);
       return {
         ...r,
-        display_name: r.display_name || 'GUEST',
+        display_name: r.display_name || r.discord_global_name || r.discord_display_name || r.discord_name || r.discord_username || 'GUEST',
         wins: r.wins || 0,
         losses: r.losses || 0,
         win_rate: (r.wins + r.losses) > 0 ? (((r.wins) / (r.wins + r.losses)) * 100).toFixed(1) + '%' : '0.0%',
@@ -5701,9 +5735,11 @@ function App() {
           <div onMouseEnter={() => playSFX('hover')} className={`min-w-0 flex-1 cursor-pointer flex items-center gap-3 sm:gap-4 lg:gap-6 ${masterUiPrefs.showDiscordEntry ? 'pt-4 sm:pt-5' : ''}`} onClick={() => setActiveMenu('home')}>
             <div className="flex flex-col items-start gap-1 sm:gap-2 shrink-0">
               <h1
-                className="font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple] leading-none whitespace-nowrap"
+                className="font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple] leading-none whitespace-nowrap inline-block"
                 style={{
                   fontSize: `clamp(${Math.round((24 * masterUiPrefs.titleScalePercent) / 100)}px, ${Math.round((8 * masterUiPrefs.titleScalePercent) / 100)}vw, ${Math.round((64 * masterUiPrefs.titleScalePercent) / 100)}px)`,
+                  transform: `translate(${masterUiPrefs.headerTitleOffsetXpx}px, ${masterUiPrefs.headerTitleOffsetYpx}px)`,
+                  transformOrigin: 'left center'
                 }}
               >
                 {masterUiPrefs.headerTitle || '은하단'}
@@ -5712,12 +5748,26 @@ function App() {
             {masterUiPrefs.showSeasonTitle && (
               <>
                 <div className="hidden sm:block w-px h-14 lg:h-16 bg-gradient-to-b from-cyan-300 to-fuchsia-400 opacity-80 shrink-0"></div>
-                <div className="hidden sm:flex flex-col min-w-0 overflow-hidden">
-                  <h2 className="text-lg sm:text-[1.35rem] lg:text-[2.35rem] leading-tight font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-300 tracking-tight truncate">
+                <div className="hidden sm:flex flex-col min-w-0 overflow-visible">
+                  <h2 
+                    className="text-lg sm:text-[1.35rem] lg:text-[2.35rem] leading-tight font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-300 tracking-tight whitespace-nowrap inline-block"
+                    style={{
+                      transform: `translate(${masterUiPrefs.seasonTitleOffsetXpx}px, ${masterUiPrefs.seasonTitleOffsetYpx}px) scale(${masterUiPrefs.seasonTitleScalePercent / 100})`,
+                      transformOrigin: 'left center'
+                    }}
+                  >
                     {masterUiPrefs.seasonTitle || '별들의 전쟁 : 시즌 1'}
                   </h2>
-                  <p className="hidden lg:block text-[12px] lg:text-[15px] font-bold text-cyan-300/90 italic tracking-wide">
-                    SEASON 01 BATTLE FOR THE STAR THRONE
+                  <p 
+                    className="hidden lg:inline-block font-bold italic tracking-wide whitespace-nowrap"
+                    style={{
+                      color: masterUiPrefs.seasonSubtitleColor,
+                      fontSize: 'clamp(12px, 1.2vw, 15px)',
+                      transform: `translate(${masterUiPrefs.seasonSubtitleOffsetXpx}px, ${masterUiPrefs.seasonSubtitleOffsetYpx}px) scale(${masterUiPrefs.seasonSubtitleScalePercent / 100})`,
+                      transformOrigin: 'left center'
+                    }}
+                  >
+                    {masterUiPrefs.seasonSubtitle || 'SEASON 01 BATTLE FOR THE STAR THRONE'}
                   </p>
                   {masterUiPrefs.headerBadges.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -7610,35 +7660,82 @@ function App() {
                   <p className="text-slate-400 text-xs sm:text-sm font-bold mb-4">
                     이동·변경·삭제·추가 기능을 여기서 즉시 적용할 수 있습니다. 설정은 현재 브라우저에 저장됩니다.
                   </p>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                  {/* --- 헤더 텍스트 상세 편집 영역 --- */}
+                  <h4 className="mt-2 mb-2 text-emerald-300 font-black text-sm sm:text-base border-b border-emerald-500/30 pb-2">1. 좌측 메인 타이틀 (은하단)</h4>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6 bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/20">
                     <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                      헤더 타이틀
-                      <input
-                        value={masterUiPrefs.headerTitle}
-                        onChange={(e) => updateMasterUiPrefs('headerTitle', e.target.value)}
-                        className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-cyan-400"
-                      />
+                      텍스트 내용
+                      <input value={masterUiPrefs.headerTitle} onChange={(e) => updateMasterUiPrefs('headerTitle', e.target.value)} className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-emerald-400" />
                     </label>
                     <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                      시즌 문구
-                      <input
-                        value={masterUiPrefs.seasonTitle}
-                        onChange={(e) => updateMasterUiPrefs('seasonTitle', e.target.value)}
-                        className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-cyan-400"
-                      />
+                      폰트 크기 배율 {masterUiPrefs.titleScalePercent}%
+                      <input type="range" min={70} max={140} step={1} value={masterUiPrefs.titleScalePercent} onChange={(e) => updateMasterUiPrefs('titleScalePercent', Math.max(70, Math.min(140, Number(e.target.value) || 100)))} className="w-full mt-2" />
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                        X 위치 {masterUiPrefs.headerTitleOffsetXpx}px
+                        <input type="number" value={masterUiPrefs.headerTitleOffsetXpx} onChange={(e) => updateMasterUiPrefs('headerTitleOffsetXpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+                      </label>
+                      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                        Y 위치 {masterUiPrefs.headerTitleOffsetYpx}px
+                        <input type="number" value={masterUiPrefs.headerTitleOffsetYpx} onChange={(e) => updateMasterUiPrefs('headerTitleOffsetYpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+                      </label>
+                    </div>
+                  </div>
+
+                  <h4 className="mb-2 text-cyan-300 font-black text-sm sm:text-base border-b border-cyan-500/30 pb-2">2. 우측 시즌 제목 (별들의 전쟁)</h4>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6 bg-cyan-500/5 p-3 rounded-xl border border-cyan-500/20">
+                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                      텍스트 내용
+                      <input value={masterUiPrefs.seasonTitle} onChange={(e) => updateMasterUiPrefs('seasonTitle', e.target.value)} className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-cyan-400" />
                     </label>
                     <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                      타이틀 폰트 크기 {masterUiPrefs.titleScalePercent}%
-                      <input
-                        type="range"
-                        min={70}
-                        max={140}
-                        step={1}
-                        value={masterUiPrefs.titleScalePercent}
-                        onChange={(e) => updateMasterUiPrefs('titleScalePercent', Math.max(70, Math.min(140, Number(e.target.value) || 100)))}
-                        className="w-full"
-                      />
+                      크기 배율 {masterUiPrefs.seasonTitleScalePercent}%
+                      <input type="range" min={50} max={200} step={1} value={masterUiPrefs.seasonTitleScalePercent} onChange={(e) => updateMasterUiPrefs('seasonTitleScalePercent', Math.max(50, Math.min(200, Number(e.target.value) || 100)))} className="w-full mt-2" />
                     </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                        X 위치 {masterUiPrefs.seasonTitleOffsetXpx}px
+                        <input type="number" value={masterUiPrefs.seasonTitleOffsetXpx} onChange={(e) => updateMasterUiPrefs('seasonTitleOffsetXpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+                      </label>
+                      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                        Y 위치 {masterUiPrefs.seasonTitleOffsetYpx}px
+                        <input type="number" value={masterUiPrefs.seasonTitleOffsetYpx} onChange={(e) => updateMasterUiPrefs('seasonTitleOffsetYpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+                      </label>
+                    </div>
+                  </div>
+
+                  <h4 className="mb-2 text-fuchsia-300 font-black text-sm sm:text-base border-b border-fuchsia-500/30 pb-2">3. 우측 시즌 부제목 (영문)</h4>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-6 bg-fuchsia-500/5 p-3 rounded-xl border border-fuchsia-500/20">
+                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300 xl:col-span-2">
+                      텍스트 내용
+                      <input value={masterUiPrefs.seasonSubtitle} onChange={(e) => updateMasterUiPrefs('seasonSubtitle', e.target.value)} className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-fuchsia-400" />
+                    </label>
+                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                      색상 설정
+                      <div className="flex items-center gap-2 mt-1">
+                        <input type="color" value={masterUiPrefs.seasonSubtitleColor} onChange={(e) => updateMasterUiPrefs('seasonSubtitleColor', e.target.value)} className="h-8 w-10 rounded border border-white/20 bg-transparent cursor-pointer" />
+                        <span className="text-[11px] font-mono text-slate-300">{masterUiPrefs.seasonSubtitleColor}</span>
+                      </div>
+                    </label>
+                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                      크기 배율 {masterUiPrefs.seasonSubtitleScalePercent}%
+                      <input type="range" min={50} max={200} step={1} value={masterUiPrefs.seasonSubtitleScalePercent} onChange={(e) => updateMasterUiPrefs('seasonSubtitleScalePercent', Math.max(50, Math.min(200, Number(e.target.value) || 100)))} className="w-full mt-2" />
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 xl:col-span-4">
+                      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                        X 위치 {masterUiPrefs.seasonSubtitleOffsetXpx}px
+                        <input type="number" value={masterUiPrefs.seasonSubtitleOffsetXpx} onChange={(e) => updateMasterUiPrefs('seasonSubtitleOffsetXpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+                      </label>
+                      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                        Y 위치 {masterUiPrefs.seasonSubtitleOffsetYpx}px
+                        <input type="number" value={masterUiPrefs.seasonSubtitleOffsetYpx} onChange={(e) => updateMasterUiPrefs('seasonSubtitleOffsetYpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+                      </label>
+                    </div>
+                  </div>
+
+                  <h4 className="mt-6 mb-2 text-slate-300 font-black text-sm sm:text-base border-b border-white/20 pb-2">기타 위치 및 여백 조절</h4>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-4">
                     <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
                       홈 보드 간격 {masterUiPrefs.homeGapPx}px
                       <input
