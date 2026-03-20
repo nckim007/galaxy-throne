@@ -5738,7 +5738,7 @@ function App() {
                 className="font-bold text-white italic tracking-tighter drop-shadow-[0_0_20px_purple] leading-none whitespace-nowrap inline-block"
                 style={{
                   fontSize: `clamp(${Math.round((24 * masterUiPrefs.titleScalePercent) / 100)}px, ${Math.round((8 * masterUiPrefs.titleScalePercent) / 100)}vw, ${Math.round((64 * masterUiPrefs.titleScalePercent) / 100)}px)`,
-                  transform: `translate(${masterUiPrefs.headerTitleOffsetXpx}px, ${masterUiPrefs.headerTitleOffsetYpx}px)`,
+                  transform: `translate(${masterUiPrefs.headerTitleOffsetXpx || 0}px, ${masterUiPrefs.headerTitleOffsetYpx || 0}px)`,
                   transformOrigin: 'left center'
                 }}
               >
@@ -5752,7 +5752,7 @@ function App() {
                   <h2 
                     className="text-lg sm:text-[1.35rem] lg:text-[2.35rem] leading-tight font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-300 tracking-tight whitespace-nowrap inline-block"
                     style={{
-                      transform: `translate(${masterUiPrefs.seasonTitleOffsetXpx}px, ${masterUiPrefs.seasonTitleOffsetYpx}px) scale(${masterUiPrefs.seasonTitleScalePercent / 100})`,
+                      transform: `translate(${masterUiPrefs.seasonTitleOffsetXpx || 0}px, ${masterUiPrefs.seasonTitleOffsetYpx || 0}px) scale(${masterUiPrefs.seasonTitleScalePercent ? masterUiPrefs.seasonTitleScalePercent / 100 : 1})`,
                       transformOrigin: 'left center'
                     }}
                   >
@@ -5761,26 +5761,14 @@ function App() {
                   <p 
                     className="hidden lg:inline-block font-bold italic tracking-wide whitespace-nowrap"
                     style={{
-                      color: masterUiPrefs.seasonSubtitleColor,
+                      color: masterUiPrefs.seasonSubtitleColor || '#67e8f9',
                       fontSize: 'clamp(12px, 1.2vw, 15px)',
-                      transform: `translate(${masterUiPrefs.seasonSubtitleOffsetXpx}px, ${masterUiPrefs.seasonSubtitleOffsetYpx}px) scale(${masterUiPrefs.seasonSubtitleScalePercent / 100})`,
+                      transform: `translate(${masterUiPrefs.seasonSubtitleOffsetXpx || 0}px, ${masterUiPrefs.seasonSubtitleOffsetYpx || 0}px) scale(${masterUiPrefs.seasonSubtitleScalePercent ? masterUiPrefs.seasonSubtitleScalePercent / 100 : 1})`,
                       transformOrigin: 'left center'
                     }}
                   >
                     {masterUiPrefs.seasonSubtitle || 'SEASON 01 BATTLE FOR THE STAR THRONE'}
                   </p>
-                  {masterUiPrefs.headerBadges.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {masterUiPrefs.headerBadges.filter((badge) => badge.trim().length > 0).map((badge, idx) => (
-                        <span
-                          key={`${badge}-${idx}`}
-                          className="px-2.5 py-1 rounded-full border border-cyan-400/40 bg-cyan-500/10 text-cyan-200 text-[11px] font-black tracking-wide"
-                        >
-                          {badge}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </>
             )}
