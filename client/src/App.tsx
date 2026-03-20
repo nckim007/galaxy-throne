@@ -5894,26 +5894,53 @@ function App() {
               <div className="flex flex-col gap-6">
                 {/* 1. 좌측 메인 타이틀 (은하단) */}
                 <div>
-                  <h4 className="mt-2 mb-2 text-emerald-300 font-black text-sm sm:text-base border-b border-emerald-500/30 pb-2">1. 좌측 메인 타이틀</h4>
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/20">
-                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                      텍스트 내용
-                      <input value={masterUiPrefs.headerTitle} onChange={(e) => updateMasterUiPrefs('headerTitle', e.target.value)} className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-emerald-400" />
+                  <h3 className="mb-4 text-lg font-black text-cyan-400 flex items-center gap-2">
+                <Palette className="w-5 h-5" /> UI 설정
+              </h3>
+              <div className="flex flex-col gap-4">
+
+                {/* 👇 여기서부터 팝업창용 영어 제목 설정 추가 👇 */}
+                <div className="p-3 bg-black/40 rounded-xl border border-white/10 flex flex-col gap-3">
+                  <label className="flex flex-col gap-1 text-sm font-bold text-fuchsia-300">
+                    시즌 영어 문구
+                    <input
+                      value={masterUiPrefs.seasonSubtitle || ''}
+                      onChange={(e) => updateMasterUiPrefs('seasonSubtitle', e.target.value)}
+                      className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-fuchsia-400"
+                    />
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex flex-col gap-1 text-xs font-bold text-slate-300">
+                      색상
+                      <input type="color" value={masterUiPrefs.seasonSubtitleColor || '#67e8f9'} onChange={(e) => updateMasterUiPrefs('seasonSubtitleColor', e.target.value)} className="h-8 w-full rounded border border-white/20 bg-transparent cursor-pointer" />
                     </label>
-                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                      폰트 크기 배율 {masterUiPrefs.titleScalePercent}%
-                      <input type="range" min={70} max={140} step={1} value={masterUiPrefs.titleScalePercent} onChange={(e) => updateMasterUiPrefs('titleScalePercent', Math.max(70, Math.min(140, Number(e.target.value) || 100)))} className="w-full mt-2" />
+                    <label className="flex flex-col gap-1 text-xs font-bold text-slate-300">
+                      크기 {masterUiPrefs.seasonSubtitleScalePercent || 100}%
+                      <input type="range" min={50} max={200} step={1} value={masterUiPrefs.seasonSubtitleScalePercent || 100} onChange={(e) => updateMasterUiPrefs('seasonSubtitleScalePercent', Math.max(50, Math.min(200, Number(e.target.value) || 100)))} className="w-full mt-2" />
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                        X 위치 {masterUiPrefs.headerTitleOffsetXpx || 0}px
-                        <input type="number" value={masterUiPrefs.headerTitleOffsetXpx || 0} onChange={(e) => updateMasterUiPrefs('headerTitleOffsetXpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
-                      </label>
-                      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                        Y 위치 {masterUiPrefs.headerTitleOffsetYpx || 0}px
-                        <input type="number" value={masterUiPrefs.headerTitleOffsetYpx || 0} onChange={(e) => updateMasterUiPrefs('headerTitleOffsetYpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
-                      </label>
-                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex flex-col gap-1 text-xs font-bold text-slate-300">
+                      X 위치 {masterUiPrefs.seasonSubtitleOffsetXpx || 0}px
+                      <input type="number" value={masterUiPrefs.seasonSubtitleOffsetXpx || 0} onChange={(e) => updateMasterUiPrefs('seasonSubtitleOffsetXpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs font-bold text-slate-300">
+                      Y 위치 {masterUiPrefs.seasonSubtitleOffsetYpx || 0}px
+                      <input type="number" value={masterUiPrefs.seasonSubtitleOffsetYpx || 0} onChange={(e) => updateMasterUiPrefs('seasonSubtitleOffsetYpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
+                    </label>
+                  </div>
+                </div>
+                {/* 👆 여기까지 추가 완료 👆 */}
+
+                <label className="flex flex-col gap-1 text-sm font-bold text-slate-300 mt-2">
+                  타이틀 폰트 크기 {masterUiPrefs.titleScalePercent}%
+                  <input type="range" min={70} max={140} step={1} value={masterUiPrefs.titleScalePercent} onChange={(e) => updateMasterUiPrefs('titleScalePercent', Math.max(70, Math.min(140, Number(e.target.value) || 100)))} className="w-full" />
+                </label>
+                <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                  홈 보드 간격 {masterUiPrefs.homeGapPx}px
+                  <input type="range" min={8} max={48} step={1} value={masterUiPrefs.homeGapPx} onChange={(e) => updateMasterUiPrefs('homeGapPx', Math.max(8, Math.min(48, Number(e.target.value) || 16)))} className="w-full" />
+                </label>
+              </div>
                   </div>
                 </div>
 
