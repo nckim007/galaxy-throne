@@ -2461,13 +2461,13 @@ function App() {
         }
         if (totalRefund > 0) {
           showStatusPopup(
-            'success',
-            '구매 복구 완료',
-            shouldApplyLegacyCompensation
-              ? `정밀 복구 기록이 부족해 보상 환불 ${totalRefund.toLocaleString()} GP를 지급했습니다.`
-              : `누락된 아이템 소유권을 복구했고, 차감되었던 ${totalRefund.toLocaleString()} GP를 환급했습니다.`,
-            { autoCloseMs: 2200, hideConfirm: true }
-          );
+  'success',
+  '구매 복구 완료',
+  shouldApplyLegacyCompensation
+    ? `정밀 복구 기록이 부족해 보상 환불 ${totalRefund.toLocaleString()} GC를 지급했습니다.`
+    : `누락된 아이템 소유권을 복구했고, 차감되었던 ${totalRefund.toLocaleString()} GC를 환급했습니다.`,
+  { autoCloseMs: 2200, hideConfirm: true }
+);
         }
       } finally {
         purchaseRecoveryRunningRef.current = false;
@@ -2757,7 +2757,7 @@ function App() {
   useEffect(() => {
     const profilesChannel = supabase
       .channel('profiles_realtime_sync')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload) => {
         const nextRow: any = payload.new || {};
         if (!nextRow?.id) return;
         const resolved = resolveIngameProfile(nextRow);
@@ -2838,7 +2838,10 @@ function App() {
                  checkActiveChallenge(currentUserName);
                }
 	           }
-           if (payload.eventType === 'UPDATE') {
+             if (payload.eventType === 'INSERT') {
+      fetchRankers();
+    }
+           else if (payload.eventType === 'UPDATE') {
                 const updated = payload.new;
                const pendingIncoming = incomingChallengeRef.current;
                if (
@@ -2854,9 +2857,16 @@ function App() {
                         setMatchPhase('scoring');
                     }
                    if (currentPhase === 'scoring') {
-                       setActiveMatch(prev => prev ? { ...prev, oppLegend: prev.isChallenger ? updated.t_legend : updated.legend, oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons } : prev);
-                    }
-                }
+                               setActiveMatch(prev => prev ? { ...prev, oppLegend: prev.isChallenger ? updated.t_legend : updated.legend, oppWeapons: prev.isChallenger ? updated.t_weapons : updated.weapons } : prev);
+                               
+                               // 💡 추가된 로직: 실시간 업데이트 시 양쪽 점수가 모두 있다면 무한 대기(로딩)를 풀고 재실행합니다.
+                               const hasC = isSubmittedScorePair(updated.c_win, updated.c_lose);
+                               const hasT = isSubmittedScorePair(updated.t_win, updated.t_lose);
+                               if (hasC && hasT && isWaiting) {
+                                   autoScoreSubmitKeyRef.current = '';
+                                   setWaitingForScore(false);
+                               }
+                            }
                 if (rowAffectsMe(updated) || rowAffectsMe(payload.old)) {
                   checkActiveChallenge(currentUserName);
                 }
@@ -6407,7 +6417,7 @@ function App() {
                            </div>
 
                            <button onMouseEnter={() => playSFX('hover')} onClick={handleStartMatch} className="hvr-grow hvr-glow w-full py-5 mt-6 rounded-[2rem] font-bold text-2xl text-white bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.6)] hover:bg-blue-500 transition-all border border-blue-400 cursor-pointer">
-                              {isRegularMode(entryMode) ? '매칭 신청 (200GP)' : '매칭 신청 및 수락'}
+                              {isRegularMode(entryMode) ? '매칭 신청 (200GC)' : '매칭 신청 및 수락'}
                            </button>
                         </div>
                       )}
