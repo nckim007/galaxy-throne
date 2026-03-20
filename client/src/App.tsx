@@ -5944,29 +5944,32 @@ function App() {
 
                 {/* 3. 우측 시즌 부제목 (영문) */}
                 <div>
-                  <h4 className="mb-2 text-fuchsia-300 font-black text-sm sm:text-base border-b border-fuchsia-500/30 pb-2">3. 우측 시즌 부제목 (영문)</h4>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 bg-fuchsia-500/5 p-3 rounded-xl border border-fuchsia-500/20">
-                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300 xl:col-span-2">
-                      텍스트 내용
-                      <input value={masterUiPrefs.seasonSubtitle || ''} onChange={(e) => updateMasterUiPrefs('seasonSubtitle', e.target.value)} className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-fuchsia-400" />
+                  <label className="flex flex-col gap-1 text-sm font-bold text-fuchsia-300 mt-2 border-t border-white/10 pt-3">
+                      시즌 영어 문구
+                      <input
+                        value={masterUiPrefs.seasonSubtitle || ''}
+                        onChange={(e) => updateMasterUiPrefs('seasonSubtitle', e.target.value)}
+                        className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-white outline-none focus:border-fuchsia-400"
+                      />
                     </label>
-                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                      색상 설정
-                      <div className="flex items-center gap-2 mt-1">
-                        <input type="color" value={masterUiPrefs.seasonSubtitleColor || '#67e8f9'} onChange={(e) => updateMasterUiPrefs('seasonSubtitleColor', e.target.value)} className="h-8 w-10 rounded border border-white/20 bg-transparent cursor-pointer" />
-                        <span className="text-[11px] font-mono text-slate-300">{masterUiPrefs.seasonSubtitleColor || '#67e8f9'}</span>
-                      </div>
-                    </label>
-                    <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
-                      크기 배율 {masterUiPrefs.seasonSubtitleScalePercent || 100}%
-                      <input type="range" min={50} max={200} step={1} value={masterUiPrefs.seasonSubtitleScalePercent || 100} onChange={(e) => updateMasterUiPrefs('seasonSubtitleScalePercent', Math.max(50, Math.min(200, Number(e.target.value) || 100)))} className="w-full mt-2" />
-                    </label>
-                    <div className="grid grid-cols-2 gap-2 xl:col-span-4">
-                      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+
+                    <div className="grid grid-cols-2 gap-2 mt-1">
+                      <label className="flex flex-col gap-1 text-xs font-bold text-slate-300">
+                        색상
+                        <input type="color" value={masterUiPrefs.seasonSubtitleColor || '#67e8f9'} onChange={(e) => updateMasterUiPrefs('seasonSubtitleColor', e.target.value)} className="h-8 w-full rounded border border-white/20 bg-transparent cursor-pointer" />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs font-bold text-slate-300">
+                        크기 {masterUiPrefs.seasonSubtitleScalePercent || 100}%
+                        <input type="range" min={50} max={200} step={1} value={masterUiPrefs.seasonSubtitleScalePercent || 100} onChange={(e) => updateMasterUiPrefs('seasonSubtitleScalePercent', Math.max(50, Math.min(200, Number(e.target.value) || 100)))} className="w-full mt-2" />
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mt-1">
+                      <label className="flex flex-col gap-1 text-xs font-bold text-slate-300">
                         X 위치 {masterUiPrefs.seasonSubtitleOffsetXpx || 0}px
                         <input type="number" value={masterUiPrefs.seasonSubtitleOffsetXpx || 0} onChange={(e) => updateMasterUiPrefs('seasonSubtitleOffsetXpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
                       </label>
-                      <label className="flex flex-col gap-1 text-sm font-bold text-slate-300">
+                      <label className="flex flex-col gap-1 text-xs font-bold text-slate-300">
                         Y 위치 {masterUiPrefs.seasonSubtitleOffsetYpx || 0}px
                         <input type="number" value={masterUiPrefs.seasonSubtitleOffsetYpx || 0} onChange={(e) => updateMasterUiPrefs('seasonSubtitleOffsetYpx', Number(e.target.value) || 0)} className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-white w-full text-center" />
                       </label>
