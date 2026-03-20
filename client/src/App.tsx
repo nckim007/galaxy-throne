@@ -2792,6 +2792,9 @@ function App() {
     const profilesChannel = supabase
       .channel('profiles_realtime_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          fetchRankers();
+        }
         const nextRow: any = payload.new || {};
         if (!nextRow?.id) return;
         const resolved = resolveIngameProfile(nextRow);
@@ -2872,10 +2875,7 @@ function App() {
                  checkActiveChallenge(currentUserName);
                }
 	           }
-             if (payload.eventType === 'INSERT') {
-      fetchRankers();
-    }
-           else if (payload.eventType === 'UPDATE') {
+             else if (payload.eventType === 'UPDATE') {
                 const updated = payload.new;
                const pendingIncoming = incomingChallengeRef.current;
                if (
@@ -2901,6 +2901,7 @@ function App() {
                                    setWaitingForScore(false);
                                }
                             }
+                }
                 if (rowAffectsMe(updated) || rowAffectsMe(payload.old)) {
                   checkActiveChallenge(currentUserName);
                 }
